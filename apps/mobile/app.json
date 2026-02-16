@@ -1,0 +1,25 @@
+{
+  "expo": {
+    "name": "VeeValve",
+    "slug": "veevalve",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "veevalve",
+    "userInterfaceStyle": "light",
+    "plugins": [
+      "expo-notifications"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "ee.veevalve.app"
+    },
+    "android": {
+      "package": "ee.veevalve.app"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "replace-with-your-eas-project-id"
+      }
+    }
+  }
+}

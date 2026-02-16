@@ -1,0 +1,40 @@
+# dependencies
+node_modules/
+.pnp/
+
+# monorepo
+.turbo/
+.cache/
+
+# build output
+dist/
+build/
+coverage/
+.next/
+out/
+.vercel/
+
+# expo / react native
+.expo/
+.expo-shared/
+*.jks
+*.p8
+*.p12
+*.mobileprovision
+
+# env
+.env
+.env.*
+!.env.example
+
+# os/editor
+.DS_Store
+.vscode/
+.idea/
+*.swp
+
+# logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*

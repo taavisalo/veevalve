@@ -1,0 +1,56 @@
+name: Build Mobile (EAS)
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: 'Build platform'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - android
+          - ios
+      submit:
+        description: 'Submit build to stores after success'
+        required: true
+        default: false
+        type: boolean
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    if: ${{ secrets.EXPO_TOKEN != '' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Setup Expo and EAS
+        uses: expo/expo-github-action@v8
+        with:
+          expo-version: latest
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Build mobile app
+        run: pnpm --filter @veevalve/mobile exec eas build --non-interactive --platform ${{ inputs.platform }} --profile production
+
+      - name: Submit mobile app
+        if: ${{ inputs.submit && inputs.platform != 'all' }}
+        run: pnpm --filter @veevalve/mobile exec eas submit --non-interactive --platform ${{ inputs.platform }} --profile production

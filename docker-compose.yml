@@ -1,0 +1,101 @@
+services:
+  workspace:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.dev
+    working_dir: /workspace
+    command: sleep infinity
+    volumes:
+      - .:/workspace
+      - pnpm_store:/pnpm/store
+      - root_node_modules:/workspace/node_modules
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: veevalve
+      POSTGRES_USER: veevalve
+      POSTGRES_PASSWORD: veevalve
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U veevalve -d veevalve']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.dev
+    working_dir: /workspace
+    command: >-
+      sh -lc "pnpm install &&
+      pnpm --filter @veevalve/api prisma:generate &&
+      pnpm --filter @veevalve/api dev"
+    environment:
+      DATABASE_URL: postgresql://veevalve:veevalve@postgres:5432/veevalve?schema=public
+      TERVISEAMET_XML_URL: https://vtiav.sm.ee/index.php/?active_tab_id=A
+      CORS_ORIGIN: http://localhost:3000
+      PORT: 3001
+    ports:
+      - '3001:3001'
+    volumes:
+      - .:/workspace
+      - pnpm_store:/pnpm/store
+      - root_node_modules:/workspace/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.dev
+    working_dir: /workspace
+    command: >-
+      sh -lc "pnpm install &&
+      pnpm --filter @veevalve/web dev -- --hostname 0.0.0.0 --port 3000"
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:3001/api
+    ports:
+      - '3000:3000'
+    volumes:
+      - .:/workspace
+      - pnpm_store:/pnpm/store
+      - root_node_modules:/workspace/node_modules
+    depends_on:
+      - api
+
+  mobile:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.dev
+    working_dir: /workspace
+    command: >-
+      sh -lc "pnpm install &&
+      pnpm --filter @veevalve/mobile dev -- --host 0.0.0.0 --port 8081"
+    environment:
+      EXPO_DEVTOOLS_LISTEN_ADDRESS: 0.0.0.0
+      EXPO_USE_FAST_RESOLVER: 1
+    ports:
+      - '8081:8081'
+      - '19000:19000'
+      - '19001:19001'
+      - '19002:19002'
+    volumes:
+      - .:/workspace
+      - pnpm_store:/pnpm/store
+      - root_node_modules:/workspace/node_modules
+    depends_on:
+      - api
+    stdin_open: true
+    tty: true
+
+volumes:
+  postgres_data:
+  pnpm_store:
+  root_node_modules:

@@ -1,0 +1,28 @@
+{
+  "name": "@veevalve/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format esm,cjs --dts",
+    "dev": "tsup src/index.ts --watch --dts",
+    "lint": "eslint \"src/**/*.{ts,tsx}\"",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "format": "prettier --check \"src/**/*.{ts,tsx,json}\"",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "fast-xml-parser": "^4.5.1",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "tsup": "^8.4.0",
+    "vitest": "^3.0.8"
+  }
+}
