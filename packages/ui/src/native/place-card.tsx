@@ -1,8 +1,6 @@
-import type { AppLocale, PlaceType, PlaceWithLatestReading } from '@veevalve/core';
+import { t, type AppLocale, type PlaceType, type PlaceWithLatestReading, type QualityStatus } from '@veevalve/core';
 import { useState } from 'react';
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
-
-import { StatusChip } from './status-chip';
 
 export interface NativePlaceCardProps {
   place: PlaceWithLatestReading;
@@ -105,6 +103,66 @@ const mergeUniqueDetails = (details: string[], fallbackDetail: string | undefine
   return merged;
 };
 
+const getStatusPalette = (
+  status: QualityStatus,
+): {
+  cardBorder: string;
+  panelBackground: string;
+  panelBorder: string;
+  panelText: string;
+  iconBackground: string;
+  iconText: string;
+} => {
+  if (status === 'BAD') {
+    return {
+      cardBorder: '#F8C6C3',
+      panelBackground: '#FFF1F1',
+      panelBorder: '#F4A8A3',
+      panelText: '#7F1D1D',
+      iconBackground: '#F9C9C5',
+      iconText: '#7F1D1D',
+    };
+  }
+
+  if (status === 'GOOD') {
+    return {
+      cardBorder: '#B7E9CA',
+      panelBackground: '#ECFBF2',
+      panelBorder: '#9BDEB7',
+      panelText: '#14532D',
+      iconBackground: '#C6F0D5',
+      iconText: '#14532D',
+    };
+  }
+
+  return {
+    cardBorder: '#D6DEE8',
+    panelBackground: '#F3F6FA',
+    panelBorder: '#CDD7E4',
+    panelText: '#334155',
+    iconBackground: '#DFE6EF',
+    iconText: '#334155',
+  };
+};
+
+const getStatusSymbol = (status: QualityStatus): string => {
+  if (status === 'BAD') {
+    return '!';
+  }
+
+  if (status === 'GOOD') {
+    return '✓';
+  }
+
+  return '?';
+};
+
+const statusLabelKeyByStatus: Record<QualityStatus, 'qualityGood' | 'qualityBad' | 'qualityUnknown'> = {
+  GOOD: 'qualityGood',
+  BAD: 'qualityBad',
+  UNKNOWN: 'qualityUnknown',
+};
+
 export const NativePlaceCard = ({
   place,
   locale = 'et',
@@ -139,7 +197,10 @@ export const NativePlaceCard = ({
     locale === 'en'
       ? (isFavorite ? 'Remove from favorites' : 'Add to favorites')
       : (isFavorite ? 'Eemalda lemmikutest' : 'Lisa lemmikutesse');
-  const isBadStatus = place.latestReading?.status === 'BAD';
+  const status = place.latestReading?.status ?? 'UNKNOWN';
+  const statusPalette = getStatusPalette(status);
+  const statusLabel = t(statusLabelKeyByStatus[status], locale);
+  const isBadStatus = status === 'BAD';
   const badDetailCandidates =
     locale === 'en'
       ? (place.latestReading?.badDetailsEn ?? place.latestReading?.badDetailsEt ?? [])
@@ -151,9 +212,17 @@ export const NativePlaceCard = ({
   const badDetails = mergeUniqueDetails(badDetailCandidates, statusReason);
   const badDetailsToggleLabel =
     locale === 'en'
-      ? (showBadDetails ? 'Hide bad quality details' : 'Show bad quality details')
-      : (showBadDetails ? 'Peida halva kvaliteedi detailid' : 'Näita halva kvaliteedi detaile');
-  const badDetailsTitle = locale === 'en' ? 'Why is this marked bad?' : 'Miks on see märgitud halvaks?';
+      ? (showBadDetails ? 'Hide details' : 'Show details')
+      : (showBadDetails ? 'Peida detailid' : 'Näita detaile');
+  const statusPanelTitle = locale === 'en' ? 'Water quality' : 'Vee kvaliteet';
+  const statusInlineHint =
+    status === 'BAD'
+      ? (showBadDetails
+          ? (locale === 'en' ? 'Hide details' : 'Peida detailid')
+          : (locale === 'en' ? 'Show details' : 'Näita detaile'))
+      : status === 'GOOD'
+        ? (locale === 'en' ? 'Compliant' : 'Korras')
+        : (locale === 'en' ? 'No rating' : 'Hinnang puudub');
   const badDetailsFallbackText =
     locale === 'en'
       ? 'The source did not include additional detailed reasons.'
@@ -200,7 +269,13 @@ export const NativePlaceCard = ({
   };
 
   return (
-    <View style={[styles.card, showExactSampledAt ? styles.cardOverlay : null]}>
+    <View
+      style={[
+        styles.card,
+        { borderColor: statusPalette.cardBorder },
+        showExactSampledAt ? styles.cardOverlay : null,
+      ]}
+    >
       <View style={styles.headerRow}>
         <View style={styles.textBlock}>
           <Text style={styles.name}>{placeName}</Text>
@@ -223,26 +298,105 @@ export const NativePlaceCard = ({
               </Text>
             </Pressable>
           ) : null}
-          {isBadStatus ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={badDetailsToggleLabel}
-              accessibilityState={{ expanded: showBadDetails }}
-              style={({ pressed }) => [styles.statusChipButton, pressed ? styles.statusChipButtonPressed : null]}
-              onPress={() => setShowBadDetails((value) => !value)}
-            >
-              <StatusChip
-                status={place.latestReading?.status ?? 'UNKNOWN'}
-                locale={locale}
-                prominent
-                trailingSymbol={showBadDetails ? '▾' : '▸'}
-              />
-            </Pressable>
-          ) : (
-            <StatusChip status={place.latestReading?.status ?? 'UNKNOWN'} locale={locale} prominent />
-          )}
         </View>
       </View>
+      {isBadStatus ? (
+        <View
+          style={[
+            styles.statusPanel,
+            { backgroundColor: statusPalette.panelBackground, borderColor: statusPalette.panelBorder },
+          ]}
+        >
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={badDetailsToggleLabel}
+            accessibilityState={{ expanded: showBadDetails }}
+            style={({ pressed }) => [styles.statusPanelToggle, pressed ? styles.statusPanelPressed : null]}
+            onPress={() => setShowBadDetails((value) => !value)}
+          >
+            <View style={styles.statusPanelTopRow}>
+              <View style={styles.statusPanelMainRow}>
+                <View style={[styles.statusSymbolWrap, { backgroundColor: statusPalette.iconBackground }]}>
+                  <Text style={[styles.statusSymbolText, { color: statusPalette.iconText }]}>
+                    {getStatusSymbol(status)}
+                  </Text>
+                </View>
+                <View style={styles.statusPanelTextBlock}>
+                  <Text style={[styles.statusPanelTitle, { color: statusPalette.panelText }]}>{statusPanelTitle}</Text>
+                  <Text style={[styles.statusLabel, { color: statusPalette.panelText }]}>
+                    {statusLabel}
+                    <Text style={[styles.statusInlineHint, { color: statusPalette.panelText }]}>
+                      {' '}
+                      • {statusInlineHint}
+                    </Text>
+                  </Text>
+                </View>
+              </View>
+              <Text style={[styles.statusPanelChevron, { color: statusPalette.panelText }]}>
+                {showBadDetails ? '▾' : '▸'}
+              </Text>
+            </View>
+          </Pressable>
+          {showBadDetails ? (
+            <View style={styles.statusDetailsSection}>
+              {badDetails.length > 0 ? (
+                <View style={styles.badDetailsList}>
+                  {badDetails.map((detail) => (
+                    <View key={`${place.id}-bad-detail-${detail}`} style={styles.badDetailsItem}>
+                      <Text style={styles.badDetailsBullet}>•</Text>
+                      <Text style={styles.badDetailsItemText}>{detail}</Text>
+                    </View>
+                  ))}
+                </View>
+              ) : (
+                <Text style={styles.badDetailsFallback}>{badDetailsFallbackText}</Text>
+              )}
+              {fullReportUrl ? (
+                <Pressable
+                  accessibilityRole="link"
+                  accessibilityLabel={fullReportLabel}
+                  style={({ pressed }) => [styles.reportLink, pressed ? styles.reportLinkPressed : null]}
+                  onPress={() => {
+                    void openFullReport(fullReportUrl);
+                  }}
+                >
+                  <Text style={styles.reportLinkText}>{fullReportLabel}</Text>
+                  <Text aria-hidden style={styles.reportLinkIcon}>
+                    ↗
+                  </Text>
+                </Pressable>
+              ) : null}
+            </View>
+          ) : null}
+        </View>
+      ) : (
+        <View
+          style={[
+            styles.statusPanel,
+            { backgroundColor: statusPalette.panelBackground, borderColor: statusPalette.panelBorder },
+          ]}
+        >
+          <View style={styles.statusPanelTopRow}>
+            <View style={styles.statusPanelMainRow}>
+              <View style={[styles.statusSymbolWrap, { backgroundColor: statusPalette.iconBackground }]}>
+                <Text style={[styles.statusSymbolText, { color: statusPalette.iconText }]}>
+                  {getStatusSymbol(status)}
+                </Text>
+              </View>
+              <View style={styles.statusPanelTextBlock}>
+                <Text style={[styles.statusPanelTitle, { color: statusPalette.panelText }]}>{statusPanelTitle}</Text>
+                <Text style={[styles.statusLabel, { color: statusPalette.panelText }]}>
+                  {statusLabel}
+                  <Text style={[styles.statusInlineHint, { color: statusPalette.panelText }]}>
+                    {' '}
+                    • {statusInlineHint}
+                  </Text>
+                </Text>
+              </View>
+            </View>
+          </View>
+        </View>
+      )}
       {mapsSearchQuery ? (
         <Pressable
           accessibilityRole="link"
@@ -284,40 +438,6 @@ export const NativePlaceCard = ({
           <Text style={styles.latestSampleValue}>—</Text>
         )}
       </View>
-      {isBadStatus && showBadDetails ? (
-        <View style={styles.badDetailsContainer}>
-          <View style={styles.badDetailsBody}>
-            <Text style={styles.badDetailsTitle}>{badDetailsTitle}</Text>
-            {badDetails.length > 0 ? (
-              <View style={styles.badDetailsList}>
-                {badDetails.map((detail) => (
-                  <View key={`${place.id}-bad-detail-${detail}`} style={styles.badDetailsItem}>
-                    <Text style={styles.badDetailsBullet}>•</Text>
-                    <Text style={styles.badDetailsItemText}>{detail}</Text>
-                  </View>
-                ))}
-              </View>
-            ) : (
-              <Text style={styles.badDetailsFallback}>{badDetailsFallbackText}</Text>
-            )}
-            {fullReportUrl ? (
-              <Pressable
-                accessibilityRole="link"
-                accessibilityLabel={fullReportLabel}
-                style={({ pressed }) => [styles.reportLink, pressed ? styles.reportLinkPressed : null]}
-                onPress={() => {
-                  void openFullReport(fullReportUrl);
-                }}
-              >
-                <Text style={styles.reportLinkText}>{fullReportLabel}</Text>
-                <Text aria-hidden style={styles.reportLinkIcon}>
-                  ↗
-                </Text>
-              </Pressable>
-            ) : null}
-          </View>
-        </View>
-      ) : null}
     </View>
   );
 };
@@ -328,6 +448,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     padding: 16,
     marginBottom: 12,
+    borderWidth: 1,
     shadowColor: '#06685A',
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.15,
@@ -345,12 +466,6 @@ const styles = StyleSheet.create({
   actionsColumn: {
     alignItems: 'flex-end',
     gap: 6,
-  },
-  statusChipButton: {
-    borderRadius: 999,
-  },
-  statusChipButtonPressed: {
-    opacity: 0.85,
   },
   favoriteButton: {
     width: 30,
@@ -376,6 +491,75 @@ const styles = StyleSheet.create({
   },
   favoriteButtonTextActive: {
     color: '#D97706',
+  },
+  statusPanel: {
+    marginTop: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 11,
+    paddingVertical: 9,
+  },
+  statusPanelToggle: {
+    borderRadius: 8,
+  },
+  statusPanelPressed: {
+    opacity: 0.9,
+  },
+  statusPanelTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 10,
+  },
+  statusPanelMainRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+    flex: 1,
+  },
+  statusSymbolWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statusSymbolText: {
+    fontSize: 14,
+    fontWeight: '900',
+    lineHeight: 16,
+  },
+  statusPanelTextBlock: {
+    flexShrink: 1,
+    gap: 4,
+  },
+  statusPanelTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  statusLabel: {
+    marginTop: 1,
+    fontSize: 15,
+    lineHeight: 18,
+    fontWeight: '800',
+  },
+  statusInlineHint: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '600',
+  },
+  statusPanelChevron: {
+    fontSize: 19,
+    fontWeight: '700',
+    lineHeight: 20,
+  },
+  statusDetailsSection: {
+    marginTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F4A8A3',
+    paddingTop: 8,
   },
   textBlock: {
     flex: 1,
@@ -458,25 +642,8 @@ const styles = StyleSheet.create({
     color: '#334155',
     flexShrink: 0,
   },
-  badDetailsContainer: {
-    marginTop: 10,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#F8C6C3',
-    backgroundColor: '#FFF1F1',
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-  },
-  badDetailsBody: {
-    marginTop: 2,
-  },
-  badDetailsTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#7F1D1D',
-  },
   badDetailsList: {
-    marginTop: 4,
+    marginTop: 2,
     gap: 4,
   },
   badDetailsItem: {
@@ -496,7 +663,7 @@ const styles = StyleSheet.create({
     color: '#7F1D1D',
   },
   badDetailsFallback: {
-    marginTop: 4,
+    marginTop: 2,
     fontSize: 12,
     color: '#9F1239',
   },

@@ -1,7 +1,5 @@
-import type { AppLocale, PlaceType, PlaceWithLatestReading } from '@veevalve/core';
+import { t, type AppLocale, type PlaceType, type PlaceWithLatestReading, type QualityStatus } from '@veevalve/core';
 import { useState } from 'react';
-
-import { QualityBadge } from './status-badge';
 
 export interface PlaceCardProps {
   place: PlaceWithLatestReading;
@@ -106,6 +104,72 @@ const mergeUniqueDetails = (details: string[], fallbackDetail: string | undefine
   return merged;
 };
 
+const getStatusCardBorderClass = (status: QualityStatus): string => {
+  if (status === 'BAD') {
+    return 'border-rose-200';
+  }
+
+  if (status === 'GOOD') {
+    return 'border-emerald-200';
+  }
+
+  return 'border-slate-200';
+};
+
+const getStatusPanelClass = (status: QualityStatus): string => {
+  if (status === 'BAD') {
+    return 'border-rose-300 bg-gradient-to-r from-rose-100 to-rose-50';
+  }
+
+  if (status === 'GOOD') {
+    return 'border-emerald-300 bg-gradient-to-r from-emerald-100 to-emerald-50';
+  }
+
+  return 'border-slate-300 bg-gradient-to-r from-slate-100 to-slate-50';
+};
+
+const getStatusPanelTextClass = (status: QualityStatus): string => {
+  if (status === 'BAD') {
+    return 'text-rose-900';
+  }
+
+  if (status === 'GOOD') {
+    return 'text-emerald-900';
+  }
+
+  return 'text-slate-800';
+};
+
+const getStatusIconWrapClass = (status: QualityStatus): string => {
+  if (status === 'BAD') {
+    return 'bg-rose-200 text-rose-800';
+  }
+
+  if (status === 'GOOD') {
+    return 'bg-emerald-200 text-emerald-800';
+  }
+
+  return 'bg-slate-200 text-slate-700';
+};
+
+const getStatusSymbol = (status: QualityStatus): string => {
+  if (status === 'BAD') {
+    return '!';
+  }
+
+  if (status === 'GOOD') {
+    return '✓';
+  }
+
+  return '?';
+};
+
+const statusLabelKeyByStatus: Record<QualityStatus, 'qualityGood' | 'qualityBad' | 'qualityUnknown'> = {
+  GOOD: 'qualityGood',
+  BAD: 'qualityBad',
+  UNKNOWN: 'qualityUnknown',
+};
+
 export const PlaceCard = ({
   place,
   locale = 'et',
@@ -145,7 +209,9 @@ export const PlaceCard = ({
     locale === 'en'
       ? (isFavorite ? 'Remove from favorites' : 'Add to favorites')
       : (isFavorite ? 'Eemalda lemmikutest' : 'Lisa lemmikutesse');
-  const isBadStatus = place.latestReading?.status === 'BAD';
+  const status = place.latestReading?.status ?? 'UNKNOWN';
+  const statusLabel = t(statusLabelKeyByStatus[status], locale);
+  const isBadStatus = status === 'BAD';
   const badDetailCandidates =
     locale === 'en'
       ? (place.latestReading?.badDetailsEn ?? place.latestReading?.badDetailsEt ?? [])
@@ -157,9 +223,17 @@ export const PlaceCard = ({
   const badDetails = mergeUniqueDetails(badDetailCandidates, statusReason);
   const badDetailsToggleLabel =
     locale === 'en'
-      ? (showBadDetails ? 'Hide bad quality details' : 'Show bad quality details')
-      : (showBadDetails ? 'Peida halva kvaliteedi detailid' : 'Näita halva kvaliteedi detaile');
-  const badDetailsTitle = locale === 'en' ? 'Why is this marked bad?' : 'Miks on see märgitud halvaks?';
+      ? (showBadDetails ? 'Hide details' : 'Show details')
+      : (showBadDetails ? 'Peida detailid' : 'Näita detaile');
+  const statusPanelTitle = locale === 'en' ? 'Water quality' : 'Vee kvaliteet';
+  const statusInlineHint =
+    status === 'BAD'
+      ? (showBadDetails
+          ? (locale === 'en' ? 'Hide details' : 'Peida detailid')
+          : (locale === 'en' ? 'Show details' : 'Näita detaile'))
+      : status === 'GOOD'
+        ? (locale === 'en' ? 'Compliant' : 'Korras')
+        : (locale === 'en' ? 'No rating' : 'Hinnang puudub');
   const badDetailsFallbackText =
     locale === 'en'
       ? 'The source did not include additional detailed reasons.'
@@ -171,7 +245,7 @@ export const PlaceCard = ({
 
   return (
     <article
-      className={`relative overflow-visible rounded-xl border border-emerald-100 bg-card p-4 shadow-card transition hover:-translate-y-0.5 ${
+      className={`relative overflow-visible rounded-xl border bg-card p-4 shadow-card transition hover:-translate-y-0.5 ${getStatusCardBorderClass(status)} ${
         showExactSampledAt ? 'z-30' : ''
       }`}
     >
@@ -197,33 +271,90 @@ export const PlaceCard = ({
               {isFavorite ? '★' : '☆'}
             </button>
           ) : null}
-          {isBadStatus ? (
-            <button
-              type="button"
-              onClick={() => setShowBadDetails((value) => !value)}
-              aria-expanded={showBadDetails}
-              aria-label={badDetailsToggleLabel}
-              title={badDetailsToggleLabel}
-              className={`rounded-full transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:ring-offset-2 ${
-                showBadDetails ? 'ring-2 ring-rose-300 ring-offset-2' : ''
-              }`}
-            >
-              <QualityBadge
-                status={place.latestReading?.status ?? 'UNKNOWN'}
-                locale={locale}
-                trailingSymbol={showBadDetails ? '▾' : '▸'}
-                className="min-h-9 px-4 text-sm font-bold shadow-sm"
-              />
-            </button>
-          ) : (
-            <QualityBadge
-              status={place.latestReading?.status ?? 'UNKNOWN'}
-              locale={locale}
-              className="min-h-9 px-4 text-sm font-bold shadow-sm"
-            />
-          )}
         </div>
       </header>
+      {isBadStatus ? (
+        <div className={`mt-3 w-full rounded-xl border p-3 ${getStatusPanelClass(status)}`}>
+          <button
+            type="button"
+            onClick={() => setShowBadDetails((value) => !value)}
+            aria-expanded={showBadDetails}
+            aria-label={badDetailsToggleLabel}
+            title={badDetailsToggleLabel}
+            className="w-full text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:ring-offset-2"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <span
+                  aria-hidden
+                  className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-sm font-black ${getStatusIconWrapClass(status)}`}
+                >
+                  {getStatusSymbol(status)}
+                </span>
+                <div>
+                  <p className={`text-[11px] font-semibold uppercase tracking-wide ${getStatusPanelTextClass(status)}`}>
+                    {statusPanelTitle}
+                  </p>
+                  <p className={`mt-0.5 text-sm font-extrabold leading-tight ${getStatusPanelTextClass(status)}`}>
+                    {statusLabel}
+                    <span className="ml-1.5 text-xs font-semibold opacity-90">• {statusInlineHint}</span>
+                  </p>
+                </div>
+              </div>
+              <span className={`text-lg font-bold ${getStatusPanelTextClass(status)}`} aria-hidden>
+                {showBadDetails ? '▾' : '▸'}
+              </span>
+            </div>
+          </button>
+          {showBadDetails ? (
+            <div className="mt-2 border-t border-rose-200/80 pt-2">
+              {badDetails.length > 0 ? (
+                <ul className="list-disc space-y-1 pl-4 text-xs text-rose-900">
+                  {badDetails.map((detail) => (
+                    <li key={`${place.id}-bad-detail-${detail}`} className="leading-5">
+                      {detail}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-xs text-rose-800">{badDetailsFallbackText}</p>
+              )}
+              {fullReportUrl ? (
+                <a
+                  href={fullReportUrl}
+                  target="_blank"
+                  rel="noopener noreferrer nofollow external"
+                  referrerPolicy="no-referrer"
+                  className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-rose-700 underline decoration-dotted underline-offset-2 hover:text-rose-800"
+                >
+                  <span>{fullReportLabel}</span>
+                  <span aria-hidden>↗</span>
+                </a>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      ) : (
+        <div className={`mt-3 rounded-xl border p-3 ${getStatusPanelClass(status)}`}>
+          <div className="flex items-center gap-3">
+            <span
+              aria-hidden
+              className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-sm font-black ${getStatusIconWrapClass(status)}`}
+            >
+              {getStatusSymbol(status)}
+            </span>
+            <div>
+              <p className={`text-[11px] font-semibold uppercase tracking-wide ${getStatusPanelTextClass(status)}`}>
+                {statusPanelTitle}
+              </p>
+              <p className={`mt-0.5 text-sm font-extrabold leading-tight ${getStatusPanelTextClass(status)}`}>
+                {statusLabel}
+                <span className="ml-1.5 text-xs font-semibold opacity-90">• {statusInlineHint}</span>
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
       {placeAddress && mapsAddressUrl ? (
         <a
           href={mapsAddressUrl}
@@ -270,36 +401,6 @@ export const PlaceCard = ({
           '—'
         )}
       </p>
-      {isBadStatus && showBadDetails ? (
-        <section className="mt-3 rounded-lg border border-rose-200 bg-rose-50/70 p-2.5">
-          <div>
-            <p className="text-xs font-semibold text-rose-800">{badDetailsTitle}</p>
-            {badDetails.length > 0 ? (
-              <ul className="mt-1 list-disc space-y-1 pl-4 text-xs text-rose-800">
-                {badDetails.map((detail) => (
-                  <li key={`${place.id}-bad-detail-${detail}`} className="leading-5">
-                    {detail}
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="mt-1 text-xs text-rose-700">{badDetailsFallbackText}</p>
-            )}
-            {fullReportUrl ? (
-              <a
-                href={fullReportUrl}
-                target="_blank"
-                rel="noopener noreferrer nofollow external"
-                referrerPolicy="no-referrer"
-                className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-rose-700 underline decoration-dotted underline-offset-2 hover:text-rose-800"
-              >
-                <span>{fullReportLabel}</span>
-                <span aria-hidden>↗</span>
-              </a>
-            ) : null}
-          </div>
-        </section>
-      ) : null}
     </article>
   );
 };
