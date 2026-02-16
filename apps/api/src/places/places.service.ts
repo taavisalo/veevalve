@@ -183,6 +183,14 @@ export class PlacesService {
           return [];
         }
 
+        type RankedPlace = Place & {
+          latestStatus: PlaceLatestStatus | null;
+          samplingPoints: Array<{
+            name: string;
+            address: string | null;
+          }>;
+        };
+
         const placeMap = new Map(
           (
             await this.prisma.place.findMany({
@@ -191,14 +199,27 @@ export class PlacesService {
               },
               include: {
                 latestStatus: true,
+                samplingPoints: {
+                  select: {
+                    name: true,
+                    address: true,
+                  },
+                },
               },
             })
-          ).map((place) => [place.id, place] as const),
+          ).map((place) => [place.id, place as RankedPlace] as const),
         );
 
-        return rankedPlaceIds
+        const orderedPlaces = rankedPlaceIds
           .map((placeId) => placeMap.get(placeId))
-          .filter((place): place is Place & { latestStatus: PlaceLatestStatus | null } => Boolean(place))
+          .filter((place): place is RankedPlace => Boolean(place));
+
+        const strictlyFilteredPlaces = this.filterStrictSearchMatches(orderedPlaces, search);
+        const responsePlaces = strictlyFilteredPlaces.length > 0
+          ? strictlyFilteredPlaces
+          : orderedPlaces;
+
+        return responsePlaces
           .map((place) => this.toListResponse(place, locale));
       }
     }
@@ -275,9 +296,26 @@ export class PlacesService {
   }): Promise<string[] | null> {
     const { search, type, status, limit, offset } = input;
     const threshold = search.length <= 3 ? 0.2 : 0.12;
+    const strictTokens = this.extractStrictSearchTokens(search);
+    const shouldRunStrictSearch = search.includes(' ') || strictTokens.length >= 2;
 
     const typeFilter = type ? Prisma.sql`AND p.type = ${type}` : Prisma.empty;
     const statusFilter = status ? Prisma.sql`AND ls.status = ${status}` : Prisma.empty;
+
+    if (shouldRunStrictSearch) {
+      const strictRankedRows = await this.findStrictRankedPlaceIds({
+        search,
+        strictTokens,
+        limit,
+        offset,
+        typeFilter,
+        statusFilter,
+      });
+
+      if (strictRankedRows.length > 0) {
+        return strictRankedRows;
+      }
+    }
 
     try {
       const rankedRows = await this.prisma.$queryRaw<RankedPlaceId[]>(Prisma.sql`
@@ -342,6 +380,150 @@ export class PlacesService {
       // Extension/index may not be applied yet; fall back to standard contains search.
       return null;
     }
+  }
+
+  private async findStrictRankedPlaceIds(input: {
+    search: string;
+    strictTokens: string[];
+    limit: number;
+    offset: number;
+    typeFilter: Prisma.Sql;
+    statusFilter: Prisma.Sql;
+  }): Promise<string[]> {
+    const { search, strictTokens, limit, offset, typeFilter, statusFilter } = input;
+    const searchableTextExpression = Prisma.sql`
+      (
+        lower(p."nameEt")
+        || ' '
+        || lower(p."nameEn")
+        || ' '
+        || lower(p."municipality")
+        || ' '
+        || lower(coalesce(p."addressEt", ''))
+        || ' '
+        || lower(coalesce(p."addressEn", ''))
+        || ' '
+        || coalesce(spx."searchBlob", '')
+      )
+    `;
+    const tokenContainsClauses = strictTokens.map((token) =>
+      Prisma.sql`${searchableTextExpression} LIKE '%' || ${token} || '%'`,
+    );
+    const allStrictTokensMatch = tokenContainsClauses.length
+      ? Prisma.sql`(${Prisma.join(tokenContainsClauses, ' AND ')})`
+      : Prisma.sql`FALSE`;
+
+    const rankedRows = await this.prisma.$queryRaw<RankedPlaceId[]>(Prisma.sql`
+      SELECT p.id
+      FROM "Place" p
+      INNER JOIN "PlaceLatestStatus" ls ON ls."placeId" = p.id
+      LEFT JOIN LATERAL (
+        SELECT
+          MAX(CASE WHEN lower(sp.name) LIKE '%' || lower(${search}) || '%' THEN 1 ELSE 0 END) AS "nameContainsMatch",
+          MAX(CASE WHEN lower(coalesce(sp.address, '')) LIKE '%' || lower(${search}) || '%' THEN 1 ELSE 0 END) AS "addressContainsMatch",
+          STRING_AGG(
+            lower(coalesce(sp.name, '')) || ' ' || lower(coalesce(sp.address, '')),
+            ' '
+          ) AS "searchBlob"
+        FROM "SamplingPoint" sp
+        WHERE sp."placeId" = p.id
+      ) spx ON TRUE
+      WHERE (
+        lower(p."nameEt") LIKE '%' || lower(${search}) || '%'
+        OR lower(p."nameEn") LIKE '%' || lower(${search}) || '%'
+        OR lower(p."municipality") LIKE '%' || lower(${search}) || '%'
+        OR lower(coalesce(p."addressEt", '')) LIKE '%' || lower(${search}) || '%'
+        OR lower(coalesce(p."addressEn", '')) LIKE '%' || lower(${search}) || '%'
+        OR coalesce(spx."nameContainsMatch", 0) = 1
+        OR coalesce(spx."addressContainsMatch", 0) = 1
+        OR ${allStrictTokensMatch}
+      )
+      ${typeFilter}
+      ${statusFilter}
+      ORDER BY (
+        CASE WHEN lower(p."nameEt") LIKE lower(${search}) || '%' THEN 2.0 ELSE 0 END
+        + CASE WHEN lower(p."nameEn") LIKE lower(${search}) || '%' THEN 1.8 ELSE 0 END
+        + CASE WHEN lower(p."nameEt") LIKE '%' || lower(${search}) || '%' THEN 1.4 ELSE 0 END
+        + CASE WHEN lower(p."nameEn") LIKE '%' || lower(${search}) || '%' THEN 1.2 ELSE 0 END
+        + CASE WHEN coalesce(spx."nameContainsMatch", 0) = 1 THEN 1.0 ELSE 0 END
+        + CASE WHEN lower(coalesce(p."addressEt", '')) LIKE '%' || lower(${search}) || '%' THEN 0.7 ELSE 0 END
+        + CASE WHEN lower(coalesce(p."addressEn", '')) LIKE '%' || lower(${search}) || '%' THEN 0.6 ELSE 0 END
+        + CASE WHEN coalesce(spx."addressContainsMatch", 0) = 1 THEN 0.4 ELSE 0 END
+        + CASE WHEN ${allStrictTokensMatch} THEN 1.1 ELSE 0 END
+      ) DESC,
+      ls."sampledAt" DESC,
+      p."nameEt" ASC
+      LIMIT ${limit}
+      OFFSET ${offset}
+    `);
+
+    return rankedRows.map((row) => row.id);
+  }
+
+  private extractStrictSearchTokens(search: string): string[] {
+    const parts = search
+      .normalize('NFKC')
+      .toLowerCase()
+      .match(/[\p{L}\p{N}]+/gu);
+
+    if (!parts || parts.length === 0) {
+      return [];
+    }
+
+    const uniqueTokens = new Set<string>();
+    for (const token of parts) {
+      if (token.length < 3) {
+        continue;
+      }
+      uniqueTokens.add(token);
+    }
+
+    return [...uniqueTokens];
+  }
+
+  private filterStrictSearchMatches<
+    T extends {
+      nameEt: string;
+      nameEn: string;
+      municipality: string;
+      addressEt: string | null;
+      addressEn: string | null;
+      samplingPoints?: Array<{ name: string; address: string | null }>;
+    },
+  >(places: T[], search: string): T[] {
+    const normalizedSearch = search.trim().normalize('NFKC').toLowerCase();
+    if (!normalizedSearch) {
+      return places;
+    }
+
+    const strictTokens = this.extractStrictSearchTokens(normalizedSearch);
+    const shouldUseStrictFiltering = normalizedSearch.includes(' ') || strictTokens.length >= 2;
+    if (!shouldUseStrictFiltering) {
+      return places;
+    }
+
+    return places.filter((place) => {
+      const searchable = [
+        place.nameEt,
+        place.nameEn,
+        place.municipality,
+        place.addressEt ?? '',
+        place.addressEn ?? '',
+        ...(place.samplingPoints ?? []).flatMap((samplingPoint) => [
+          samplingPoint.name,
+          samplingPoint.address ?? '',
+        ]),
+      ]
+        .join(' ')
+        .normalize('NFKC')
+        .toLowerCase();
+
+      if (searchable.includes(normalizedSearch)) {
+        return true;
+      }
+
+      return strictTokens.length > 0 && strictTokens.every((token) => searchable.includes(token));
+    });
   }
 
   private toListResponse(
