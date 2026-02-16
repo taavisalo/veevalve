@@ -1,5 +1,6 @@
 import { Controller, Get, Param, Query } from '@nestjs/common';
 
+import { GetPlaceQuery } from './dto/get-place.query';
 import { ListPlacesQuery } from './dto/list-places.query';
 import { PlacesService } from './places.service';
 
@@ -18,7 +19,7 @@ export class PlacesController {
   }
 
   @Get(':id')
-  getPlace(@Param('id') id: string) {
-    return this.placesService.getPlaceById(id);
+  getPlace(@Param('id') id: string, @Query() query: GetPlaceQuery) {
+    return this.placesService.getPlaceById(id, query.locale ?? 'et');
   }
 }

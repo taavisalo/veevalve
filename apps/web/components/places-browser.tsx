@@ -13,7 +13,8 @@ import {
 import { PlaceCard } from '@veevalve/ui/web';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 
-import type { PlaceMetrics } from '../lib/fetch-places';
+import { fetchPlacesByIds, type PlaceMetrics } from '../lib/fetch-places';
+import { readFavoritePlaceIds, writeFavoritePlaceIds } from '../lib/favorites-storage';
 import { mapPlaceApiRows, type PlaceApiRow } from '../lib/place-api';
 
 const LATEST_RESULTS_LIMIT = 10;
@@ -196,6 +197,10 @@ export const PlacesBrowser = ({
   const [referenceTimeIso, setReferenceTimeIso] = useState(initialNowIso);
   const [metrics, setMetrics] = useState<PlaceMetrics>(initialMetrics);
   const [metricsExpanded, setMetricsExpanded] = useState(false);
+  const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
+  const [favoritesHydrated, setFavoritesHydrated] = useState(false);
+  const [favoritesLoading, setFavoritesLoading] = useState(false);
+  const [favoritePlaces, setFavoritePlaces] = useState<PlaceWithLatestReading[]>([]);
 
   const isInitialRender = useRef(true);
   const searchContainerRef = useRef<HTMLDivElement | null>(null);
@@ -264,6 +269,61 @@ export const PlacesBrowser = ({
   }, [initialMetrics]);
 
   useEffect(() => {
+    setFavoriteIds(readFavoritePlaceIds());
+    setFavoritesHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!favoritesHydrated) {
+      return;
+    }
+
+    writeFavoritePlaceIds(favoriteIds);
+  }, [favoriteIds, favoritesHydrated]);
+
+  useEffect(() => {
+    if (favoriteIds.length === 0) {
+      setFavoritePlaces([]);
+      setFavoritesLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    setFavoritesLoading(true);
+
+    fetchPlacesByIds({
+      locale,
+      ids: favoriteIds,
+      signal: controller.signal,
+    })
+      .then((fetchedPlaces) => {
+        if (controller.signal.aborted) {
+          return;
+        }
+
+        const byId = new Map(fetchedPlaces.map((place) => [place.id, place] as const));
+        const ordered = favoriteIds
+          .map((id) => byId.get(id))
+          .filter((place): place is PlaceWithLatestReading => Boolean(place));
+        setFavoritePlaces(ordered);
+      })
+      .catch((fetchError: unknown) => {
+        if (controller.signal.aborted) {
+          return;
+        }
+        setFavoritePlaces([]);
+        console.error(fetchError);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setFavoritesLoading(false);
+        }
+      });
+
+    return () => controller.abort();
+  }, [favoriteIds, locale]);
+
+  useEffect(() => {
     const onPointerDown = (event: MouseEvent) => {
       const target = event.target as Node;
       if (searchContainerRef.current && !searchContainerRef.current.contains(target)) {
@@ -308,6 +368,18 @@ export const PlacesBrowser = ({
   const visiblePlaces = places.slice(0, visibleResultsLimit);
   const shownResultsCount = visiblePlaces.length;
   const badShare = formatShare(metrics.badQualityEntries, metrics.totalEntries);
+  const favoriteIdSet = useMemo(() => new Set(favoriteIds), [favoriteIds]);
+  const hasFavorites = favoriteIds.length > 0;
+
+  const toggleFavorite = (placeId: string) => {
+    setFavoriteIds((currentIds) => {
+      if (currentIds.includes(placeId)) {
+        return currentIds.filter((id) => id !== placeId);
+      }
+
+      return [placeId, ...currentIds].slice(0, 50);
+    });
+  };
 
   const suggestions = useMemo<Suggestion[]>(() => {
     if (!searchQuery) {
@@ -730,6 +802,51 @@ export const PlacesBrowser = ({
       </section>
 
       <section className="mt-8">
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold uppercase tracking-[0.12em] text-accent">
+            {t('favorites', locale)}
+          </h2>
+          {hasFavorites ? (
+            <span className="rounded-full border border-emerald-100 bg-white px-2 py-0.5 text-xs font-medium text-slate-600">
+              {favoritePlaces.length}
+            </span>
+          ) : null}
+        </div>
+
+        {!hasFavorites ? (
+          <div className="rounded-xl border border-emerald-100 bg-card p-4 text-sm text-slate-600">
+            {locale === 'et'
+              ? 'Lemmikuid veel ei ole. Märgi kohad tärniga, et need oleksid alati nähtaval.'
+              : 'No favorites yet. Star places to keep them pinned here.'}
+          </div>
+        ) : favoritesLoading && favoritePlaces.length === 0 ? (
+          <div className="rounded-xl border border-emerald-100 bg-card p-4 text-sm text-slate-600">
+            {locale === 'et' ? 'Laadin lemmikuid...' : 'Loading favorites...'}
+          </div>
+        ) : favoritePlaces.length === 0 ? (
+          <div className="rounded-xl border border-emerald-100 bg-card p-4 text-sm text-slate-600">
+            {locale === 'et'
+              ? 'Lemmikuid ei õnnestunud hetkel laadida.'
+              : 'Could not load favorites right now.'}
+          </div>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2">
+            {favoritePlaces.map((place, index) => (
+              <div className="fade-up" style={{ animationDelay: `${index * 70}ms` }} key={`favorite-${place.id}`}>
+                <PlaceCard
+                  place={place}
+                  locale={locale}
+                  referenceTimeIso={referenceTimeIso}
+                  isFavorite
+                  onToggleFavorite={toggleFavorite}
+                />
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="mt-8">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
           <p>
             {searchQuery
@@ -757,7 +874,13 @@ export const PlacesBrowser = ({
           <div className="grid gap-4 md:grid-cols-2">
             {visiblePlaces.map((place, index) => (
               <div className="fade-up" style={{ animationDelay: `${index * 70}ms` }} key={place.id}>
-                <PlaceCard place={place} locale={locale} referenceTimeIso={referenceTimeIso} />
+                <PlaceCard
+                  place={place}
+                  locale={locale}
+                  referenceTimeIso={referenceTimeIso}
+                  isFavorite={favoriteIdSet.has(place.id)}
+                  onToggleFavorite={toggleFavorite}
+                />
               </div>
             ))}
           </div>

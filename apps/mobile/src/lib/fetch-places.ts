@@ -16,6 +16,12 @@ interface FetchPlacesOptions {
   signal?: AbortSignal;
 }
 
+interface FetchPlacesByIdsOptions {
+  locale: AppLocale;
+  ids: string[];
+  signal?: AbortSignal;
+}
+
 export interface PlaceMetrics {
   totalEntries: number;
   poolEntries: number;
@@ -137,6 +143,37 @@ export const fetchPlaces = async ({
 
   const rows = (await response.json()) as PlaceApiRow[];
   return mapPlaceApiRows(rows);
+};
+
+export const fetchPlacesByIds = async ({
+  locale,
+  ids,
+  signal,
+}: FetchPlacesByIdsOptions): Promise<PlaceWithLatestReading[]> => {
+  const uniqueIds = [...new Set(ids.map((id) => id.trim()).filter((id) => id.length > 0))].slice(0, 50);
+  if (uniqueIds.length === 0) {
+    return [];
+  }
+
+  const baseUrl = resolveApiBaseUrl();
+  const responses = await Promise.all(
+    uniqueIds.map(async (id) => {
+      const response = await fetch(
+        `${baseUrl}/places/${encodeURIComponent(id)}?locale=${encodeURIComponent(locale)}`,
+        { signal },
+      );
+
+      if (!response.ok) {
+        return null;
+      }
+
+      const row = (await response.json()) as PlaceApiRow;
+      const mapped = mapPlaceApiRows([row]);
+      return mapped[0] ?? null;
+    }),
+  );
+
+  return responses.filter((place): place is PlaceWithLatestReading => Boolean(place));
 };
 
 export const fetchPlaceMetrics = async ({

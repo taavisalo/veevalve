@@ -24,7 +24,8 @@ import {
 } from 'react-native';
 
 import { ToggleRow } from './src/components/toggle-row';
-import { fetchPlaceMetrics, fetchPlaces, type PlaceMetrics } from './src/lib/fetch-places';
+import { fetchPlaceMetrics, fetchPlaces, fetchPlacesByIds, type PlaceMetrics } from './src/lib/fetch-places';
+import { readFavoritePlaceIds, writeFavoritePlaceIds } from './src/lib/favorites-storage';
 
 const LATEST_RESULTS_LIMIT = 10;
 const SEARCH_RESULTS_LIMIT = 20;
@@ -96,6 +97,10 @@ const App = () => {
   const [referenceTimeIso, setReferenceTimeIso] = useState(() => new Date().toISOString());
   const [metrics, setMetrics] = useState<PlaceMetrics | null>(null);
   const [metricsExpanded, setMetricsExpanded] = useState(false);
+  const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
+  const [favoritesHydrated, setFavoritesHydrated] = useState(false);
+  const [favoritesLoading, setFavoritesLoading] = useState(false);
+  const [favoritePlaces, setFavoritePlaces] = useState<PlaceWithLatestReading[]>([]);
 
   const inputRef = useRef<TextInput | null>(null);
 
@@ -176,10 +181,97 @@ const App = () => {
     };
   }, []);
 
+  useEffect(() => {
+    let mounted = true;
+
+    readFavoritePlaceIds()
+      .then((storedIds) => {
+        if (!mounted) {
+          return;
+        }
+
+        setFavoriteIds(storedIds);
+      })
+      .finally(() => {
+        if (mounted) {
+          setFavoritesHydrated(true);
+        }
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!favoritesHydrated) {
+      return;
+    }
+
+    void writeFavoritePlaceIds(favoriteIds);
+  }, [favoriteIds, favoritesHydrated]);
+
+  useEffect(() => {
+    if (favoriteIds.length === 0) {
+      setFavoritePlaces([]);
+      setFavoritesLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    setFavoritesLoading(true);
+
+    fetchPlacesByIds({
+      locale,
+      ids: favoriteIds,
+      signal: controller.signal,
+    })
+      .then((fetchedPlaces) => {
+        if (controller.signal.aborted) {
+          return;
+        }
+
+        const byId = new Map(fetchedPlaces.map((place) => [place.id, place] as const));
+        const ordered = favoriteIds
+          .map((id) => byId.get(id))
+          .filter((place): place is PlaceWithLatestReading => Boolean(place));
+        setFavoritePlaces(ordered);
+      })
+      .catch((fetchError: unknown) => {
+        if (controller.signal.aborted) {
+          return;
+        }
+
+        setFavoritePlaces([]);
+        console.error(fetchError);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setFavoritesLoading(false);
+        }
+      });
+
+    return () => {
+      controller.abort();
+    };
+  }, [favoriteIds, locale]);
+
   const searchQuery = searchInput.trim();
   const visibleResultsLimit = getResultsLimit(searchQuery);
   const shownResultsCount = places.length;
   const badShare = formatShare(metrics?.badQualityEntries ?? 0, metrics?.totalEntries ?? 0);
+  const favoriteIdSet = useMemo(() => new Set(favoriteIds), [favoriteIds]);
+  const hasFavorites = favoriteIds.length > 0;
+
+  const toggleFavorite = (placeId: string) => {
+    setFavoriteIds((currentIds) => {
+      if (currentIds.includes(placeId)) {
+        return currentIds.filter((id) => id !== placeId);
+      }
+
+      return [placeId, ...currentIds].slice(0, 50);
+    });
+  };
 
   const suggestions = useMemo<Suggestion[]>(() => {
     if (!searchQuery) {
@@ -661,6 +753,50 @@ const App = () => {
           </View>
         </View>
 
+        <View style={styles.favoritesSection}>
+          <View style={styles.favoritesHeaderRow}>
+            <Text style={styles.favoritesTitle}>{t('favorites', locale)}</Text>
+            {hasFavorites ? (
+              <Text style={styles.favoritesCountBadge}>{favoritePlaces.length}</Text>
+            ) : null}
+          </View>
+
+          {!hasFavorites ? (
+            <View style={styles.emptyCard}>
+              <Text style={styles.emptyText}>
+                {locale === 'et'
+                  ? 'Lemmikuid veel ei ole. Märgi kohad tärniga, et need oleksid alati nähtaval.'
+                  : 'No favorites yet. Star places to keep them pinned here.'}
+              </Text>
+            </View>
+          ) : favoritesLoading && favoritePlaces.length === 0 ? (
+            <View style={styles.emptyCard}>
+              <Text style={styles.emptyText}>
+                {locale === 'et' ? 'Laadin lemmikuid...' : 'Loading favorites...'}
+              </Text>
+            </View>
+          ) : favoritePlaces.length === 0 ? (
+            <View style={styles.emptyCard}>
+              <Text style={styles.emptyText}>
+                {locale === 'et'
+                  ? 'Lemmikuid ei õnnestunud hetkel laadida.'
+                  : 'Could not load favorites right now.'}
+              </Text>
+            </View>
+          ) : (
+            favoritePlaces.map((place) => (
+              <NativePlaceCard
+                key={`favorite-${place.id}`}
+                place={place}
+                locale={locale}
+                referenceTimeIso={referenceTimeIso}
+                isFavorite
+                onToggleFavorite={toggleFavorite}
+              />
+            ))
+          )}
+        </View>
+
         <View style={styles.notificationsCard}>
           <Text style={styles.notificationsTitle}>
             {locale === 'et' ? 'Teavitused' : 'Notifications'}
@@ -719,6 +855,8 @@ const App = () => {
               place={place}
               locale={locale}
               referenceTimeIso={referenceTimeIso}
+              isFavorite={favoriteIdSet.has(place.id)}
+              onToggleFavorite={toggleFavorite}
             />
           ))
         )}
@@ -1017,6 +1155,33 @@ const styles = StyleSheet.create({
   },
   filterButtonTextInactive: {
     color: '#153233',
+  },
+  favoritesSection: {
+    marginBottom: 16,
+  },
+  favoritesHeaderRow: {
+    marginBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  favoritesTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+    color: '#0A8F78',
+  },
+  favoritesCountBadge: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#CDE6DF',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#475569',
   },
   notificationsCard: {
     borderRadius: 16,

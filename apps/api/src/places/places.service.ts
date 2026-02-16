@@ -251,7 +251,7 @@ export class PlacesService {
     return places.map((place) => this.toListResponse(place, locale));
   }
 
-  async getPlaceById(id: string): Promise<PlaceListResponse> {
+  async getPlaceById(id: string, locale: 'et' | 'en' = 'et'): Promise<PlaceListResponse> {
     const place = await this.prisma.place.findUnique({
       where: { id },
       include: {
@@ -263,7 +263,7 @@ export class PlacesService {
       throw new NotFoundException('Place not found');
     }
 
-    return this.toListResponse(place, 'et');
+    return this.toListResponse(place, locale);
   }
 
   private async findRankedPlaceIds(input: {

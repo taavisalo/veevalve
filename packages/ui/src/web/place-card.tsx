@@ -7,6 +7,8 @@ export interface PlaceCardProps {
   place: PlaceWithLatestReading;
   locale?: AppLocale;
   referenceTimeIso?: string;
+  isFavorite?: boolean;
+  onToggleFavorite?: (placeId: string) => void;
 }
 
 const GOOGLE_MAPS_SEARCH_URL = 'https://www.google.com/maps/search/';
@@ -65,6 +67,8 @@ export const PlaceCard = ({
   place,
   locale = 'et',
   referenceTimeIso,
+  isFavorite = false,
+  onToggleFavorite,
 }: PlaceCardProps) => {
   const placeName = locale === 'en' ? place.nameEn : place.nameEt;
   const placeAddress = locale === 'en' ? place.addressEn : place.addressEt;
@@ -88,6 +92,10 @@ export const PlaceCard = ({
     locale === 'en'
       ? `Open location in Google Maps: ${mapsSearchQuery ?? ''}`
       : `Ava asukoht Google Mapsis: ${mapsSearchQuery ?? ''}`;
+  const toggleFavoriteLabel =
+    locale === 'en'
+      ? (isFavorite ? 'Remove from favorites' : 'Add to favorites')
+      : (isFavorite ? 'Eemalda lemmikutest' : 'Lisa lemmikutesse');
 
   return (
     <article className="rounded-xl border border-emerald-100 bg-card p-4 shadow-card transition hover:-translate-y-0.5">
@@ -96,7 +104,25 @@ export const PlaceCard = ({
           <h3 className="text-base font-semibold text-ink">{placeName}</h3>
           <p className="text-sm text-slate-600">{place.municipality}</p>
         </div>
-        <QualityBadge status={place.latestReading?.status ?? 'UNKNOWN'} />
+        <div className="flex items-center gap-2">
+          {onToggleFavorite ? (
+            <button
+              type="button"
+              aria-label={toggleFavoriteLabel}
+              aria-pressed={isFavorite}
+              title={toggleFavoriteLabel}
+              onClick={() => onToggleFavorite(place.id)}
+              className={`inline-flex h-8 w-8 items-center justify-center rounded-full border text-base leading-none transition ${
+                isFavorite
+                  ? 'border-amber-300 bg-amber-50 text-amber-600'
+                  : 'border-emerald-100 bg-white text-slate-500 hover:border-amber-300 hover:text-amber-600'
+              }`}
+            >
+              {isFavorite ? '★' : '☆'}
+            </button>
+          ) : null}
+          <QualityBadge status={place.latestReading?.status ?? 'UNKNOWN'} />
+        </div>
       </header>
       {placeAddress && mapsAddressUrl ? (
         <a

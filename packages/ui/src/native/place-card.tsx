@@ -8,6 +8,8 @@ export interface NativePlaceCardProps {
   place: PlaceWithLatestReading;
   locale?: AppLocale;
   referenceTimeIso?: string;
+  isFavorite?: boolean;
+  onToggleFavorite?: (placeId: string) => void;
 }
 
 const GOOGLE_MAPS_SEARCH_BASE_URL = 'https://www.google.com/maps/search/?api=1&query=';
@@ -65,6 +67,8 @@ export const NativePlaceCard = ({
   place,
   locale = 'et',
   referenceTimeIso,
+  isFavorite = false,
+  onToggleFavorite,
 }: NativePlaceCardProps) => {
   const placeName = locale === 'en' ? place.nameEn : place.nameEt;
   const placeAddress = locale === 'en' ? place.addressEn : place.addressEt;
@@ -88,6 +92,10 @@ export const NativePlaceCard = ({
     locale === 'en'
       ? 'Opens the address in Google Maps in another app.'
       : 'Avab aadressi Google Mapsis eraldi rakenduses.';
+  const toggleFavoriteLabel =
+    locale === 'en'
+      ? (isFavorite ? 'Remove from favorites' : 'Add to favorites')
+      : (isFavorite ? 'Eemalda lemmikutest' : 'Lisa lemmikutesse');
 
   const openAddressInMaps = async (query: string): Promise<void> => {
     const url = buildGoogleMapsSearchUrl(query);
@@ -112,7 +120,25 @@ export const NativePlaceCard = ({
           <Text style={styles.name}>{placeName}</Text>
           <Text style={styles.municipality}>{place.municipality}</Text>
         </View>
-        <StatusChip status={place.latestReading?.status ?? 'UNKNOWN'} />
+        <View style={styles.actionsColumn}>
+          {onToggleFavorite ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={toggleFavoriteLabel}
+              style={({ pressed }) => [
+                styles.favoriteButton,
+                isFavorite ? styles.favoriteButtonActive : null,
+                pressed ? styles.favoriteButtonPressed : null,
+              ]}
+              onPress={() => onToggleFavorite(place.id)}
+            >
+              <Text style={[styles.favoriteButtonText, isFavorite ? styles.favoriteButtonTextActive : null]}>
+                {isFavorite ? '★' : '☆'}
+              </Text>
+            </Pressable>
+          ) : null}
+          <StatusChip status={place.latestReading?.status ?? 'UNKNOWN'} />
+        </View>
       </View>
       {mapsSearchQuery ? (
         <Pressable
@@ -170,6 +196,35 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
+  },
+  actionsColumn: {
+    alignItems: 'flex-end',
+    gap: 6,
+  },
+  favoriteButton: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: '#CDE6DF',
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  favoriteButtonActive: {
+    borderColor: '#FCD34D',
+    backgroundColor: '#FFFBEB',
+  },
+  favoriteButtonPressed: {
+    opacity: 0.8,
+  },
+  favoriteButtonText: {
+    fontSize: 17,
+    color: '#64748B',
+    lineHeight: 19,
+  },
+  favoriteButtonTextActive: {
+    color: '#D97706',
   },
   textBlock: {
     flex: 1,
