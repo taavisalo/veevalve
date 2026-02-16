@@ -6,27 +6,13 @@ import {
   Pressable,
   SafeAreaView,
   ScrollView,
+  StyleSheet,
   Text,
   View,
 } from 'react-native';
 
 import { mobileMockPlaces } from './src/mock-places';
 import { ToggleRow } from './src/components/toggle-row';
-
-const buttonStyle = (active: boolean) => ({
-  borderRadius: 999,
-  borderWidth: 1,
-  borderColor: active ? '#0A8F78' : '#CDE6DF',
-  backgroundColor: active ? '#0A8F78' : '#FFFFFF',
-  paddingHorizontal: 12,
-  paddingVertical: 8,
-});
-
-const buttonTextStyle = (active: boolean) => ({
-  color: active ? '#FFFFFF' : '#153233',
-  fontSize: 13,
-  fontWeight: '600' as const,
-});
 
 const App = () => {
   const [locale, setLocale] = useState<AppLocale>('et');
@@ -48,89 +34,160 @@ const App = () => {
   }, [typeFilter, statusFilter]);
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#F2F7F5' }}>
+    <SafeAreaView style={styles.screen}>
       <StatusBar style="dark" />
-      <ScrollView contentContainerStyle={{ padding: 18, paddingBottom: 40 }}>
-        <View
-          style={{
-            borderRadius: 24,
-            backgroundColor: '#FFFFFF',
-            padding: 18,
-            shadowColor: '#06685A',
-            shadowOffset: { width: 0, height: 12 },
-            shadowOpacity: 0.18,
-            shadowRadius: 28,
-            marginBottom: 18,
-          }}
-        >
-          <Text style={{ color: '#0A8F78', fontSize: 12, fontWeight: '700', letterSpacing: 1.2 }}>
+      <ScrollView contentContainerStyle={styles.scroll}>
+        <View style={styles.heroCard}>
+          <Text style={styles.heroLabel}>
             {t('appName', locale)}
           </Text>
-          <Text
-            style={{
-              marginTop: 8,
-              color: '#153233',
-              fontSize: 28,
-              fontWeight: '700',
-              lineHeight: 34,
-            }}
-          >
+          <Text style={styles.heroTitle}>
             {locale === 'et'
               ? 'Ujumiskohtade vee kvaliteet Eestis'
               : 'Water quality for swimming places in Estonia'}
           </Text>
-          <Text style={{ marginTop: 10, color: '#4B5563', fontSize: 14 }}>{t('subtitle', locale)}</Text>
+          <Text style={styles.heroSubtitle}>{t('subtitle', locale)}</Text>
 
-          <View style={{ flexDirection: 'row', marginTop: 12, gap: 8 }}>
+          <View style={styles.buttonRow}>
             <Pressable
               onPress={() => setLocale('et')}
-              style={buttonStyle(locale === 'et')}
+              style={[
+                styles.filterButton,
+                locale === 'et' ? styles.filterButtonActive : styles.filterButtonInactive,
+              ]}
             >
-              <Text style={buttonTextStyle(locale === 'et')}>EST</Text>
+              <Text
+                style={[
+                  styles.filterButtonText,
+                  locale === 'et'
+                    ? styles.filterButtonTextActive
+                    : styles.filterButtonTextInactive,
+                ]}
+              >
+                EST
+              </Text>
             </Pressable>
             <Pressable
               onPress={() => setLocale('en')}
-              style={buttonStyle(locale === 'en')}
+              style={[
+                styles.filterButton,
+                locale === 'en' ? styles.filterButtonActive : styles.filterButtonInactive,
+              ]}
             >
-              <Text style={buttonTextStyle(locale === 'en')}>ENG</Text>
+              <Text
+                style={[
+                  styles.filterButtonText,
+                  locale === 'en'
+                    ? styles.filterButtonTextActive
+                    : styles.filterButtonTextInactive,
+                ]}
+              >
+                ENG
+              </Text>
             </Pressable>
           </View>
         </View>
 
-        <View style={{ marginBottom: 14 }}>
-          <Text style={{ marginBottom: 8, fontSize: 12, fontWeight: '700', color: '#0A8F78' }}>
+        <View style={styles.filterSection}>
+          <Text style={styles.filterTitle}>
             {locale === 'et' ? 'Filtreeri' : 'Filter'}
           </Text>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-            <Pressable style={buttonStyle(typeFilter === 'ALL')} onPress={() => setTypeFilter('ALL')}>
-              <Text style={buttonTextStyle(typeFilter === 'ALL')}>{locale === 'et' ? 'Kõik' : 'All'}</Text>
+          <View style={styles.filterWrap}>
+            <Pressable
+              style={[
+                styles.filterButton,
+                typeFilter === 'ALL' ? styles.filterButtonActive : styles.filterButtonInactive,
+              ]}
+              onPress={() => setTypeFilter('ALL')}
+            >
+              <Text
+                style={[
+                  styles.filterButtonText,
+                  typeFilter === 'ALL'
+                    ? styles.filterButtonTextActive
+                    : styles.filterButtonTextInactive,
+                ]}
+              >
+                {locale === 'et' ? 'Kõik' : 'All'}
+              </Text>
             </Pressable>
-            <Pressable style={buttonStyle(typeFilter === 'BEACH')} onPress={() => setTypeFilter('BEACH')}>
-              <Text style={buttonTextStyle(typeFilter === 'BEACH')}>{t('beaches', locale)}</Text>
+            <Pressable
+              style={[
+                styles.filterButton,
+                typeFilter === 'BEACH' ? styles.filterButtonActive : styles.filterButtonInactive,
+              ]}
+              onPress={() => setTypeFilter('BEACH')}
+            >
+              <Text
+                style={[
+                  styles.filterButtonText,
+                  typeFilter === 'BEACH'
+                    ? styles.filterButtonTextActive
+                    : styles.filterButtonTextInactive,
+                ]}
+              >
+                {t('beaches', locale)}
+              </Text>
             </Pressable>
-            <Pressable style={buttonStyle(typeFilter === 'POOL')} onPress={() => setTypeFilter('POOL')}>
-              <Text style={buttonTextStyle(typeFilter === 'POOL')}>{t('pools', locale)}</Text>
+            <Pressable
+              style={[
+                styles.filterButton,
+                typeFilter === 'POOL' ? styles.filterButtonActive : styles.filterButtonInactive,
+              ]}
+              onPress={() => setTypeFilter('POOL')}
+            >
+              <Text
+                style={[
+                  styles.filterButtonText,
+                  typeFilter === 'POOL'
+                    ? styles.filterButtonTextActive
+                    : styles.filterButtonTextInactive,
+                ]}
+              >
+                {t('pools', locale)}
+              </Text>
             </Pressable>
-            <Pressable style={buttonStyle(statusFilter === 'GOOD')} onPress={() => setStatusFilter('GOOD')}>
-              <Text style={buttonTextStyle(statusFilter === 'GOOD')}>{t('qualityGood', locale)}</Text>
+            <Pressable
+              style={[
+                styles.filterButton,
+                statusFilter === 'GOOD' ? styles.filterButtonActive : styles.filterButtonInactive,
+              ]}
+              onPress={() => setStatusFilter('GOOD')}
+            >
+              <Text
+                style={[
+                  styles.filterButtonText,
+                  statusFilter === 'GOOD'
+                    ? styles.filterButtonTextActive
+                    : styles.filterButtonTextInactive,
+                ]}
+              >
+                {t('qualityGood', locale)}
+              </Text>
             </Pressable>
-            <Pressable style={buttonStyle(statusFilter === 'BAD')} onPress={() => setStatusFilter('BAD')}>
-              <Text style={buttonTextStyle(statusFilter === 'BAD')}>{t('qualityBad', locale)}</Text>
+            <Pressable
+              style={[
+                styles.filterButton,
+                statusFilter === 'BAD' ? styles.filterButtonActive : styles.filterButtonInactive,
+              ]}
+              onPress={() => setStatusFilter('BAD')}
+            >
+              <Text
+                style={[
+                  styles.filterButtonText,
+                  statusFilter === 'BAD'
+                    ? styles.filterButtonTextActive
+                    : styles.filterButtonTextInactive,
+                ]}
+              >
+                {t('qualityBad', locale)}
+              </Text>
             </Pressable>
           </View>
         </View>
 
-        <View
-          style={{
-            borderRadius: 16,
-            borderWidth: 1,
-            borderColor: '#D9E9E5',
-            backgroundColor: '#FFFFFF',
-            padding: 14,
-            marginBottom: 16,
-          }}
-        >
-          <Text style={{ fontSize: 15, fontWeight: '700', color: '#153233', marginBottom: 10 }}>
+        <View style={styles.notificationsCard}>
+          <Text style={styles.notificationsTitle}>
             {locale === 'et' ? 'Teavitused' : 'Notifications'}
           </Text>
           <ToggleRow
@@ -162,3 +219,99 @@ const App = () => {
 };
 
 export default App;
+
+const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: '#F2F7F5',
+  },
+  scroll: {
+    padding: 18,
+    paddingBottom: 40,
+  },
+  heroCard: {
+    borderRadius: 24,
+    backgroundColor: '#FFFFFF',
+    padding: 18,
+    shadowColor: '#06685A',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.18,
+    shadowRadius: 28,
+    marginBottom: 18,
+  },
+  heroLabel: {
+    color: '#0A8F78',
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 1.2,
+  },
+  heroTitle: {
+    marginTop: 8,
+    color: '#153233',
+    fontSize: 28,
+    fontWeight: '700',
+    lineHeight: 34,
+  },
+  heroSubtitle: {
+    marginTop: 10,
+    color: '#4B5563',
+    fontSize: 14,
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    marginTop: 12,
+    gap: 8,
+  },
+  filterSection: {
+    marginBottom: 14,
+  },
+  filterTitle: {
+    marginBottom: 8,
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0A8F78',
+  },
+  filterWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  filterButton: {
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  filterButtonActive: {
+    borderColor: '#0A8F78',
+    backgroundColor: '#0A8F78',
+  },
+  filterButtonInactive: {
+    borderColor: '#CDE6DF',
+    backgroundColor: '#FFFFFF',
+  },
+  filterButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  filterButtonTextActive: {
+    color: '#FFFFFF',
+  },
+  filterButtonTextInactive: {
+    color: '#153233',
+  },
+  notificationsCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#D9E9E5',
+    backgroundColor: '#FFFFFF',
+    padding: 14,
+    marginBottom: 16,
+  },
+  notificationsTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#153233',
+    marginBottom: 10,
+  },
+});

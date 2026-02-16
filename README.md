@@ -60,6 +60,8 @@ Data source:
 docker compose up --build
 ```
 
+The Docker services use a lock-aware bootstrap script (`docker/scripts/bootstrap.sh`) that installs dependencies only when `pnpm-lock.yaml` changes. This keeps startup faster and avoids repeated package installs.
+
 Services:
 - Web: `http://localhost:3000`
 - API: `http://localhost:3001/api`
@@ -70,6 +72,14 @@ To run only database + workspace container:
 
 ```bash
 docker compose up postgres workspace
+```
+
+To start only selected app services after bootstrap:
+
+```bash
+docker compose up api
+docker compose up web
+docker compose up mobile
 ```
 
 ## Quick Start (Local, Native Toolchain)
@@ -161,6 +171,14 @@ Backend identity model supports multiple providers per user.
 - `CI`: lint + typecheck + tests + build
 - `Deploy Web (Vercel)`: production deployment with Vercel secrets
 - `Build Mobile (EAS)`: workflow-dispatch build/submit pipeline
+
+## Size and Performance Defaults
+
+- Peer auto-install is disabled to avoid pulling unnecessary packages.
+- Optional peers are used in shared UI package so web builds do not require native runtime packages.
+- Next.js uses `output: standalone` for smaller production containers.
+- API Prisma client generation is cached by schema hash to reduce repeated build/dev overhead.
+- Docker dev startup avoids re-running `pnpm install` on every service start.
 
 ## Current Status
 

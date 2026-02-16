@@ -4,7 +4,7 @@ services:
       context: .
       dockerfile: docker/Dockerfile.dev
     working_dir: /workspace
-    command: sleep infinity
+    command: sh -lc "./docker/scripts/bootstrap.sh && sleep infinity"
     volumes:
       - .:/workspace
       - pnpm_store:/pnpm/store
@@ -33,7 +33,7 @@ services:
       dockerfile: docker/Dockerfile.dev
     working_dir: /workspace
     command: >-
-      sh -lc "pnpm install &&
+      sh -lc "./docker/scripts/bootstrap.sh &&
       pnpm --filter @veevalve/api prisma:generate &&
       pnpm --filter @veevalve/api dev"
     environment:
@@ -50,6 +50,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      workspace:
+        condition: service_started
 
   web:
     build:
@@ -57,7 +59,7 @@ services:
       dockerfile: docker/Dockerfile.dev
     working_dir: /workspace
     command: >-
-      sh -lc "pnpm install &&
+      sh -lc "./docker/scripts/bootstrap.sh &&
       pnpm --filter @veevalve/web dev -- --hostname 0.0.0.0 --port 3000"
     environment:
       NEXT_PUBLIC_API_BASE_URL: http://localhost:3001/api
@@ -69,6 +71,7 @@ services:
       - root_node_modules:/workspace/node_modules
     depends_on:
       - api
+      - workspace
 
   mobile:
     build:
@@ -76,7 +79,7 @@ services:
       dockerfile: docker/Dockerfile.dev
     working_dir: /workspace
     command: >-
-      sh -lc "pnpm install &&
+      sh -lc "./docker/scripts/bootstrap.sh &&
       pnpm --filter @veevalve/mobile dev -- --host 0.0.0.0 --port 8081"
     environment:
       EXPO_DEVTOOLS_LISTEN_ADDRESS: 0.0.0.0
@@ -92,6 +95,7 @@ services:
       - root_node_modules:/workspace/node_modules
     depends_on:
       - api
+      - workspace
     stdin_open: true
     tty: true
 
