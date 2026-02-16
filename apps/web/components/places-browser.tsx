@@ -23,6 +23,7 @@ const SEARCH_RESULTS_LIMIT = 20;
 const SUGGESTION_LIMIT = 8;
 const SEARCH_DEBOUNCE_MS = 180;
 const API_BASE_URL = (process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:3001/api').replace(/\/+$/, '');
+const TERVISEAMET_DATA_URL = 'https://vtiav.sm.ee/index.php/?active_tab_id=A';
 
 const getResultsLimit = (search?: string): number =>
   search?.trim() ? SEARCH_RESULTS_LIMIT : LATEST_RESULTS_LIMIT;
@@ -199,6 +200,7 @@ export const PlacesBrowser = ({
   const [metrics, setMetrics] = useState<PlaceMetrics>(initialMetrics);
   const [metricsExpanded, setMetricsExpanded] = useState(false);
   const [metricsVisible, setMetricsVisible] = useState(false);
+  const [aboutVisible, setAboutVisible] = useState(false);
   const [metricsPreferencesHydrated, setMetricsPreferencesHydrated] = useState(false);
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
   const [favoritesHydrated, setFavoritesHydrated] = useState(false);
@@ -504,6 +506,20 @@ export const PlacesBrowser = ({
         <div className="absolute right-6 top-4 z-10 flex items-start gap-2" ref={languageContainerRef}>
           <button
             type="button"
+            aria-pressed={aboutVisible}
+            onClick={() => setAboutVisible((value) => !value)}
+            className={`inline-flex h-7 w-7 items-center justify-center rounded-full border text-sm font-semibold leading-none transition ${
+              aboutVisible
+                ? 'border-accent bg-accent text-white'
+                : 'border-emerald-100 bg-white text-accent hover:border-accent'
+            }`}
+            aria-label={locale === 'et' ? 'Ava info andmete kohta' : 'Open data info'}
+            title={locale === 'et' ? 'Info' : 'About'}
+          >
+            ?
+          </button>
+          <button
+            type="button"
             aria-pressed={metricsVisible}
             onClick={() => setMetricsVisible((value) => !value)}
             className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
@@ -562,6 +578,83 @@ export const PlacesBrowser = ({
             ? 'Vee kvaliteet randades ja basseinides'
             : 'Water quality for beaches and pools'}
         </h1>
+
+        {aboutVisible ? (
+          <div className="mt-4 rounded-2xl border border-emerald-100 bg-white/85 p-4 text-sm text-slate-700">
+            <p className="font-semibold text-ink">
+              {locale === 'et' ? 'Kust andmed tulevad?' : 'Where does this data come from?'}
+            </p>
+            <p className="mt-1">
+              {locale === 'et'
+                ? (
+                    <>
+                      Andmed pärinevad Terviseameti avalikest XML-andmetest (
+                      <a
+                        href={TERVISEAMET_DATA_URL}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-accent underline decoration-dotted underline-offset-2"
+                      >
+                        vtiav.sm.ee
+                      </a>
+                      ).
+                    </>
+                  )
+                : (
+                    <>
+                      Data comes from public XML feeds by the Estonian Health Board (
+                      <a
+                        href={TERVISEAMET_DATA_URL}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-accent underline decoration-dotted underline-offset-2"
+                      >
+                        vtiav.sm.ee
+                      </a>
+                      ).
+                    </>
+                  )}
+            </p>
+            <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-slate-600">
+              {locale === 'et' ? (
+                <>
+                  <li>Ujulate ja basseinide allikad: `ujulad.xml`, `basseinid.xml`, `basseini_veeproovid_{'{year}'}.xml`.</li>
+                  <li>Supluskohtade allikad: `supluskohad.xml`, `supluskoha_veeproovid_{'{year}'}.xml`.</li>
+                  <li>Andmete uuendamine käivitub iga tunni 15. minutil.</li>
+                  <li>Muutuseid kontrollitakse `ETag`/`Last-Modified` päistega ja sisuräsi abil.</li>
+                  <li>Asukohafaile kontrollitakse umbes kord ööpäevas; proovifaile sagedamini (basseinid ~2 h, rannad hooajal ~2 h, väljaspool hooaega ~24 h).</li>
+                </>
+              ) : (
+                <>
+                  <li>Pool sources: `ujulad.xml`, `basseinid.xml`, `basseini_veeproovid_{'{year}'}.xml`.</li>
+                  <li>Beach sources: `supluskohad.xml`, `supluskoha_veeproovid_{'{year}'}.xml`.</li>
+                  <li>Automatic sync runs every hour at minute 15.</li>
+                  <li>Changes are detected via `ETag`/`Last-Modified` headers and content hash checks.</li>
+                  <li>Location feeds are checked about once per day; sample feeds more often (pools ~2h, beaches in season ~2h, off-season ~24h).</li>
+                </>
+              )}
+            </ul>
+
+            <p className="mt-3 font-semibold text-ink">
+              {locale === 'et' ? 'Mida tähendavad staatused?' : 'What do statuses mean?'}
+            </p>
+            <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-slate-600">
+              {locale === 'et' ? (
+                <>
+                  <li>`Hea`: viimane proov vastab nõuetele.</li>
+                  <li>`Halb`: viimane proov ei vasta nõuetele.</li>
+                  <li>`Teadmata`: värske hinnang puudub või staatust ei saanud määrata.</li>
+                </>
+              ) : (
+                <>
+                  <li>`Good`: the latest sample meets requirements.</li>
+                  <li>`Bad`: the latest sample does not meet requirements.</li>
+                  <li>`Unknown`: no recent rating is available, or a status could not be determined.</li>
+                </>
+              )}
+            </ul>
+          </div>
+        ) : null}
 
         {metricsVisible ? (
           <div id="metrics-panel" className="mt-4">

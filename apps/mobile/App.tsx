@@ -14,6 +14,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Keyboard,
+  Linking,
   Pressable,
   SafeAreaView,
   ScrollView,
@@ -32,6 +33,7 @@ const LATEST_RESULTS_LIMIT = 10;
 const SEARCH_RESULTS_LIMIT = 20;
 const SUGGESTION_LIMIT = 8;
 const SEARCH_DEBOUNCE_MS = 180;
+const TERVISEAMET_DATA_URL = 'https://vtiav.sm.ee/index.php/?active_tab_id=A';
 
 const getResultsLimit = (search?: string): number =>
   search?.trim() ? SEARCH_RESULTS_LIMIT : LATEST_RESULTS_LIMIT;
@@ -99,6 +101,7 @@ const App = () => {
   const [metrics, setMetrics] = useState<PlaceMetrics | null>(null);
   const [metricsExpanded, setMetricsExpanded] = useState(false);
   const [metricsVisible, setMetricsVisible] = useState(false);
+  const [aboutVisible, setAboutVisible] = useState(false);
   const [metricsPreferencesHydrated, setMetricsPreferencesHydrated] = useState(false);
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
   const [favoritesHydrated, setFavoritesHydrated] = useState(false);
@@ -308,6 +311,14 @@ const App = () => {
     setMetricsExpanded((value) => !value);
   };
 
+  const openAboutSourceLink = async () => {
+    try {
+      await Linking.openURL(TERVISEAMET_DATA_URL);
+    } catch (openUrlError) {
+      console.error(openUrlError);
+    }
+  };
+
   const toggleFavorite = (placeId: string) => {
     setFavoriteIds((currentIds) => {
       if (currentIds.includes(placeId)) {
@@ -474,6 +485,24 @@ const App = () => {
                 {locale === 'et' ? 'Mõõdikud' : 'Metrics'}
               </Text>
             </Pressable>
+            <Pressable
+              style={[
+                styles.aboutHeaderToggle,
+                aboutVisible ? styles.aboutHeaderToggleActive : undefined,
+              ]}
+              onPress={() => setAboutVisible((value) => !value)}
+              accessibilityRole="button"
+              accessibilityLabel={locale === 'et' ? 'Ava info andmete kohta' : 'Open data info'}
+            >
+              <Text
+                style={[
+                  styles.aboutHeaderToggleText,
+                  aboutVisible ? styles.aboutHeaderToggleTextActive : undefined,
+                ]}
+              >
+                ?
+              </Text>
+            </Pressable>
             <View style={styles.languageControl}>
               <Pressable
                 style={styles.languageTrigger}
@@ -530,6 +559,72 @@ const App = () => {
               ? 'Ujumiskohtade vee kvaliteet Eestis'
               : 'Water quality for swimming places in Estonia'}
           </Text>
+
+          {aboutVisible ? (
+            <View style={styles.aboutPanel}>
+              <Text style={styles.aboutTitle}>
+                {locale === 'et' ? 'Kust andmed tulevad?' : 'Where does this data come from?'}
+              </Text>
+              <Text style={styles.aboutText}>
+                {locale === 'et'
+                  ? 'Andmed pärinevad Terviseameti avalikest XML-andmetest.'
+                  : 'Data comes from public XML feeds by the Estonian Health Board.'}
+              </Text>
+              <Pressable
+                onPress={openAboutSourceLink}
+                accessibilityRole="link"
+                accessibilityLabel={locale === 'et' ? 'Ava andmeallikas' : 'Open data source'}
+              >
+                <Text style={styles.aboutSourceLink}>{TERVISEAMET_DATA_URL}</Text>
+              </Pressable>
+
+              {locale === 'et' ? (
+                <>
+                  <Text style={styles.aboutListItem}>
+                    • Ujulate allikad: ujulad.xml, basseinid.xml, basseini_veeproovid_{'{year}'}.xml
+                  </Text>
+                  <Text style={styles.aboutListItem}>
+                    • Supluskohtade allikad: supluskohad.xml, supluskoha_veeproovid_{'{year}'}.xml
+                  </Text>
+                  <Text style={styles.aboutListItem}>• Andmete uuendaminde käivitub iga tunni 15. minutil.</Text>
+                  <Text style={styles.aboutListItem}>
+                    • Muutuseid kontrollitakse ETag/Last-Modified päiste ja sisuräsi abil.
+                  </Text>
+                  <Text style={styles.aboutListItem}>
+                    • Asukohafaile kontrollitakse umbes kord ööpäevas; proovifaile sagedamini (basseinid ~2 h, rannad hooajal ~2 h, väljaspool hooaega ~24 h).
+                  </Text>
+                  <Text style={styles.aboutTitleSecondary}>Mida tähendavad staatused?</Text>
+                  <Text style={styles.aboutListItem}>• Hea: viimane proov vastab nõuetele.</Text>
+                  <Text style={styles.aboutListItem}>• Halb: viimane proov ei vasta nõuetele.</Text>
+                  <Text style={styles.aboutListItem}>
+                    • Teadmata: värske hinnang puudub või staatust ei saanud määrata.
+                  </Text>
+                </>
+              ) : (
+                <>
+                  <Text style={styles.aboutListItem}>
+                    • Pool sources: ujulad.xml, basseinid.xml, basseini_veeproovid_{'{year}'}.xml
+                  </Text>
+                  <Text style={styles.aboutListItem}>
+                    • Beach sources: supluskohad.xml, supluskoha_veeproovid_{'{year}'}.xml
+                  </Text>
+                  <Text style={styles.aboutListItem}>• Automatic sync runs every hour at minute 15.</Text>
+                  <Text style={styles.aboutListItem}>
+                    • Changes are detected via ETag/Last-Modified headers and content hash checks.
+                  </Text>
+                  <Text style={styles.aboutListItem}>
+                    • Location feeds are checked about once per day; sample feeds more often (pools ~2h, beaches in season ~2h, off-season ~24h).
+                  </Text>
+                  <Text style={styles.aboutTitleSecondary}>What do statuses mean?</Text>
+                  <Text style={styles.aboutListItem}>• Good: the latest sample meets requirements.</Text>
+                  <Text style={styles.aboutListItem}>• Bad: the latest sample does not meet requirements.</Text>
+                  <Text style={styles.aboutListItem}>
+                    • Unknown: no recent rating is available, or a status could not be determined.
+                  </Text>
+                </>
+              )}
+            </View>
+          ) : null}
 
           {metricsVisible ? (
             <View style={styles.metricsWrap}>
@@ -1056,6 +1151,64 @@ const styles = StyleSheet.create({
   },
   metricsHeaderToggleTextActive: {
     color: '#FFFFFF',
+  },
+  aboutHeaderToggle: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#CDE6DF',
+    backgroundColor: '#FFFFFF',
+    width: 30,
+    height: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  aboutHeaderToggleActive: {
+    backgroundColor: '#0A8F78',
+    borderColor: '#0A8F78',
+  },
+  aboutHeaderToggleText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0A8F78',
+  },
+  aboutHeaderToggleTextActive: {
+    color: '#FFFFFF',
+  },
+  aboutPanel: {
+    marginTop: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#D9E9E5',
+    backgroundColor: '#F8FCFA',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 4,
+  },
+  aboutTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#153233',
+  },
+  aboutTitleSecondary: {
+    marginTop: 6,
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#153233',
+  },
+  aboutText: {
+    fontSize: 12,
+    color: '#475569',
+  },
+  aboutSourceLink: {
+    fontSize: 12,
+    color: '#0A8F78',
+    textDecorationLine: 'underline',
+    textDecorationStyle: 'dotted',
+  },
+  aboutListItem: {
+    fontSize: 11,
+    lineHeight: 15,
+    color: '#475569',
   },
   metricsDetailsToggle: {
     marginTop: 4,
