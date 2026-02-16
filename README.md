@@ -61,6 +61,7 @@ docker compose up --build
 ```
 
 The Docker services use a lock-aware bootstrap script (`docker/scripts/bootstrap.sh`) that installs dependencies only when `pnpm-lock.yaml` changes. This keeps startup faster and avoids repeated package installs.
+App-level `node_modules` are mounted as Docker volumes to avoid host/container symlink conflicts in pnpm workspaces.
 
 Services:
 - Web: `http://localhost:3000`
@@ -116,6 +117,14 @@ pnpm --filter @veevalve/api prisma:migrate
 pnpm --filter @veevalve/api prisma:seed
 ```
 
+Optional migration workflows:
+
+```bash
+pnpm --filter @veevalve/api prisma:migrate:create
+pnpm --filter @veevalve/api prisma:migrate:deploy
+pnpm --filter @veevalve/api prisma:reset
+```
+
 5. Start all apps:
 
 ```bash
@@ -136,10 +145,66 @@ See `.env.example` for full defaults.
 
 Important variables:
 - `DATABASE_URL`
-- `TERVISEAMET_XML_URL`
+- `TERVISEAMET_POOL_FACILITIES_URL`
+- `TERVISEAMET_POOL_LOCATIONS_URL`
+- `TERVISEAMET_BEACH_LOCATIONS_URL`
+- `TERVISEAMET_POOL_SAMPLES_URL_TEMPLATE`
+- `TERVISEAMET_BEACH_SAMPLES_URL_TEMPLATE`
+- `TERVISEAMET_SAMPLE_YEARS_BACK`
 - `NEXT_PUBLIC_API_BASE_URL`
 - `CORS_ORIGIN`
 - Expo/EAS credentials for production builds
+
+## Data Schema
+
+The API uses a normalized Prisma/PostgreSQL schema for Terviseamet open-data ingestion:
+- `Place` (canonical pool/beach entity used by app features)
+- `PoolFacility`, `PoolProfile`, `BeachProfile` (location metadata)
+- `SamplingPoint` (`proovivotukoht`)
+- `WaterQualitySample` (`proovivott`)
+- `WaterQualityProtocol` (`katseprotokoll`)
+- `WaterQualityIndicator` (`naitaja`)
+- `PlaceLatestStatus` (fast latest-status lookup for list/filter endpoints)
+- `SourceSyncState` (per-feed checksum/header tracking for change detection)
+
+Indexing highlights:
+- Latest sample lookup per place: `(placeId, sampledAt DESC)`
+- Status filtering and recency: `(overallStatus, sampledAt DESC)` and `(status, sampledAt DESC)`
+- Upsert/dedup keys: `(type, externalId)`, `(placeId, externalId)`, `(fileKind, year)`
+
+## Sync Strategy
+
+The sync service pulls:
+- `ujulad.xml` (pool facilities)
+- `basseinid.xml` (pool locations + sampling points)
+- `supluskohad.xml` (beach locations + sampling points)
+- `basseini_veeproovid_{year}.xml` (pool samples)
+- `supluskoha_veeproovid_{year}.xml` (beach samples)
+
+Change detection:
+- Tries conditional requests with `If-None-Match` and `If-Modified-Since`
+- Falls back to SHA-256 content hash comparison when headers are not useful
+- Stores state in `SourceSyncState`
+
+Year handling:
+- Automatically checks current year and previous year feeds (`TERVISEAMET_SAMPLE_YEARS_BACK`, default `1`)
+- Handles missing yearly files (`404`) without breaking the whole sync
+
+## Feed Frequency Notes
+
+Observed from source data and headers on **February 16, 2026**:
+- Response headers are `cache-control: no-store` and do not expose stable `ETag`/`Last-Modified` for reliable incremental polling.
+- Pool sample feed (`basseini_veeproovid_2026.xml`) shows near-daily additions:
+  - sample date range: `2026-01-05` to `2026-02-12`
+  - median gap between sampling days: `1` day
+- Beach sample feed (`supluskoha_veeproovid_2025.xml`) is strongly seasonal:
+  - sample date range: `2025-05-12` to `2025-10-02`
+  - median gap between sampling days: `1` day during season, sparse outside season
+
+Default polling optimization implemented:
+- metadata feeds: every 24h
+- pool sample feeds: every 2h
+- beach sample feeds: every 2h in May-October, otherwise every 24h
 
 ## Auth Strategy
 
@@ -194,11 +259,11 @@ Already included:
 - Open-source project governance files
 
 Next implementation steps:
-1. Connect XML parser to exact Terviseamet payload structure and map all fields.
+1. Add WGS84 coordinate transformation from source coordinate system for geofence precision.
 2. Build real auth flows (OIDC and session/token lifecycle).
 3. Integrate Expo push token registration and delivery pipeline.
-4. Implement location geofence checks from real user coordinates.
-5. Replace mock data in web/mobile with live API data.
+4. Replace mock data in web/mobile with live API data.
+5. Add advanced place/sample detail endpoints for protocol and indicator drill-down UI.
 
 ## License
 

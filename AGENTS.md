@@ -36,6 +36,9 @@ Core goals:
 ## Data and Domain Rules
 
 - Data source is public XML from Terviseamet VTIAV.
+- Ingestion is normalized: `Place` -> `WaterQualitySample` -> `WaterQualityProtocol` -> `WaterQualityIndicator`.
+- Keep `PlaceLatestStatus` as the primary fast-read path for list/filter endpoints.
+- `SourceSyncState` stores per-feed hash/header state and must be updated on every fetch attempt.
 - Quality states must be normalized to: `GOOD`, `BAD`, `UNKNOWN`.
 - Notifications should be edge-triggered on quality transition, not repeated on unchanged status.
 - Location-based notifications must remain opt-in.

@@ -3,8 +3,12 @@ set -eu
 
 cd /workspace
 
+export PNPM_DISABLE_SELF_UPDATE_CHECK=true
+export NO_UPDATE_NOTIFIER=true
+export npm_config_update_notifier=false
+
 LOCK_FILE="/workspace/node_modules/.pnpm-lock-hash"
-LOCK_DIR="/tmp/veevalve-pnpm-install.lock"
+LOCK_DIR="/workspace/node_modules/.pnpm-install.lock"
 
 hash_lockfile() {
   if command -v sha256sum >/dev/null 2>&1; then

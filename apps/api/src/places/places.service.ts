@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import type { Place, PlaceType, QualityStatus } from '@prisma/client';
+import type { Place, PlaceLatestStatus, PlaceType, QualityStatus } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
 import type { ListPlacesQuery } from './dto/list-places.query';
@@ -11,8 +11,8 @@ export interface PlaceListResponse {
   name: string;
   municipality: string;
   address: string | null;
-  latitude: number;
-  longitude: number;
+  latitude: number | null;
+  longitude: number | null;
   latestReading?: {
     sampledAt: string;
     status: QualityStatus;
@@ -37,14 +37,16 @@ export class PlacesService {
               { municipality: { contains: query.search, mode: 'insensitive' } },
             ]
           : undefined,
+        latestStatus: query.status
+          ? {
+              is: {
+                status: query.status,
+              },
+            }
+          : undefined,
       },
       include: {
-        readings: {
-          orderBy: {
-            sampledAt: 'desc',
-          },
-          take: 1,
-        },
+        latestStatus: true,
       },
       skip: query.offset ?? 0,
       take: query.limit ?? 100,
@@ -53,23 +55,14 @@ export class PlacesService {
       },
     });
 
-    const mapped = places.map((place) => this.toListResponse(place, locale));
-
-    if (!query.status) {
-      return mapped;
-    }
-
-    return mapped.filter((place) => place.latestReading?.status === query.status);
+    return places.map((place) => this.toListResponse(place, locale));
   }
 
   async getPlaceById(id: string): Promise<PlaceListResponse> {
     const place = await this.prisma.place.findUnique({
       where: { id },
       include: {
-        readings: {
-          orderBy: { sampledAt: 'desc' },
-          take: 1,
-        },
+        latestStatus: true,
       },
     });
 
@@ -80,8 +73,11 @@ export class PlacesService {
     return this.toListResponse(place, 'et');
   }
 
-  private toListResponse(place: Place & { readings: Array<{ sampledAt: Date; status: QualityStatus; statusReasonEt: string; statusReasonEn: string }> }, locale: 'et' | 'en'): PlaceListResponse {
-    const latest = place.readings[0];
+  private toListResponse(
+    place: Place & { latestStatus: PlaceLatestStatus | null },
+    locale: 'et' | 'en',
+  ): PlaceListResponse {
+    const latest = place.latestStatus;
 
     return {
       id: place.id,
@@ -90,13 +86,16 @@ export class PlacesService {
       name: locale === 'en' ? place.nameEn : place.nameEt,
       municipality: place.municipality,
       address: locale === 'en' ? (place.addressEn ?? null) : (place.addressEt ?? null),
-      latitude: place.latitude,
-      longitude: place.longitude,
+      latitude: place.latitude ?? null,
+      longitude: place.longitude ?? null,
       latestReading: latest
         ? {
             sampledAt: latest.sampledAt.toISOString(),
             status: latest.status,
-            statusReason: locale === 'en' ? latest.statusReasonEn : latest.statusReasonEt,
+            statusReason:
+              locale === 'en'
+                ? (latest.statusReasonEn ?? latest.statusReasonEt ?? '')
+                : (latest.statusReasonEt ?? latest.statusReasonEn ?? ''),
           }
         : undefined,
     };

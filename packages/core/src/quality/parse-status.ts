@@ -6,6 +6,14 @@ export const parseQualityStatus = (raw: string | null | undefined): QualityStatu
     return 'UNKNOWN';
   }
 
-  const normalized = raw.trim().toLowerCase();
-  return QUALITY_LABEL_TO_STATUS[normalized] ?? 'UNKNOWN';
+  const normalized = raw.trim().toLowerCase().replace(/\s+/g, ' ');
+  const normalizedAscii = normalized
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '');
+
+  return (
+    QUALITY_LABEL_TO_STATUS[normalized] ??
+    QUALITY_LABEL_TO_STATUS[normalizedAscii] ??
+    'UNKNOWN'
+  );
 };

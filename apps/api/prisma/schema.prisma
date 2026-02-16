@@ -22,6 +22,14 @@ enum WaterSource {
   TERVISEAMET_XML
 }
 
+enum SourceFileKind {
+  POOL_LOCATIONS
+  POOL_FACILITIES
+  POOL_SAMPLES
+  BEACH_LOCATIONS
+  BEACH_SAMPLES
+}
+
 enum AuthProvider {
   GOOGLE
   APPLE
@@ -55,40 +63,255 @@ model UserIdentity {
 }
 
 model Place {
-  id           String                  @id @default(cuid())
-  externalId   String                  @unique
-  nameEt       String
-  nameEn       String
-  type         PlaceType
-  municipality String
-  addressEt    String?
-  addressEn    String?
-  latitude     Float
-  longitude    Float
-  createdAt    DateTime                @default(now())
-  updatedAt    DateTime                @updatedAt
-  readings     WaterQualityReading[]
-  favorites    Favorite[]
-  preferences  NotificationPreference[]
+  id             String                   @id @default(cuid())
+  externalId     String
+  externalKey    String                   @unique
+  nameEt         String
+  nameEn         String
+  type           PlaceType
+  municipality   String
+  addressEt      String?
+  addressEn      String?
+  coordinateX    Float?
+  coordinateY    Float?
+  latitude       Float?
+  longitude      Float?
+  sourceUrl      String?
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
+  poolProfile    PoolProfile?
+  beachProfile   BeachProfile?
+  samplingPoints SamplingPoint[]
+  samples        WaterQualitySample[]
+  latestStatus   PlaceLatestStatus?
+  favorites      Favorite[]
+  preferences    NotificationPreference[]
 
+  @@unique([type, externalId])
   @@index([type])
   @@index([municipality])
+  @@index([type, nameEt])
+  @@index([latitude, longitude])
 }
 
-model WaterQualityReading {
-  id             String        @id @default(cuid())
-  placeId        String
-  sampledAt      DateTime
-  status         QualityStatus
-  statusReasonEt String
-  statusReasonEn String
-  source         WaterSource
-  sourceUrl      String
-  createdAt      DateTime      @default(now())
-  place          Place          @relation(fields: [placeId], references: [id], onDelete: Cascade)
+model PoolFacility {
+  id               String        @id @default(cuid())
+  externalId       String        @unique
+  name             String
+  address          String?
+  type             String?
+  sourceUrl        String?
+  coordinateX      Float?
+  coordinateY      Float?
+  latitude         Float?
+  longitude        Float?
+  userCount        Int?
+  ownerExternalId  String?
+  ownerName        String?
+  ownerPhone       String?
+  ownerEmail       String?
+  lastInspectionAt DateTime?
+  inspector        String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  pools            PoolProfile[]
 
+  @@index([name])
+}
+
+model PoolProfile {
+  id               String        @id @default(cuid())
+  placeId          String        @unique
+  externalId       String        @unique
+  facilityId       String?
+  poolType         String?
+  loadText         String?
+  waterExchangeType String?
+  areaM2           Float?
+  volumeM3         Float?
+  perimeterM       Float?
+  minDepthCm       Float?
+  maxDepthCm       Float?
+  assessmentRaw    String?
+  assessmentStatus QualityStatus @default(UNKNOWN)
+  assessmentDate   DateTime?
+  lastInspectionAt DateTime?
+  inspector        String?
+  inspectorNotes   String?
+  sourceUrl        String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  place            Place         @relation(fields: [placeId], references: [id], onDelete: Cascade)
+  facility         PoolFacility? @relation(fields: [facilityId], references: [id], onDelete: SetNull)
+
+  @@index([facilityId])
+  @@index([assessmentStatus, assessmentDate(sort: Desc)])
+}
+
+model BeachProfile {
+  id                  String        @id @default(cuid())
+  placeId             String        @unique
+  externalId          String        @unique
+  groupId             String?
+  beachType           String?
+  sourceUrl           String?
+  profileUrl          String?
+  waterBodyName       String?
+  waterBodyType       String?
+  visitorCount        Int?
+  shorelineLengthM    Float?
+  monitoringCalendarDate DateTime?
+  lastInspectionAt    DateTime?
+  inspector           String?
+  latestSampleAt      DateTime?
+  latestQualityRaw    String?
+  latestQualityClassRaw String?
+  samplingProtocolNumber String?
+  coverLetterNumber   String?
+  samplerRole         String?
+  inspectorComments   String?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+  place               Place         @relation(fields: [placeId], references: [id], onDelete: Cascade)
+
+  @@index([latestSampleAt(sort: Desc)])
+  @@index([latestQualityRaw])
+}
+
+model SamplingPoint {
+  id             String              @id @default(cuid())
+  placeId        String
+  externalId     String
+  name           String
+  address        String?
+  coordinateX    Float?
+  coordinateY    Float?
+  latitude       Float?
+  longitude      Float?
+  locationDetails String?
+  waterSourceType String?
+  pointType      String?
+  pointClass     String?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  place          Place               @relation(fields: [placeId], references: [id], onDelete: Cascade)
+  samples        WaterQualitySample[]
+
+  @@unique([placeId, externalId])
+  @@index([placeId])
+  @@index([latitude, longitude])
+  @@index([name])
+}
+
+model WaterQualitySample {
+  id                      String                 @id @default(cuid())
+  source                  WaterSource            @default(TERVISEAMET_XML)
+  sourceYear              Int?
+  sourceUrl               String
+  externalId              String
+  placeId                 String
+  samplingPointId         String?
+  sampledAt               DateTime
+  waterType               String?
+  sampleType              String?
+  samplerName             String?
+  samplerRole             String?
+  samplerCertificateNumber String?
+  samplingPurpose         String?
+  samplingMethod          String?
+  samplingProtocolNumber  String?
+  overallAssessmentRaw    String?
+  overallStatus           QualityStatus          @default(UNKNOWN)
+  createdAt               DateTime               @default(now())
+  updatedAt               DateTime               @updatedAt
+  place                   Place                  @relation(fields: [placeId], references: [id], onDelete: Cascade)
+  samplingPoint           SamplingPoint?         @relation(fields: [samplingPointId], references: [id], onDelete: SetNull)
+  protocols               WaterQualityProtocol[]
+  latestStatuses          PlaceLatestStatus[]
+
+  @@unique([placeId, externalId])
   @@index([placeId, sampledAt(sort: Desc)])
-  @@unique([placeId, sampledAt, status])
+  @@index([sampledAt(sort: Desc)])
+  @@index([overallStatus, sampledAt(sort: Desc)])
+  @@index([sourceYear, sampledAt(sort: Desc)])
+  @@index([samplingPointId, sampledAt(sort: Desc)])
+}
+
+model WaterQualityProtocol {
+  id              String                @id @default(cuid())
+  sampleId        String
+  protocolOrder   Int
+  coverLetterNumber String?
+  protocolNumber  String?
+  assessmentRaw   String?
+  assessmentStatus QualityStatus        @default(UNKNOWN)
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  sample          WaterQualitySample    @relation(fields: [sampleId], references: [id], onDelete: Cascade)
+  indicators      WaterQualityIndicator[]
+
+  @@unique([sampleId, protocolOrder])
+  @@index([sampleId, assessmentStatus])
+  @@index([protocolNumber])
+}
+
+model WaterQualityIndicator {
+  id               String              @id @default(cuid())
+  protocolId       String
+  indicatorOrder   Int
+  indicatorExternalId String?
+  name             String
+  valueRaw         String?
+  valueNumber      Float?
+  unit             String?
+  assessmentRaw    String?
+  assessmentStatus QualityStatus       @default(UNKNOWN)
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  protocol         WaterQualityProtocol @relation(fields: [protocolId], references: [id], onDelete: Cascade)
+
+  @@unique([protocolId, indicatorOrder])
+  @@index([protocolId, assessmentStatus])
+  @@index([name])
+}
+
+model PlaceLatestStatus {
+  placeId       String           @id
+  sampleId      String           @unique
+  sampledAt     DateTime
+  status        QualityStatus
+  statusRaw     String?
+  statusReasonEt String?
+  statusReasonEn String?
+  sourceUrl     String
+  changedAt     DateTime?
+  updatedAt     DateTime         @updatedAt
+  place         Place            @relation(fields: [placeId], references: [id], onDelete: Cascade)
+  sample        WaterQualitySample @relation(fields: [sampleId], references: [id], onDelete: Cascade)
+
+  @@index([status, sampledAt(sort: Desc)])
+  @@index([sampledAt(sort: Desc)])
+}
+
+model SourceSyncState {
+  id            String         @id @default(cuid())
+  source        WaterSource    @default(TERVISEAMET_XML)
+  fileKind      SourceFileKind
+  year          Int            @default(0)
+  url           String
+  etag          String?
+  lastModified  String?
+  contentHash   String?
+  contentLength Int?
+  lastStatusCode Int?
+  lastCheckedAt DateTime?
+  lastChangedAt DateTime?
+  lastError     String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@unique([fileKind, year])
+  @@index([lastCheckedAt(sort: Desc)])
 }
 
 model Favorite {

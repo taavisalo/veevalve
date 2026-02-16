@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "pnpm prisma:ensure && nest start --watch",
     "build": "pnpm prisma:ensure && nest build",
-    "start": "node dist/main.js",
+    "start": "node dist/src/main.js",
+    "start:docker": "node dist/src/main.js",
     "lint": "eslint \"src/**/*.{ts,tsx}\"",
     "typecheck": "pnpm prisma:ensure && tsc --noEmit",
     "test": "vitest run",
@@ -14,6 +15,9 @@
     "prisma:ensure": "sh ./scripts/ensure-prisma-client.sh",
     "prisma:generate": "XDG_CACHE_HOME=../../.cache prisma generate",
     "prisma:migrate": "XDG_CACHE_HOME=../../.cache prisma migrate dev",
+    "prisma:migrate:create": "XDG_CACHE_HOME=../../.cache prisma migrate dev --create-only",
+    "prisma:migrate:deploy": "XDG_CACHE_HOME=../../.cache prisma migrate deploy",
+    "prisma:reset": "XDG_CACHE_HOME=../../.cache prisma migrate reset --force",
     "prisma:studio": "XDG_CACHE_HOME=../../.cache prisma studio",
     "prisma:seed": "tsx prisma/seed.ts"
   },

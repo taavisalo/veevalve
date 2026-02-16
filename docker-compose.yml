@@ -5,10 +5,21 @@ services:
       dockerfile: docker/Dockerfile.dev
     working_dir: /workspace
     command: sh -lc "./docker/scripts/bootstrap.sh && sleep infinity"
+    healthcheck:
+      test:
+        ['CMD-SHELL', 'test -f /workspace/node_modules/.pnpm-lock-hash']
+      interval: 5s
+      timeout: 3s
+      retries: 30
     volumes:
       - .:/workspace
       - pnpm_store:/pnpm/store
       - root_node_modules:/workspace/node_modules
+      - api_node_modules:/workspace/apps/api/node_modules
+      - web_node_modules:/workspace/apps/web/node_modules
+      - mobile_node_modules:/workspace/apps/mobile/node_modules
+      - core_node_modules:/workspace/packages/core/node_modules
+      - ui_node_modules:/workspace/packages/ui/node_modules
 
   postgres:
     image: postgres:16-alpine
@@ -33,12 +44,17 @@ services:
       dockerfile: docker/Dockerfile.dev
     working_dir: /workspace
     command: >-
-      sh -lc "./docker/scripts/bootstrap.sh &&
-      pnpm --filter @veevalve/api prisma:generate &&
-      pnpm --filter @veevalve/api dev"
+      sh -lc "pnpm --filter @veevalve/api prisma:generate &&
+      pnpm --filter @veevalve/api... build &&
+      pnpm --filter @veevalve/api start:docker"
     environment:
       DATABASE_URL: postgresql://veevalve:veevalve@postgres:5432/veevalve?schema=public
-      TERVISEAMET_XML_URL: https://vtiav.sm.ee/index.php/?active_tab_id=A
+      TERVISEAMET_POOL_FACILITIES_URL: https://vtiav.sm.ee/index.php/opendata/ujulad.xml
+      TERVISEAMET_POOL_LOCATIONS_URL: https://vtiav.sm.ee/index.php/opendata/basseinid.xml
+      TERVISEAMET_BEACH_LOCATIONS_URL: https://vtiav.sm.ee/index.php/opendata/supluskohad.xml
+      TERVISEAMET_POOL_SAMPLES_URL_TEMPLATE: https://vtiav.sm.ee/index.php/opendata/basseini_veeproovid_{year}.xml
+      TERVISEAMET_BEACH_SAMPLES_URL_TEMPLATE: https://vtiav.sm.ee/index.php/opendata/supluskoha_veeproovid_{year}.xml
+      TERVISEAMET_SAMPLE_YEARS_BACK: 1
       CORS_ORIGIN: http://localhost:3000
       PORT: 3001
     ports:
@@ -47,11 +63,16 @@ services:
       - .:/workspace
       - pnpm_store:/pnpm/store
       - root_node_modules:/workspace/node_modules
+      - api_node_modules:/workspace/apps/api/node_modules
+      - web_node_modules:/workspace/apps/web/node_modules
+      - mobile_node_modules:/workspace/apps/mobile/node_modules
+      - core_node_modules:/workspace/packages/core/node_modules
+      - ui_node_modules:/workspace/packages/ui/node_modules
     depends_on:
       postgres:
         condition: service_healthy
       workspace:
-        condition: service_started
+        condition: service_healthy
 
   web:
     build:
@@ -59,8 +80,7 @@ services:
       dockerfile: docker/Dockerfile.dev
     working_dir: /workspace
     command: >-
-      sh -lc "./docker/scripts/bootstrap.sh &&
-      pnpm --filter @veevalve/web dev -- --hostname 0.0.0.0 --port 3000"
+      sh -lc "pnpm --filter @veevalve/web dev:docker"
     environment:
       NEXT_PUBLIC_API_BASE_URL: http://localhost:3001/api
     ports:
@@ -69,9 +89,16 @@ services:
       - .:/workspace
       - pnpm_store:/pnpm/store
       - root_node_modules:/workspace/node_modules
+      - api_node_modules:/workspace/apps/api/node_modules
+      - web_node_modules:/workspace/apps/web/node_modules
+      - mobile_node_modules:/workspace/apps/mobile/node_modules
+      - core_node_modules:/workspace/packages/core/node_modules
+      - ui_node_modules:/workspace/packages/ui/node_modules
     depends_on:
-      - api
-      - workspace
+      api:
+        condition: service_started
+      workspace:
+        condition: service_healthy
 
   mobile:
     build:
@@ -79,8 +106,7 @@ services:
       dockerfile: docker/Dockerfile.dev
     working_dir: /workspace
     command: >-
-      sh -lc "./docker/scripts/bootstrap.sh &&
-      pnpm --filter @veevalve/mobile dev -- --host 0.0.0.0 --port 8081"
+      sh -lc "pnpm --filter @veevalve/mobile dev:docker"
     environment:
       EXPO_DEVTOOLS_LISTEN_ADDRESS: 0.0.0.0
       EXPO_USE_FAST_RESOLVER: 1
@@ -93,9 +119,16 @@ services:
       - .:/workspace
       - pnpm_store:/pnpm/store
       - root_node_modules:/workspace/node_modules
+      - api_node_modules:/workspace/apps/api/node_modules
+      - web_node_modules:/workspace/apps/web/node_modules
+      - mobile_node_modules:/workspace/apps/mobile/node_modules
+      - core_node_modules:/workspace/packages/core/node_modules
+      - ui_node_modules:/workspace/packages/ui/node_modules
     depends_on:
-      - api
-      - workspace
+      api:
+        condition: service_started
+      workspace:
+        condition: service_healthy
     stdin_open: true
     tty: true
 
@@ -103,3 +136,8 @@ volumes:
   postgres_data:
   pnpm_store:
   root_node_modules:
+  api_node_modules:
+  web_node_modules:
+  mobile_node_modules:
+  core_node_modules:
+  ui_node_modules:

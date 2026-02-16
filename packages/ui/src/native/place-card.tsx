@@ -1,5 +1,4 @@
 import type { PlaceWithLatestReading } from '@veevalve/core';
-import { memo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { StatusChip } from './status-chip';
@@ -8,7 +7,7 @@ export interface NativePlaceCardProps {
   place: PlaceWithLatestReading;
 }
 
-export const NativePlaceCard = memo(({ place }: NativePlaceCardProps) => {
+export const NativePlaceCard = ({ place }: NativePlaceCardProps) => {
   return (
     <View style={styles.card}>
       <View style={styles.headerRow}>
@@ -23,7 +22,7 @@ export const NativePlaceCard = memo(({ place }: NativePlaceCardProps) => {
       </Text>
     </View>
   );
-});
+};
 
 const styles = StyleSheet.create({
   card: {
