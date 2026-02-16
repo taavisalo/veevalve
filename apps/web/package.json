@@ -6,7 +6,7 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint \"app/**/*.{ts,tsx}\" \"components/**/*.{ts,tsx}\" \"lib/**/*.{ts,tsx}\" \"test/**/*.{ts,tsx}\" \"next.config.ts\" \"tailwind.config.ts\"",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "format": "prettier --check \"**/*.{ts,tsx,css,json}\"",
@@ -14,21 +14,21 @@
   },
   "dependencies": {
     "@fontsource/manrope": "^5.2.8",
-    "@fontsource/newsreader": "^5.2.8",
+    "@fontsource/newsreader": "^5.2.10",
     "@veevalve/core": "workspace:*",
     "@veevalve/ui": "workspace:*",
-    "next": "^15.2.0",
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "next": "^15.5.12",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4"
   },
   "devDependencies": {
-    "@types/node": "^22.13.5",
-    "@types/react": "^19.0.8",
-    "@types/react-dom": "^19.0.3",
-    "autoprefixer": "^10.4.20",
-    "eslint-config-next": "^15.2.0",
-    "postcss": "^8.5.3",
-    "tailwindcss": "^3.4.17",
-    "vitest": "^3.0.8"
+    "@types/node": "^22.19.11",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "autoprefixer": "^10.4.24",
+    "eslint-config-next": "^15.5.12",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^3.4.19",
+    "vitest": "^3.2.4"
   }
 }

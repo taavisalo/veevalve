@@ -18,11 +18,11 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "fast-xml-parser": "^4.5.1",
-    "zod": "^3.24.2"
+    "fast-xml-parser": "^4.5.3",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
-    "tsup": "^8.4.0",
-    "vitest": "^3.0.8"
+    "tsup": "^8.5.1",
+    "vitest": "^3.2.4"
   }
 }
