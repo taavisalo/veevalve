@@ -26,9 +26,13 @@ import {
 import { ToggleRow } from './src/components/toggle-row';
 import { fetchPlaces } from './src/lib/fetch-places';
 
-const RESULTS_LIMIT = 10;
+const LATEST_RESULTS_LIMIT = 10;
+const SEARCH_RESULTS_LIMIT = 20;
 const SUGGESTION_LIMIT = 8;
 const SEARCH_DEBOUNCE_MS = 180;
+
+const getResultsLimit = (search?: string): number =>
+  search?.trim() ? SEARCH_RESULTS_LIMIT : LATEST_RESULTS_LIMIT;
 
 interface Suggestion {
   id: string;
@@ -49,6 +53,7 @@ const App = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
+  const [referenceTimeIso, setReferenceTimeIso] = useState(() => new Date().toISOString());
 
   const inputRef = useRef<TextInput | null>(null);
 
@@ -62,6 +67,7 @@ const App = () => {
 
   useEffect(() => {
     const controller = new AbortController();
+    const currentResultsLimit = getResultsLimit(debouncedSearch);
 
     setLoading(true);
     setError(null);
@@ -71,11 +77,11 @@ const App = () => {
       type: typeFilter === 'ALL' ? undefined : typeFilter,
       status: statusFilter === 'ALL' ? undefined : statusFilter,
       search: debouncedSearch || undefined,
-      limit: RESULTS_LIMIT,
+      limit: currentResultsLimit,
       signal: controller.signal,
     })
       .then((nextPlaces) => {
-        setPlaces(nextPlaces.slice(0, RESULTS_LIMIT));
+        setPlaces(nextPlaces.slice(0, currentResultsLimit));
       })
       .catch((fetchError: unknown) => {
         if (controller.signal.aborted) {
@@ -100,7 +106,17 @@ const App = () => {
     };
   }, [debouncedSearch, locale, statusFilter, typeFilter]);
 
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      setReferenceTimeIso(new Date().toISOString());
+    }, 60_000);
+
+    return () => clearInterval(intervalId);
+  }, []);
+
   const searchQuery = searchInput.trim();
+  const visibleResultsLimit = getResultsLimit(searchQuery);
+  const shownResultsCount = places.length;
 
   const suggestions = useMemo<Suggestion[]>(() => {
     if (!searchQuery) {
@@ -452,11 +468,11 @@ const App = () => {
           <Text style={styles.resultsMetaText}>
             {searchQuery
               ? locale === 'et'
-                ? `Otsing: "${searchQuery}". Näitan kuni ${RESULTS_LIMIT} tulemust.`
-                : `Search: "${searchQuery}". Showing up to ${RESULTS_LIMIT} results.`
+                ? `Otsing: "${searchQuery}". Näitan ${shownResultsCount} tulemust (maksimaalselt ${visibleResultsLimit}).`
+                : `Search: "${searchQuery}". Showing ${shownResultsCount} of up to ${visibleResultsLimit} results.`
               : locale === 'et'
-                ? `Näitan ${RESULTS_LIMIT} värskeimat kohta.`
-                : `Showing ${RESULTS_LIMIT} most recently updated places.`}
+                ? `Näitan ${shownResultsCount} värskeimat kohta.`
+                : `Showing ${shownResultsCount} most recently updated places.`}
           </Text>
           {loading ? <ActivityIndicator size="small" color="#0A8F78" /> : null}
         </View>
@@ -476,7 +492,14 @@ const App = () => {
             </Text>
           </View>
         ) : (
-          places.map((place) => <NativePlaceCard key={place.id} place={place} />)
+          places.map((place) => (
+            <NativePlaceCard
+              key={place.id}
+              place={place}
+              locale={locale}
+              referenceTimeIso={referenceTimeIso}
+            />
+          ))
         )}
       </ScrollView>
     </SafeAreaView>

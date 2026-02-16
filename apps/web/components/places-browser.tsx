@@ -15,10 +15,14 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 
 import { mapPlaceApiRows, type PlaceApiRow } from '../lib/place-api';
 
-const RESULTS_LIMIT = 10;
+const LATEST_RESULTS_LIMIT = 10;
+const SEARCH_RESULTS_LIMIT = 20;
 const SUGGESTION_LIMIT = 8;
 const SEARCH_DEBOUNCE_MS = 180;
 const API_BASE_URL = (process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:3001/api').replace(/\/+$/, '');
+
+const getResultsLimit = (search?: string): number =>
+  search?.trim() ? SEARCH_RESULTS_LIMIT : LATEST_RESULTS_LIMIT;
 
 interface PlacesBrowserProps {
   initialLocale: AppLocale;
@@ -26,6 +30,7 @@ interface PlacesBrowserProps {
   initialStatus: QualityStatus | 'ALL';
   initialSearch?: string;
   initialPlaces: PlaceWithLatestReading[];
+  initialNowIso: string;
 }
 
 interface Suggestion {
@@ -71,7 +76,7 @@ const fetchPlacesFromApi = async ({
 }): Promise<PlaceWithLatestReading[]> => {
   const params = new URLSearchParams();
   params.set('locale', locale);
-  params.set('limit', String(RESULTS_LIMIT));
+  params.set('limit', String(getResultsLimit(search)));
   params.set('sort', 'LATEST');
 
   if (type !== 'ALL') {
@@ -130,18 +135,22 @@ export const PlacesBrowser = ({
   initialStatus,
   initialSearch,
   initialPlaces,
+  initialNowIso,
 }: PlacesBrowserProps) => {
   const [locale, setLocale] = useState<AppLocale>(initialLocale);
   const [typeFilter, setTypeFilter] = useState<PlaceType | 'ALL'>(initialType);
   const [statusFilter, setStatusFilter] = useState<QualityStatus | 'ALL'>(initialStatus);
   const [searchInput, setSearchInput] = useState(initialSearch ?? '');
   const [debouncedSearch, setDebouncedSearch] = useState((initialSearch ?? '').trim());
-  const [places, setPlaces] = useState<PlaceWithLatestReading[]>(initialPlaces.slice(0, RESULTS_LIMIT));
+  const [places, setPlaces] = useState<PlaceWithLatestReading[]>(
+    initialPlaces.slice(0, getResultsLimit(initialSearch)),
+  );
   const [loading, setLoading] = useState(false);
   const [languageMenuOpen, setLanguageMenuOpen] = useState(false);
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(-1);
   const [error, setError] = useState<string | null>(null);
+  const [referenceTimeIso, setReferenceTimeIso] = useState(initialNowIso);
 
   const isInitialRender = useRef(true);
   const searchContainerRef = useRef<HTMLDivElement | null>(null);
@@ -175,7 +184,7 @@ export const PlacesBrowser = ({
       signal: controller.signal,
     })
       .then((nextPlaces) => {
-        setPlaces(nextPlaces.slice(0, RESULTS_LIMIT));
+        setPlaces(nextPlaces.slice(0, getResultsLimit(debouncedSearch)));
       })
       .catch((fetchError: unknown) => {
         if (controller.signal.aborted) {
@@ -196,6 +205,14 @@ export const PlacesBrowser = ({
 
     return () => controller.abort();
   }, [debouncedSearch, locale, statusFilter, typeFilter]);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setReferenceTimeIso(new Date().toISOString());
+    }, 60_000);
+
+    return () => window.clearInterval(intervalId);
+  }, []);
 
   useEffect(() => {
     const onPointerDown = (event: MouseEvent) => {
@@ -238,6 +255,9 @@ export const PlacesBrowser = ({
   }, []);
 
   const searchQuery = searchInput.trim();
+  const visibleResultsLimit = getResultsLimit(searchQuery);
+  const visiblePlaces = places.slice(0, visibleResultsLimit);
+  const shownResultsCount = visiblePlaces.length;
 
   const suggestions = useMemo<Suggestion[]>(() => {
     if (!searchQuery) {
@@ -534,11 +554,11 @@ export const PlacesBrowser = ({
           <p>
             {searchQuery
               ? locale === 'et'
-                ? `Otsing: "${searchQuery}". Näitan kuni ${RESULTS_LIMIT} tulemust.`
-                : `Search: "${searchQuery}". Showing up to ${RESULTS_LIMIT} results.`
+                ? `Otsing: "${searchQuery}". Näitan ${shownResultsCount} tulemust (maksimaalselt ${visibleResultsLimit}).`
+                : `Search: "${searchQuery}". Showing ${shownResultsCount} of up to ${visibleResultsLimit} results.`
               : locale === 'et'
-                ? `Näitan ${RESULTS_LIMIT} värskeimat kohta.`
-                : `Showing ${RESULTS_LIMIT} most recently updated places.`}
+                ? `Näitan ${shownResultsCount} värskeimat kohta.`
+                : `Showing ${shownResultsCount} most recently updated places.`}
           </p>
           {loading ? <p>{locale === 'et' ? 'Uuendan tulemusi...' : 'Updating results...'}</p> : null}
         </div>
@@ -555,9 +575,9 @@ export const PlacesBrowser = ({
           </div>
         ) : (
           <div className="grid gap-4 md:grid-cols-2">
-            {places.slice(0, RESULTS_LIMIT).map((place, index) => (
+            {visiblePlaces.map((place, index) => (
               <div className="fade-up" style={{ animationDelay: `${index * 70}ms` }} key={place.id}>
-                <PlaceCard place={place} />
+                <PlaceCard place={place} locale={locale} referenceTimeIso={referenceTimeIso} />
               </div>
             ))}
           </div>
