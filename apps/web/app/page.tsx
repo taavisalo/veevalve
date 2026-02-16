@@ -1,5 +1,6 @@
 import { t, type AppLocale, type PlaceType, type QualityStatus } from '@veevalve/core';
 import { PlaceCard } from '@veevalve/ui/web';
+import Link from 'next/link';
 
 import { FilterChip } from '../components/filter-chip';
 import { filterPlaces } from '../lib/filter-places';
@@ -31,6 +32,7 @@ const createHref = (
   locale: AppLocale,
   type: PlaceType | 'ALL',
   status: QualityStatus | 'ALL',
+  search?: string,
 ) => {
   const params = new URLSearchParams();
   params.set('locale', locale);
@@ -39,6 +41,9 @@ const createHref = (
   }
   if (status !== 'ALL') {
     params.set('status', status);
+  }
+  if (search) {
+    params.set('q', search);
   }
 
   return `/?${params.toString()}`;
@@ -65,8 +70,34 @@ const HomePage = async ({ searchParams }: HomePageProps) => {
   return (
     <main className="mx-auto max-w-6xl px-4 pb-20 pt-10 md:px-8 md:pt-14">
       <section className="fade-up relative overflow-hidden rounded-3xl border border-emerald-200/70 bg-white/75 p-8 shadow-card backdrop-blur">
-        <div className="absolute right-6 top-4 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-accent">
-          Eesti + English
+        <div className="absolute right-6 top-4">
+          <details className="group relative">
+            <summary className="cursor-pointer list-none rounded-full border border-emerald-100 bg-white px-3 py-1 text-xs font-semibold text-accent transition hover:border-accent">
+              {locale === 'et' ? 'Keel: Eesti' : 'Language: English'}
+            </summary>
+            <div className="absolute right-0 z-10 mt-2 w-40 overflow-hidden rounded-xl border border-emerald-100 bg-white shadow-card">
+              <Link
+                href={createHref('et', type, status, search)}
+                className={`block px-3 py-2 text-sm transition ${
+                  locale === 'et'
+                    ? 'bg-emerald-50 font-semibold text-accent'
+                    : 'text-ink hover:bg-emerald-50'
+                }`}
+              >
+                Eesti
+              </Link>
+              <Link
+                href={createHref('en', type, status, search)}
+                className={`block px-3 py-2 text-sm transition ${
+                  locale === 'en'
+                    ? 'bg-emerald-50 font-semibold text-accent'
+                    : 'text-ink hover:bg-emerald-50'
+                }`}
+              >
+                English
+              </Link>
+            </div>
+          </details>
         </div>
         <p className="text-sm uppercase tracking-[0.14em] text-accent">{t('appName', locale)}</p>
         <h1 className="mt-3 max-w-3xl text-4xl leading-tight text-ink md:text-5xl">
@@ -78,32 +109,27 @@ const HomePage = async ({ searchParams }: HomePageProps) => {
 
         <div className="mt-6 flex flex-wrap items-center gap-3">
           <FilterChip
-            href={createHref(locale === 'et' ? 'en' : 'et', type, status)}
-            label={locale === 'et' ? 'Switch to English' : 'Vaheta eesti keelde'}
-            active={false}
-          />
-          <FilterChip
-            href={createHref(locale, 'ALL', status)}
+            href={createHref(locale, 'ALL', status, search)}
             label={locale === 'et' ? 'Kõik kohad' : 'All places'}
             active={type === 'ALL'}
           />
           <FilterChip
-            href={createHref(locale, 'BEACH', status)}
+            href={createHref(locale, type === 'BEACH' ? 'ALL' : 'BEACH', status, search)}
             label={t('beaches', locale)}
             active={type === 'BEACH'}
           />
           <FilterChip
-            href={createHref(locale, 'POOL', status)}
+            href={createHref(locale, type === 'POOL' ? 'ALL' : 'POOL', status, search)}
             label={t('pools', locale)}
             active={type === 'POOL'}
           />
           <FilterChip
-            href={createHref(locale, type, 'GOOD')}
+            href={createHref(locale, type, status === 'GOOD' ? 'ALL' : 'GOOD', search)}
             label={t('qualityGood', locale)}
             active={status === 'GOOD'}
           />
           <FilterChip
-            href={createHref(locale, type, 'BAD')}
+            href={createHref(locale, type, status === 'BAD' ? 'ALL' : 'BAD', search)}
             label={t('qualityBad', locale)}
             active={status === 'BAD'}
           />
