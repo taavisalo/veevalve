@@ -18,6 +18,7 @@ const App = () => {
   const [locale, setLocale] = useState<AppLocale>('et');
   const [typeFilter, setTypeFilter] = useState<PlaceType | 'ALL'>('ALL');
   const [statusFilter, setStatusFilter] = useState<'GOOD' | 'BAD' | 'ALL'>('ALL');
+  const [languageMenuOpen, setLanguageMenuOpen] = useState(false);
   const [qualityAlertsEnabled, setQualityAlertsEnabled] = useState(true);
   const [locationAlertsEnabled, setLocationAlertsEnabled] = useState(false);
 
@@ -38,6 +39,53 @@ const App = () => {
       <StatusBar style="dark" />
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.heroCard}>
+          <View style={styles.languageMenu}>
+            <Pressable
+              style={styles.languageTrigger}
+              onPress={() => setLanguageMenuOpen((value) => !value)}
+            >
+              <Text style={styles.languageTriggerText}>
+                {locale === 'et' ? 'Keel: Eesti' : 'Language: English'}
+              </Text>
+            </Pressable>
+            {languageMenuOpen ? (
+              <View style={styles.languageDropdown}>
+                <Pressable
+                  style={styles.languageOption}
+                  onPress={() => {
+                    setLocale('et');
+                    setLanguageMenuOpen(false);
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.languageOptionText,
+                      locale === 'et' ? styles.languageOptionTextActive : undefined,
+                    ]}
+                  >
+                    Eesti
+                  </Text>
+                </Pressable>
+                <Pressable
+                  style={styles.languageOption}
+                  onPress={() => {
+                    setLocale('en');
+                    setLanguageMenuOpen(false);
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.languageOptionText,
+                      locale === 'en' ? styles.languageOptionTextActive : undefined,
+                    ]}
+                  >
+                    English
+                  </Text>
+                </Pressable>
+              </View>
+            ) : null}
+          </View>
+
           <Text style={styles.heroLabel}>
             {t('appName', locale)}
           </Text>
@@ -47,45 +95,6 @@ const App = () => {
               : 'Water quality for swimming places in Estonia'}
           </Text>
           <Text style={styles.heroSubtitle}>{t('subtitle', locale)}</Text>
-
-          <View style={styles.buttonRow}>
-            <Pressable
-              onPress={() => setLocale('et')}
-              style={[
-                styles.filterButton,
-                locale === 'et' ? styles.filterButtonActive : styles.filterButtonInactive,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.filterButtonText,
-                  locale === 'et'
-                    ? styles.filterButtonTextActive
-                    : styles.filterButtonTextInactive,
-                ]}
-              >
-                EST
-              </Text>
-            </Pressable>
-            <Pressable
-              onPress={() => setLocale('en')}
-              style={[
-                styles.filterButton,
-                locale === 'en' ? styles.filterButtonActive : styles.filterButtonInactive,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.filterButtonText,
-                  locale === 'en'
-                    ? styles.filterButtonTextActive
-                    : styles.filterButtonTextInactive,
-                ]}
-              >
-                ENG
-              </Text>
-            </Pressable>
-          </View>
         </View>
 
         <View style={styles.filterSection}>
@@ -116,7 +125,7 @@ const App = () => {
                 styles.filterButton,
                 typeFilter === 'BEACH' ? styles.filterButtonActive : styles.filterButtonInactive,
               ]}
-              onPress={() => setTypeFilter('BEACH')}
+              onPress={() => setTypeFilter((value) => (value === 'BEACH' ? 'ALL' : 'BEACH'))}
             >
               <Text
                 style={[
@@ -134,7 +143,7 @@ const App = () => {
                 styles.filterButton,
                 typeFilter === 'POOL' ? styles.filterButtonActive : styles.filterButtonInactive,
               ]}
-              onPress={() => setTypeFilter('POOL')}
+              onPress={() => setTypeFilter((value) => (value === 'POOL' ? 'ALL' : 'POOL'))}
             >
               <Text
                 style={[
@@ -152,7 +161,7 @@ const App = () => {
                 styles.filterButton,
                 statusFilter === 'GOOD' ? styles.filterButtonActive : styles.filterButtonInactive,
               ]}
-              onPress={() => setStatusFilter('GOOD')}
+              onPress={() => setStatusFilter((value) => (value === 'GOOD' ? 'ALL' : 'GOOD'))}
             >
               <Text
                 style={[
@@ -170,7 +179,7 @@ const App = () => {
                 styles.filterButton,
                 statusFilter === 'BAD' ? styles.filterButtonActive : styles.filterButtonInactive,
               ]}
-              onPress={() => setStatusFilter('BAD')}
+              onPress={() => setStatusFilter((value) => (value === 'BAD' ? 'ALL' : 'BAD'))}
             >
               <Text
                 style={[
@@ -230,6 +239,7 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   heroCard: {
+    position: 'relative',
     borderRadius: 24,
     backgroundColor: '#FFFFFF',
     padding: 18,
@@ -257,10 +267,46 @@ const styles = StyleSheet.create({
     color: '#4B5563',
     fontSize: 14,
   },
-  buttonRow: {
-    flexDirection: 'row',
-    marginTop: 12,
-    gap: 8,
+  languageMenu: {
+    position: 'absolute',
+    right: 14,
+    top: 12,
+    alignItems: 'flex-end',
+    zIndex: 20,
+  },
+  languageTrigger: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#CDE6DF',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  languageTriggerText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0A8F78',
+  },
+  languageDropdown: {
+    marginTop: 6,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#CDE6DF',
+    backgroundColor: '#FFFFFF',
+    overflow: 'hidden',
+    minWidth: 126,
+  },
+  languageOption: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  languageOptionText: {
+    fontSize: 13,
+    color: '#153233',
+  },
+  languageOptionTextActive: {
+    fontWeight: '700',
+    color: '#0A8F78',
   },
   filterSection: {
     marginBottom: 14,
