@@ -24,7 +24,7 @@ import {
 } from 'react-native';
 
 import { ToggleRow } from './src/components/toggle-row';
-import { fetchPlaces } from './src/lib/fetch-places';
+import { fetchPlaceMetrics, fetchPlaces, type PlaceMetrics } from './src/lib/fetch-places';
 
 const LATEST_RESULTS_LIMIT = 10;
 const SEARCH_RESULTS_LIMIT = 20;
@@ -50,6 +50,36 @@ const containsSearchTerm = (value: string | undefined, normalizedQuery: string):
   return normalizeFuzzyText(value).includes(normalizedQuery);
 };
 
+const formatMetricsDate = (value: string | null, locale: AppLocale): string => {
+  if (!value) {
+    return locale === 'et' ? 'Puudub' : 'Unavailable';
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat(locale === 'en' ? 'en-GB' : 'et-EE', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+    timeZone: 'Europe/Tallinn',
+  }).format(parsed);
+};
+
+const formatShare = (count: number, total: number): string => {
+  if (total <= 0) {
+    return '0%';
+  }
+
+  const percentage = (count / total) * 100;
+  if (percentage >= 10) {
+    return `${Math.round(percentage)}%`;
+  }
+
+  return `${percentage.toFixed(1)}%`;
+};
+
 const App = () => {
   const [locale, setLocale] = useState<AppLocale>('et');
   const [typeFilter, setTypeFilter] = useState<PlaceType | 'ALL'>('ALL');
@@ -64,6 +94,8 @@ const App = () => {
   const [error, setError] = useState<string | null>(null);
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const [referenceTimeIso, setReferenceTimeIso] = useState(() => new Date().toISOString());
+  const [metrics, setMetrics] = useState<PlaceMetrics | null>(null);
+  const [metricsExpanded, setMetricsExpanded] = useState(false);
 
   const inputRef = useRef<TextInput | null>(null);
 
@@ -124,9 +156,30 @@ const App = () => {
     return () => clearInterval(intervalId);
   }, []);
 
+  useEffect(() => {
+    const controller = new AbortController();
+
+    fetchPlaceMetrics({ signal: controller.signal })
+      .then((nextMetrics) => {
+        setMetrics(nextMetrics);
+      })
+      .catch((fetchError: unknown) => {
+        if (controller.signal.aborted) {
+          return;
+        }
+
+        console.error(fetchError);
+      });
+
+    return () => {
+      controller.abort();
+    };
+  }, []);
+
   const searchQuery = searchInput.trim();
   const visibleResultsLimit = getResultsLimit(searchQuery);
   const shownResultsCount = places.length;
+  const badShare = formatShare(metrics?.badQualityEntries ?? 0, metrics?.totalEntries ?? 0);
 
   const suggestions = useMemo<Suggestion[]>(() => {
     if (!searchQuery) {
@@ -322,12 +375,110 @@ const App = () => {
               ? 'Ujumiskohtade vee kvaliteet Eestis'
               : 'Water quality for swimming places in Estonia'}
           </Text>
-          <Text style={styles.heroSubtitle}>{t('subtitle', locale)}</Text>
+
+          <View style={styles.metricsWrap}>
+            <View style={[styles.metricCard, styles.metricCardPrimary]}>
+              <Text style={[styles.metricLabel, styles.metricLabelDanger]}>
+                {locale === 'et' ? 'Halva kvaliteediga' : 'Bad quality'}
+              </Text>
+              <View style={styles.metricPrimaryValueRow}>
+                <Text style={[styles.metricValue, styles.metricValueBad, styles.metricValuePrimary]}>
+                  {metrics?.badQualityEntries ?? 0}
+                </Text>
+                <Text style={styles.metricShareText}>{badShare}</Text>
+              </View>
+              <Text style={styles.metricMetaText}>
+                {locale === 'et'
+                  ? `Basseinid ${metrics?.badPoolEntries ?? 0} • rannad ${metrics?.badBeachEntries ?? 0}`
+                  : `Pools ${metrics?.badPoolEntries ?? 0} • beaches ${metrics?.badBeachEntries ?? 0}`}
+              </Text>
+            </View>
+
+            <View style={styles.metricsRow}>
+              <View style={[styles.metricCard, styles.metricCardCompact]}>
+                <Text style={styles.metricLabel}>
+                  {locale === 'et' ? 'Viimane uuendus' : 'Last update'}
+                </Text>
+                <Text style={styles.metricValue}>
+                  {formatMetricsDate(metrics?.latestSourceUpdatedAt ?? null, locale)}
+                </Text>
+              </View>
+              <View style={[styles.metricCard, styles.metricCardCompact]}>
+                <Text style={styles.metricLabel}>
+                  {locale === 'et' ? 'Kohti kokku' : 'Total places'}
+                </Text>
+                <Text style={styles.metricValue}>
+                  {metrics?.totalEntries ?? 0}
+                </Text>
+              </View>
+            </View>
+
+            <Pressable
+              style={styles.metricsToggle}
+              onPress={() => setMetricsExpanded((value) => !value)}
+            >
+              <Text style={styles.metricsToggleText}>
+                {metricsExpanded
+                  ? (locale === 'et' ? 'Peida lisamõõdikud' : 'Hide extra metrics')
+                  : (locale === 'et' ? 'Näita lisamõõdikuid' : 'Show extra metrics')}
+              </Text>
+            </Pressable>
+
+            {metricsExpanded ? (
+              <View style={styles.metricsExtraGrid}>
+                <View style={styles.metricMiniCard}>
+                  <Text style={styles.metricLabel}>
+                    {locale === 'et' ? 'Hea kvaliteet' : 'Good quality'}
+                  </Text>
+                  <Text style={[styles.metricValue, styles.metricValueGood]}>
+                    {metrics?.goodQualityEntries ?? 0}
+                  </Text>
+                </View>
+                <View style={styles.metricMiniCard}>
+                  <Text style={styles.metricLabel}>
+                    {locale === 'et' ? 'Teadmata kvaliteet' : 'Unknown quality'}
+                  </Text>
+                  <Text style={styles.metricValue}>
+                    {metrics?.unknownQualityEntries ?? 0}
+                  </Text>
+                </View>
+                <View style={styles.metricMiniCard}>
+                  <Text style={styles.metricLabel}>
+                    {locale === 'et' ? 'Jälgitavad basseinid' : 'Pools monitored'}
+                  </Text>
+                  <Text style={styles.metricValue}>
+                    {metrics?.poolEntries ?? 0}
+                  </Text>
+                </View>
+                <View style={styles.metricMiniCard}>
+                  <Text style={styles.metricLabel}>
+                    {locale === 'et' ? 'Jälgitavad rannad' : 'Beaches monitored'}
+                  </Text>
+                  <Text style={styles.metricValue}>
+                    {metrics?.beachEntries ?? 0}
+                  </Text>
+                </View>
+                <View style={styles.metricMiniCard}>
+                  <Text style={styles.metricLabel}>
+                    {locale === 'et' ? 'Uuendatud viimase 24 h jooksul' : 'Updated in last 24h'}
+                  </Text>
+                  <Text style={styles.metricValue}>
+                    {metrics?.updatedWithin24hEntries ?? 0}
+                  </Text>
+                </View>
+                <View style={styles.metricMiniCard}>
+                  <Text style={styles.metricLabel}>
+                    {locale === 'et' ? 'Viimane proov üle 7 päeva tagasi' : 'Latest sample older than 7 days'}
+                  </Text>
+                  <Text style={styles.metricValue}>
+                    {metrics?.staleOver7dEntries ?? 0}
+                  </Text>
+                </View>
+              </View>
+            ) : null}
+          </View>
 
           <View style={styles.searchSection}>
-            <Text style={styles.searchLabel}>
-              {locale === 'et' ? 'Otsi ujumiskohta' : 'Search swimming places'}
-            </Text>
             <View style={styles.searchInputWrap}>
               <TextInput
                 ref={inputRef}
@@ -615,6 +766,98 @@ const styles = StyleSheet.create({
     marginTop: 10,
     color: '#4B5563',
     fontSize: 14,
+  },
+  metricsWrap: {
+    marginTop: 12,
+    gap: 8,
+  },
+  metricCard: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#D9E9E5',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  metricCardPrimary: {
+    borderColor: '#FED7D7',
+    backgroundColor: '#FFF1F2',
+  },
+  metricCardCompact: {
+    flex: 1,
+  },
+  metricsRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  metricLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    color: '#64748B',
+  },
+  metricLabelDanger: {
+    color: '#B42318',
+  },
+  metricValue: {
+    marginTop: 4,
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#153233',
+  },
+  metricValuePrimary: {
+    marginTop: 0,
+    fontSize: 24,
+    lineHeight: 28,
+  },
+  metricValueBad: {
+    color: '#B42318',
+  },
+  metricValueGood: {
+    color: '#047857',
+  },
+  metricPrimaryValueRow: {
+    marginTop: 4,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 8,
+  },
+  metricShareText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#B42318',
+    marginBottom: 3,
+  },
+  metricMetaText: {
+    marginTop: 4,
+    fontSize: 12,
+    color: '#9F1239',
+  },
+  metricsToggle: {
+    alignSelf: 'flex-end',
+    paddingHorizontal: 2,
+    paddingVertical: 2,
+  },
+  metricsToggleText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#0A8F78',
+    textDecorationLine: 'underline',
+  },
+  metricsExtraGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  metricMiniCard: {
+    width: '48%',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#D9E9E5',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
   },
   searchSection: {
     marginTop: 14,

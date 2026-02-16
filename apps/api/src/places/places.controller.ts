@@ -12,6 +12,11 @@ export class PlacesController {
     return this.placesService.listPlaces(query);
   }
 
+  @Get('metrics')
+  getMetrics() {
+    return this.placesService.getPlaceMetrics();
+  }
+
   @Get(':id')
   getPlace(@Param('id') id: string) {
     return this.placesService.getPlaceById(id);

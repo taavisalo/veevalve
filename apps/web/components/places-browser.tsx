@@ -13,6 +13,7 @@ import {
 import { PlaceCard } from '@veevalve/ui/web';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 
+import type { PlaceMetrics } from '../lib/fetch-places';
 import { mapPlaceApiRows, type PlaceApiRow } from '../lib/place-api';
 
 const LATEST_RESULTS_LIMIT = 10;
@@ -31,6 +32,7 @@ interface PlacesBrowserProps {
   initialSearch?: string;
   initialPlaces: PlaceWithLatestReading[];
   initialNowIso: string;
+  initialMetrics: PlaceMetrics;
 }
 
 interface Suggestion {
@@ -139,6 +141,36 @@ const containsSearchTerm = (value: string | undefined, normalizedQuery: string):
   return normalizeFuzzyText(value).includes(normalizedQuery);
 };
 
+const formatMetricsDate = (value: string | null, locale: AppLocale): string => {
+  if (!value) {
+    return locale === 'et' ? 'Puudub' : 'Unavailable';
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat(locale === 'en' ? 'en-GB' : 'et-EE', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+    timeZone: 'Europe/Tallinn',
+  }).format(parsed);
+};
+
+const formatShare = (count: number, total: number): string => {
+  if (total <= 0) {
+    return '0%';
+  }
+
+  const percentage = (count / total) * 100;
+  if (percentage >= 10) {
+    return `${Math.round(percentage)}%`;
+  }
+
+  return `${percentage.toFixed(1)}%`;
+};
+
 export const PlacesBrowser = ({
   initialLocale,
   initialType,
@@ -146,6 +178,7 @@ export const PlacesBrowser = ({
   initialSearch,
   initialPlaces,
   initialNowIso,
+  initialMetrics,
 }: PlacesBrowserProps) => {
   const [locale, setLocale] = useState<AppLocale>(initialLocale);
   const [typeFilter, setTypeFilter] = useState<PlaceType | 'ALL'>(initialType);
@@ -161,6 +194,8 @@ export const PlacesBrowser = ({
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(-1);
   const [error, setError] = useState<string | null>(null);
   const [referenceTimeIso, setReferenceTimeIso] = useState(initialNowIso);
+  const [metrics, setMetrics] = useState<PlaceMetrics>(initialMetrics);
+  const [metricsExpanded, setMetricsExpanded] = useState(false);
 
   const isInitialRender = useRef(true);
   const searchContainerRef = useRef<HTMLDivElement | null>(null);
@@ -225,6 +260,10 @@ export const PlacesBrowser = ({
   }, []);
 
   useEffect(() => {
+    setMetrics(initialMetrics);
+  }, [initialMetrics]);
+
+  useEffect(() => {
     const onPointerDown = (event: MouseEvent) => {
       const target = event.target as Node;
       if (searchContainerRef.current && !searchContainerRef.current.contains(target)) {
@@ -268,6 +307,7 @@ export const PlacesBrowser = ({
   const visibleResultsLimit = getResultsLimit(searchQuery);
   const visiblePlaces = places.slice(0, visibleResultsLimit);
   const shownResultsCount = visiblePlaces.length;
+  const badShare = formatShare(metrics.badQualityEntries, metrics.totalEntries);
 
   const suggestions = useMemo<Suggestion[]>(() => {
     if (!searchQuery) {
@@ -415,10 +455,97 @@ export const PlacesBrowser = ({
             ? 'Vee kvaliteet randades ja basseinides'
             : 'Water quality for beaches and pools'}
         </h1>
-        <p className="mt-4 max-w-2xl text-base text-slate-700 md:text-lg">{t('subtitle', locale)}</p>
 
-        <div className="mt-7 max-w-3xl" ref={searchContainerRef}>
-          <label htmlFor="place-search" className="mb-2 block text-xs font-semibold uppercase tracking-[0.1em] text-accent">
+        <div className="mt-4 grid gap-2 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)]">
+          <div className="rounded-2xl border border-rose-200 bg-rose-50/80 px-3 py-2">
+            <p className="text-[11px] uppercase tracking-[0.08em] text-rose-700">
+              {locale === 'et' ? 'Halva kvaliteediga' : 'Bad quality'}
+            </p>
+            <div className="mt-1 flex items-end gap-2">
+              <p className="text-2xl font-semibold leading-none text-rose-700">
+                {metrics.badQualityEntries}
+              </p>
+              <p className="text-xs font-semibold text-rose-600">{badShare}</p>
+            </div>
+            <p className="mt-1 text-xs text-rose-700/90">
+              {locale === 'et'
+                ? `Basseinid ${metrics.badPoolEntries} • rannad ${metrics.badBeachEntries}`
+                : `Pools ${metrics.badPoolEntries} • beaches ${metrics.badBeachEntries}`}
+            </p>
+          </div>
+          <div className="rounded-2xl border border-emerald-100 bg-white/80 px-3 py-2">
+            <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500">
+              {locale === 'et' ? 'Viimane uuendus' : 'Last update'}
+            </p>
+            <p className="mt-1 text-sm font-semibold text-ink">
+              {formatMetricsDate(metrics.latestSourceUpdatedAt, locale)}
+            </p>
+          </div>
+          <div className="rounded-2xl border border-emerald-100 bg-white/80 px-3 py-2">
+            <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500">
+              {locale === 'et' ? 'Kohti kokku' : 'Total places'}
+            </p>
+            <p className="mt-1 text-sm font-semibold text-ink">{metrics.totalEntries}</p>
+          </div>
+        </div>
+
+        <div className="mt-1 flex justify-end">
+          <button
+            type="button"
+            onClick={() => setMetricsExpanded((value) => !value)}
+            aria-expanded={metricsExpanded}
+            aria-controls="extra-metrics"
+            className="text-[11px] font-semibold text-accent underline decoration-dotted underline-offset-2 transition hover:text-emerald-700"
+          >
+            {metricsExpanded
+              ? (locale === 'et' ? 'Peida lisamõõdikud' : 'Hide extra metrics')
+              : (locale === 'et' ? 'Näita lisamõõdikuid' : 'Show extra metrics')}
+          </button>
+        </div>
+
+        {metricsExpanded ? (
+          <div id="extra-metrics" className="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="rounded-xl border border-emerald-100 bg-white/80 px-3 py-2">
+              <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500">
+                {locale === 'et' ? 'Hea kvaliteet' : 'Good quality'}
+              </p>
+              <p className="mt-1 text-sm font-semibold text-emerald-700">{metrics.goodQualityEntries}</p>
+            </div>
+            <div className="rounded-xl border border-emerald-100 bg-white/80 px-3 py-2">
+              <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500">
+                {locale === 'et' ? 'Teadmata kvaliteet' : 'Unknown quality'}
+              </p>
+              <p className="mt-1 text-sm font-semibold text-slate-700">{metrics.unknownQualityEntries}</p>
+            </div>
+            <div className="rounded-xl border border-emerald-100 bg-white/80 px-3 py-2">
+              <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500">
+                {locale === 'et' ? 'Jälgitavad basseinid' : 'Pools monitored'}
+              </p>
+              <p className="mt-1 text-sm font-semibold text-ink">{metrics.poolEntries}</p>
+            </div>
+            <div className="rounded-xl border border-emerald-100 bg-white/80 px-3 py-2">
+              <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500">
+                {locale === 'et' ? 'Jälgitavad rannad' : 'Beaches monitored'}
+              </p>
+              <p className="mt-1 text-sm font-semibold text-ink">{metrics.beachEntries}</p>
+            </div>
+            <div className="rounded-xl border border-emerald-100 bg-white/80 px-3 py-2">
+              <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500">
+                {locale === 'et' ? 'Uuendatud viimase 24 h jooksul' : 'Updated in last 24h'}
+              </p>
+              <p className="mt-1 text-sm font-semibold text-ink">{metrics.updatedWithin24hEntries}</p>
+            </div>
+            <div className="rounded-xl border border-emerald-100 bg-white/80 px-3 py-2">
+              <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500">
+                {locale === 'et' ? 'Viimane proov üle 7 päeva tagasi' : 'Latest sample older than 7 days'}
+              </p>
+              <p className="mt-1 text-sm font-semibold text-ink">{metrics.staleOver7dEntries}</p>
+            </div>
+          </div>
+        ) : null}
+
+        <div className="mt-5 max-w-3xl" ref={searchContainerRef}>
+          <label htmlFor="place-search" className="sr-only">
             {locale === 'et' ? 'Otsi ujumiskohta' : 'Search swimming places'}
           </label>
           <div className="relative">

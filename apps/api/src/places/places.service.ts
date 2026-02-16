@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import type { Place, PlaceLatestStatus, PlaceType, QualityStatus } from '@prisma/client';
-import { Prisma } from '@prisma/client';
+import { Prisma, SourceFileKind } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
 import type { ListPlacesQuery } from './dto/list-places.query';
@@ -21,6 +21,20 @@ export interface PlaceListResponse {
   };
 }
 
+export interface PlaceMetricsResponse {
+  totalEntries: number;
+  poolEntries: number;
+  beachEntries: number;
+  badQualityEntries: number;
+  goodQualityEntries: number;
+  unknownQualityEntries: number;
+  badPoolEntries: number;
+  badBeachEntries: number;
+  updatedWithin24hEntries: number;
+  staleOver7dEntries: number;
+  latestSourceUpdatedAt: string | null;
+}
+
 interface RankedPlaceId {
   id: string;
 }
@@ -31,6 +45,123 @@ const SEARCH_LIST_LIMIT = 20;
 @Injectable()
 export class PlacesService {
   constructor(private readonly prisma: PrismaService) {}
+
+  async getPlaceMetrics(): Promise<PlaceMetricsResponse> {
+    const sampleKinds = [SourceFileKind.POOL_SAMPLES, SourceFileKind.BEACH_SAMPLES];
+    const now = new Date();
+    const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+    const [
+      totalEntries,
+      poolEntries,
+      beachEntries,
+      badQualityEntries,
+      goodQualityEntries,
+      unknownQualityEntries,
+      badPoolEntries,
+      badBeachEntries,
+      updatedWithin24hEntries,
+      staleOver7dEntries,
+      latestChangedSampleFile,
+      latestCheckedSampleFile,
+    ] =
+      await this.prisma.$transaction([
+        this.prisma.placeLatestStatus.count(),
+        this.prisma.placeLatestStatus.count({
+          where: {
+            place: {
+              type: 'POOL',
+            },
+          },
+        }),
+        this.prisma.placeLatestStatus.count({
+          where: {
+            place: {
+              type: 'BEACH',
+            },
+          },
+        }),
+        this.prisma.placeLatestStatus.count({
+          where: {
+            status: 'BAD',
+          },
+        }),
+        this.prisma.placeLatestStatus.count({
+          where: {
+            status: 'GOOD',
+          },
+        }),
+        this.prisma.placeLatestStatus.count({
+          where: {
+            status: 'UNKNOWN',
+          },
+        }),
+        this.prisma.placeLatestStatus.count({
+          where: {
+            status: 'BAD',
+            place: {
+              type: 'POOL',
+            },
+          },
+        }),
+        this.prisma.placeLatestStatus.count({
+          where: {
+            status: 'BAD',
+            place: {
+              type: 'BEACH',
+            },
+          },
+        }),
+        this.prisma.placeLatestStatus.count({
+          where: {
+            sampledAt: {
+              gte: oneDayAgo,
+            },
+          },
+        }),
+        this.prisma.placeLatestStatus.count({
+          where: {
+            sampledAt: {
+              lt: sevenDaysAgo,
+            },
+          },
+        }),
+        this.prisma.sourceSyncState.findFirst({
+          where: {
+            fileKind: { in: sampleKinds },
+            lastChangedAt: { not: null },
+          },
+          orderBy: { lastChangedAt: 'desc' },
+          select: { lastChangedAt: true },
+        }),
+        this.prisma.sourceSyncState.findFirst({
+          where: {
+            fileKind: { in: sampleKinds },
+            lastCheckedAt: { not: null },
+          },
+          orderBy: { lastCheckedAt: 'desc' },
+          select: { lastCheckedAt: true },
+        }),
+      ]);
+
+    const latestSourceUpdatedAt =
+      latestChangedSampleFile?.lastChangedAt ?? latestCheckedSampleFile?.lastCheckedAt;
+
+    return {
+      totalEntries,
+      poolEntries,
+      beachEntries,
+      badQualityEntries,
+      goodQualityEntries,
+      unknownQualityEntries,
+      badPoolEntries,
+      badBeachEntries,
+      updatedWithin24hEntries,
+      staleOver7dEntries,
+      latestSourceUpdatedAt: latestSourceUpdatedAt ? latestSourceUpdatedAt.toISOString() : null,
+    };
+  }
 
   async listPlaces(query: ListPlacesQuery): Promise<PlaceListResponse[]> {
     const locale = query.locale ?? 'et';
