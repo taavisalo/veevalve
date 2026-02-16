@@ -13,6 +13,7 @@ export interface PlaceApiRow {
     sampledAt: string;
     status: QualityStatus;
     statusReason: string;
+    badDetails?: string[];
   };
 }
 
@@ -26,6 +27,10 @@ const toLatestReading = (
     return undefined;
   }
 
+  const badDetails = [
+    ...new Set((row.badDetails ?? []).map((detail) => detail.trim()).filter((detail) => detail.length > 0)),
+  ];
+
   return {
     id: `${placeId}-latest`,
     placeId,
@@ -33,6 +38,8 @@ const toLatestReading = (
     status: row.status,
     statusReasonEt: row.statusReason,
     statusReasonEn: row.statusReason,
+    badDetailsEt: badDetails.length > 0 ? badDetails : undefined,
+    badDetailsEn: badDetails.length > 0 ? [...badDetails] : undefined,
     source: 'TERVISEAMET_XML',
     sourceUrl: DEFAULT_SOURCE_URL,
   };

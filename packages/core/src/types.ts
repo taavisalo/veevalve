@@ -26,6 +26,8 @@ export interface WaterQualityReading {
   status: QualityStatus;
   statusReasonEt: string;
   statusReasonEn: string;
+  badDetailsEt?: string[];
+  badDetailsEn?: string[];
   source: WaterSource;
   sourceUrl: string;
 }

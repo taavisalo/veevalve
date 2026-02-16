@@ -17,26 +17,65 @@ const labelKeys: Record<QualityStatus, 'qualityGood' | 'qualityBad' | 'qualityUn
 export interface StatusChipProps {
   status: QualityStatus;
   locale?: AppLocale;
+  prominent?: boolean;
+  trailingSymbol?: string;
 }
 
-export const StatusChip = memo(({ status, locale = 'et' }: StatusChipProps) => {
+export const StatusChip = memo(
+  ({ status, locale = 'et', prominent = false, trailingSymbol }: StatusChipProps) => {
   const style = styles[status];
 
   return (
-    <View style={[chipStyles.container, { backgroundColor: style.backgroundColor }]}>
-      <Text style={[chipStyles.text, { color: style.textColor }]}>{t(labelKeys[status], locale)}</Text>
-    </View>
+      <View
+        style={[
+          chipStyles.container,
+          { backgroundColor: style.backgroundColor, borderColor: style.textColor },
+          prominent ? chipStyles.containerProminent : null,
+        ]}
+      >
+        <Text
+          style={[
+            chipStyles.text,
+            { color: style.textColor },
+            prominent ? chipStyles.textProminent : null,
+          ]}
+        >
+          {t(labelKeys[status], locale)}
+        </Text>
+        {trailingSymbol ? (
+          <Text style={[chipStyles.trailingSymbol, { color: style.textColor }]}>{trailingSymbol}</Text>
+        ) : null}
+      </View>
   );
-});
+  },
+);
 
 const chipStyles = StyleSheet.create({
   container: {
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 4,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 4,
+  },
+  containerProminent: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
   },
   text: {
     fontSize: 12,
     fontWeight: '600',
+  },
+  textProminent: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  trailingSymbol: {
+    fontSize: 12,
+    fontWeight: '700',
+    lineHeight: 14,
   },
 });

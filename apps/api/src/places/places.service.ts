@@ -18,6 +18,7 @@ export interface PlaceListResponse {
     sampledAt: string;
     status: QualityStatus;
     statusReason: string;
+    badDetails?: string[];
   };
 }
 
@@ -219,8 +220,7 @@ export class PlacesService {
           ? strictlyFilteredPlaces
           : orderedPlaces;
 
-        return responsePlaces
-          .map((place) => this.toListResponse(place, locale));
+        return this.toListResponsesWithBadDetails(responsePlaces, locale);
       }
     }
 
@@ -269,7 +269,7 @@ export class PlacesService {
       orderBy,
     });
 
-    return places.map((place) => this.toListResponse(place, locale));
+    return this.toListResponsesWithBadDetails(places, locale);
   }
 
   async getPlaceById(id: string, locale: 'et' | 'en' = 'et'): Promise<PlaceListResponse> {
@@ -284,7 +284,12 @@ export class PlacesService {
       throw new NotFoundException('Place not found');
     }
 
-    return this.toListResponse(place, locale);
+    const [response] = await this.toListResponsesWithBadDetails([place], locale);
+    if (!response) {
+      throw new NotFoundException('Place not found');
+    }
+
+    return response;
   }
 
   private async findRankedPlaceIds(input: {
@@ -529,8 +534,13 @@ export class PlacesService {
   private toListResponse(
     place: Place & { latestStatus: PlaceLatestStatus | null },
     locale: 'et' | 'en',
+    badDetailsBySampleId?: ReadonlyMap<string, string[]>,
   ): PlaceListResponse {
     const latest = place.latestStatus;
+    const badDetails =
+      latest?.status === 'BAD'
+        ? badDetailsBySampleId?.get(latest.sampleId)?.filter((detail) => detail.trim().length > 0)
+        : undefined;
 
     return {
       id: place.id,
@@ -549,8 +559,174 @@ export class PlacesService {
               locale === 'en'
                 ? (latest.statusReasonEn ?? latest.statusReasonEt ?? '')
                 : (latest.statusReasonEt ?? latest.statusReasonEn ?? ''),
+            badDetails: badDetails && badDetails.length > 0 ? badDetails : undefined,
           }
         : undefined,
     };
+  }
+
+  private async toListResponsesWithBadDetails<
+    T extends Place & { latestStatus: PlaceLatestStatus | null },
+  >(places: T[], locale: 'et' | 'en'): Promise<PlaceListResponse[]> {
+    const badSampleIds = places.flatMap((place) =>
+      place.latestStatus?.status === 'BAD' ? [place.latestStatus.sampleId] : [],
+    );
+    const badDetailsBySampleId = await this.buildBadDetailsBySampleId(badSampleIds, locale);
+
+    return places.map((place) => this.toListResponse(place, locale, badDetailsBySampleId));
+  }
+
+  private async buildBadDetailsBySampleId(
+    sampleIds: string[],
+    locale: 'et' | 'en',
+  ): Promise<Map<string, string[]>> {
+    const normalizedSampleIds = [...new Set(sampleIds.filter((sampleId) => sampleId.trim().length > 0))];
+    if (normalizedSampleIds.length === 0) {
+      return new Map();
+    }
+
+    const detailsBySampleId = new Map<string, string[]>();
+
+    const indicatorRows = await this.prisma.waterQualityIndicator.findMany({
+      where: {
+        OR: [
+          { assessmentStatus: 'BAD' },
+          { assessmentRaw: { contains: 'ei vasta', mode: 'insensitive' } },
+          { assessmentRaw: { contains: 'mittevastav', mode: 'insensitive' } },
+          { assessmentRaw: { contains: 'not compliant', mode: 'insensitive' } },
+        ],
+        protocol: {
+          sampleId: {
+            in: normalizedSampleIds,
+          },
+        },
+      },
+      select: {
+        name: true,
+        valueRaw: true,
+        unit: true,
+        indicatorOrder: true,
+        protocol: {
+          select: {
+            sampleId: true,
+            protocolOrder: true,
+          },
+        },
+      },
+    });
+
+    const sortedIndicatorRows = [...indicatorRows].sort((left, right) => {
+      const sampleOrder = left.protocol.sampleId.localeCompare(right.protocol.sampleId);
+      if (sampleOrder !== 0) {
+        return sampleOrder;
+      }
+
+      if (left.protocol.protocolOrder !== right.protocol.protocolOrder) {
+        return left.protocol.protocolOrder - right.protocol.protocolOrder;
+      }
+
+      return left.indicatorOrder - right.indicatorOrder;
+    });
+
+    for (const indicator of sortedIndicatorRows) {
+      const detail = this.formatIndicatorBadDetail({
+        name: indicator.name,
+        valueRaw: indicator.valueRaw,
+        unit: indicator.unit,
+      });
+      if (!detail) {
+        continue;
+      }
+
+      const existingDetails = detailsBySampleId.get(indicator.protocol.sampleId);
+      if (!existingDetails) {
+        detailsBySampleId.set(indicator.protocol.sampleId, [detail]);
+        continue;
+      }
+
+      if (!existingDetails.includes(detail)) {
+        existingDetails.push(detail);
+      }
+    }
+
+    const protocolRows = await this.prisma.waterQualityProtocol.findMany({
+      where: {
+        sampleId: {
+          in: normalizedSampleIds,
+        },
+        assessmentStatus: 'BAD',
+      },
+      select: {
+        sampleId: true,
+        protocolOrder: true,
+        protocolNumber: true,
+        assessmentRaw: true,
+      },
+      orderBy: [{ sampleId: 'asc' }, { protocolOrder: 'asc' }],
+    });
+
+    for (const protocol of protocolRows) {
+      if ((detailsBySampleId.get(protocol.sampleId)?.length ?? 0) > 0) {
+        continue;
+      }
+
+      const fallbackDetail = this.formatProtocolBadDetail(
+        {
+          protocolNumber: protocol.protocolNumber,
+          assessmentRaw: protocol.assessmentRaw,
+        },
+        locale,
+      );
+      if (!fallbackDetail) {
+        continue;
+      }
+
+      detailsBySampleId.set(protocol.sampleId, [fallbackDetail]);
+    }
+
+    return detailsBySampleId;
+  }
+
+  private formatIndicatorBadDetail(input: {
+    name: string;
+    valueRaw: string | null;
+    unit: string | null;
+  }): string | null {
+    const name = input.name.trim();
+    if (!name) {
+      return null;
+    }
+
+    const value = input.valueRaw?.trim() ?? '';
+    const unit = input.unit?.trim() ?? '';
+    const measurement = [value, unit].filter((part) => part.length > 0).join(' ');
+
+    if (measurement) {
+      return `${name}: ${measurement}`;
+    }
+
+    return name;
+  }
+
+  private formatProtocolBadDetail(
+    input: {
+      protocolNumber: string | null;
+      assessmentRaw: string | null;
+    },
+    locale: 'et' | 'en',
+  ): string | null {
+    const assessment = input.assessmentRaw?.trim() ?? '';
+    if (!assessment) {
+      return null;
+    }
+
+    const protocolNumber = input.protocolNumber?.trim() ?? '';
+    if (protocolNumber) {
+      return locale === 'en'
+        ? `Test protocol no. ${protocolNumber}: ${assessment}`
+        : `Katseprotokoll nr ${protocolNumber}: ${assessment}`;
+    }
+
+    return locale === 'en' ? `Test protocol: ${assessment}` : `Katseprotokoll: ${assessment}`;
   }
 }

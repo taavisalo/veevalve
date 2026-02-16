@@ -1,4 +1,4 @@
-import type { AppLocale, PlaceWithLatestReading } from '@veevalve/core';
+import type { AppLocale, PlaceType, PlaceWithLatestReading } from '@veevalve/core';
 import { useState } from 'react';
 
 import { QualityBadge } from './status-badge';
@@ -12,6 +12,7 @@ export interface PlaceCardProps {
 }
 
 const GOOGLE_MAPS_SEARCH_URL = 'https://www.google.com/maps/search/';
+const TERVISEAMET_REPORT_URL = 'https://vtiav.sm.ee/frontpage/show';
 
 const formatSampledAtRelative = (
   sampledAtIso: string,
@@ -63,6 +64,48 @@ const buildGoogleMapsSearchUrl = (address: string): string => {
   return url.toString();
 };
 
+const toTerviseametTabId = (placeType: PlaceType): string =>
+  placeType === 'POOL' ? 'U' : 'A';
+
+const buildTerviseametReportUrl = (externalId: string, placeType: PlaceType): string => {
+  const url = new URL(TERVISEAMET_REPORT_URL);
+  url.searchParams.set('id', externalId);
+  url.searchParams.set('active_tab_id', toTerviseametTabId(placeType));
+  return url.toString();
+};
+
+const mergeUniqueDetails = (details: string[], fallbackDetail: string | undefined): string[] => {
+  const merged: string[] = [];
+  const seen = new Set<string>();
+
+  for (const candidate of details) {
+    const detail = candidate.trim();
+    if (!detail) {
+      continue;
+    }
+
+    const key = detail.toLocaleLowerCase();
+    if (seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    merged.push(detail);
+  }
+
+  if (merged.length > 0) {
+    return merged;
+  }
+
+  const fallback = fallbackDetail?.trim() ?? '';
+  if (!fallback) {
+    return merged;
+  }
+
+  merged.push(fallback);
+  return merged;
+};
+
 export const PlaceCard = ({
   place,
   locale = 'et',
@@ -79,6 +122,7 @@ export const PlaceCard = ({
       ? [placeName, place.municipality].filter((part) => part.trim().length > 0).join(', ')
       : (placeAddress ?? placeName);
   const [showExactSampledAt, setShowExactSampledAt] = useState(false);
+  const [showBadDetails, setShowBadDetails] = useState(false);
 
   const sampledDate = place.latestReading ? toValidDate(place.latestReading.sampledAt) : undefined;
   const exactSampledAtIso = place.latestReading
@@ -88,6 +132,11 @@ export const PlaceCard = ({
     ? formatSampledAtRelative(place.latestReading.sampledAt, locale, referenceTimeIso)
     : undefined;
   const mapsAddressUrl = mapsSearchQuery ? buildGoogleMapsSearchUrl(mapsSearchQuery) : undefined;
+  const reportExternalId = place.externalId.trim();
+  const fullReportUrl =
+    reportExternalId.length > 0
+      ? buildTerviseametReportUrl(reportExternalId, place.type)
+      : undefined;
   const openAddressLabel =
     locale === 'en'
       ? `Open location in Google Maps: ${mapsSearchQuery ?? ''}`
@@ -96,6 +145,29 @@ export const PlaceCard = ({
     locale === 'en'
       ? (isFavorite ? 'Remove from favorites' : 'Add to favorites')
       : (isFavorite ? 'Eemalda lemmikutest' : 'Lisa lemmikutesse');
+  const isBadStatus = place.latestReading?.status === 'BAD';
+  const badDetailCandidates =
+    locale === 'en'
+      ? (place.latestReading?.badDetailsEn ?? place.latestReading?.badDetailsEt ?? [])
+      : (place.latestReading?.badDetailsEt ?? place.latestReading?.badDetailsEn ?? []);
+  const statusReason =
+    place.latestReading
+      ? (locale === 'en' ? place.latestReading.statusReasonEn : place.latestReading.statusReasonEt)
+      : undefined;
+  const badDetails = mergeUniqueDetails(badDetailCandidates, statusReason);
+  const badDetailsToggleLabel =
+    locale === 'en'
+      ? (showBadDetails ? 'Hide bad quality details' : 'Show bad quality details')
+      : (showBadDetails ? 'Peida halva kvaliteedi detailid' : 'Näita halva kvaliteedi detaile');
+  const badDetailsTitle = locale === 'en' ? 'Why is this marked bad?' : 'Miks on see märgitud halvaks?';
+  const badDetailsFallbackText =
+    locale === 'en'
+      ? 'The source did not include additional detailed reasons.'
+      : 'Allikandmed ei sisaldanud täpsemaid põhjuseid.';
+  const fullReportLabel =
+    locale === 'en'
+      ? 'Open full report on Terviseamet'
+      : 'Ava täielik raport Terviseameti lehel';
 
   return (
     <article
@@ -125,7 +197,31 @@ export const PlaceCard = ({
               {isFavorite ? '★' : '☆'}
             </button>
           ) : null}
-          <QualityBadge status={place.latestReading?.status ?? 'UNKNOWN'} locale={locale} />
+          {isBadStatus ? (
+            <button
+              type="button"
+              onClick={() => setShowBadDetails((value) => !value)}
+              aria-expanded={showBadDetails}
+              aria-label={badDetailsToggleLabel}
+              title={badDetailsToggleLabel}
+              className={`rounded-full transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:ring-offset-2 ${
+                showBadDetails ? 'ring-2 ring-rose-300 ring-offset-2' : ''
+              }`}
+            >
+              <QualityBadge
+                status={place.latestReading?.status ?? 'UNKNOWN'}
+                locale={locale}
+                trailingSymbol={showBadDetails ? '▾' : '▸'}
+                className="min-h-9 px-4 text-sm font-bold shadow-sm"
+              />
+            </button>
+          ) : (
+            <QualityBadge
+              status={place.latestReading?.status ?? 'UNKNOWN'}
+              locale={locale}
+              className="min-h-9 px-4 text-sm font-bold shadow-sm"
+            />
+          )}
         </div>
       </header>
       {placeAddress && mapsAddressUrl ? (
@@ -174,6 +270,36 @@ export const PlaceCard = ({
           '—'
         )}
       </p>
+      {isBadStatus && showBadDetails ? (
+        <section className="mt-3 rounded-lg border border-rose-200 bg-rose-50/70 p-2.5">
+          <div>
+            <p className="text-xs font-semibold text-rose-800">{badDetailsTitle}</p>
+            {badDetails.length > 0 ? (
+              <ul className="mt-1 list-disc space-y-1 pl-4 text-xs text-rose-800">
+                {badDetails.map((detail) => (
+                  <li key={`${place.id}-bad-detail-${detail}`} className="leading-5">
+                    {detail}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-1 text-xs text-rose-700">{badDetailsFallbackText}</p>
+            )}
+            {fullReportUrl ? (
+              <a
+                href={fullReportUrl}
+                target="_blank"
+                rel="noopener noreferrer nofollow external"
+                referrerPolicy="no-referrer"
+                className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-rose-700 underline decoration-dotted underline-offset-2 hover:text-rose-800"
+              >
+                <span>{fullReportLabel}</span>
+                <span aria-hidden>↗</span>
+              </a>
+            ) : null}
+          </div>
+        </section>
+      ) : null}
     </article>
   );
 };

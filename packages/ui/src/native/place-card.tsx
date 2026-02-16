@@ -1,4 +1,4 @@
-import type { AppLocale, PlaceWithLatestReading } from '@veevalve/core';
+import type { AppLocale, PlaceType, PlaceWithLatestReading } from '@veevalve/core';
 import { useState } from 'react';
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -13,6 +13,7 @@ export interface NativePlaceCardProps {
 }
 
 const GOOGLE_MAPS_SEARCH_BASE_URL = 'https://www.google.com/maps/search/?api=1&query=';
+const TERVISEAMET_REPORT_BASE_URL = 'https://vtiav.sm.ee/frontpage/show';
 
 const toValidDate = (value: string): Date | undefined => {
   const parsedDate = new Date(value);
@@ -24,6 +25,15 @@ const buildGoogleMapsSearchUrl = (address: string): string =>
 
 const isSafeGoogleMapsSearchUrl = (url: string): boolean =>
   url.startsWith(GOOGLE_MAPS_SEARCH_BASE_URL);
+
+const toTerviseametTabId = (placeType: PlaceType): string =>
+  placeType === 'POOL' ? 'U' : 'A';
+
+const buildTerviseametReportUrl = (externalId: string, placeType: PlaceType): string =>
+  `${TERVISEAMET_REPORT_BASE_URL}?id=${encodeURIComponent(externalId)}&active_tab_id=${toTerviseametTabId(placeType)}`;
+
+const isSafeTerviseametReportUrl = (url: string): boolean =>
+  url.startsWith(`${TERVISEAMET_REPORT_BASE_URL}?`);
 
 const formatSampledAtRelative = (
   sampledAtIso: string,
@@ -63,6 +73,38 @@ const formatSampledAtRelative = (
   return formatter.format(amount, matchedUnit.unit);
 };
 
+const mergeUniqueDetails = (details: string[], fallbackDetail: string | undefined): string[] => {
+  const merged: string[] = [];
+  const seen = new Set<string>();
+
+  for (const candidate of details) {
+    const detail = candidate.trim();
+    if (!detail) {
+      continue;
+    }
+
+    const key = detail.toLocaleLowerCase();
+    if (seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    merged.push(detail);
+  }
+
+  if (merged.length > 0) {
+    return merged;
+  }
+
+  const fallback = fallbackDetail?.trim() ?? '';
+  if (!fallback) {
+    return merged;
+  }
+
+  merged.push(fallback);
+  return merged;
+};
+
 export const NativePlaceCard = ({
   place,
   locale = 'et',
@@ -79,6 +121,7 @@ export const NativePlaceCard = ({
       ? [placeName, place.municipality].filter((part) => part.trim().length > 0).join(', ')
       : (placeAddress ?? placeName);
   const [showExactSampledAt, setShowExactSampledAt] = useState(false);
+  const [showBadDetails, setShowBadDetails] = useState(false);
 
   const sampledDate = place.latestReading ? toValidDate(place.latestReading.sampledAt) : undefined;
   const exactSampledAtIso = place.latestReading
@@ -96,10 +139,53 @@ export const NativePlaceCard = ({
     locale === 'en'
       ? (isFavorite ? 'Remove from favorites' : 'Add to favorites')
       : (isFavorite ? 'Eemalda lemmikutest' : 'Lisa lemmikutesse');
+  const isBadStatus = place.latestReading?.status === 'BAD';
+  const badDetailCandidates =
+    locale === 'en'
+      ? (place.latestReading?.badDetailsEn ?? place.latestReading?.badDetailsEt ?? [])
+      : (place.latestReading?.badDetailsEt ?? place.latestReading?.badDetailsEn ?? []);
+  const statusReason =
+    place.latestReading
+      ? (locale === 'en' ? place.latestReading.statusReasonEn : place.latestReading.statusReasonEt)
+      : undefined;
+  const badDetails = mergeUniqueDetails(badDetailCandidates, statusReason);
+  const badDetailsToggleLabel =
+    locale === 'en'
+      ? (showBadDetails ? 'Hide bad quality details' : 'Show bad quality details')
+      : (showBadDetails ? 'Peida halva kvaliteedi detailid' : 'Näita halva kvaliteedi detaile');
+  const badDetailsTitle = locale === 'en' ? 'Why is this marked bad?' : 'Miks on see märgitud halvaks?';
+  const badDetailsFallbackText =
+    locale === 'en'
+      ? 'The source did not include additional detailed reasons.'
+      : 'Allikandmed ei sisaldanud täpsemaid põhjuseid.';
+  const fullReportLabel =
+    locale === 'en'
+      ? 'Open full report on Terviseamet'
+      : 'Ava täielik raport Terviseameti lehel';
+  const reportExternalId = place.externalId.trim();
+  const fullReportUrl =
+    reportExternalId.length > 0
+      ? buildTerviseametReportUrl(reportExternalId, place.type)
+      : undefined;
 
   const openAddressInMaps = async (query: string): Promise<void> => {
     const url = buildGoogleMapsSearchUrl(query);
     if (!isSafeGoogleMapsSearchUrl(url)) {
+      return;
+    }
+
+    try {
+      const canOpen = await Linking.canOpenURL(url);
+      if (canOpen) {
+        await Linking.openURL(url);
+      }
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const openFullReport = async (url: string): Promise<void> => {
+    if (!isSafeTerviseametReportUrl(url)) {
       return;
     }
 
@@ -137,7 +223,24 @@ export const NativePlaceCard = ({
               </Text>
             </Pressable>
           ) : null}
-          <StatusChip status={place.latestReading?.status ?? 'UNKNOWN'} locale={locale} />
+          {isBadStatus ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={badDetailsToggleLabel}
+              accessibilityState={{ expanded: showBadDetails }}
+              style={({ pressed }) => [styles.statusChipButton, pressed ? styles.statusChipButtonPressed : null]}
+              onPress={() => setShowBadDetails((value) => !value)}
+            >
+              <StatusChip
+                status={place.latestReading?.status ?? 'UNKNOWN'}
+                locale={locale}
+                prominent
+                trailingSymbol={showBadDetails ? '▾' : '▸'}
+              />
+            </Pressable>
+          ) : (
+            <StatusChip status={place.latestReading?.status ?? 'UNKNOWN'} locale={locale} prominent />
+          )}
         </View>
       </View>
       {mapsSearchQuery ? (
@@ -181,6 +284,40 @@ export const NativePlaceCard = ({
           <Text style={styles.latestSampleValue}>—</Text>
         )}
       </View>
+      {isBadStatus && showBadDetails ? (
+        <View style={styles.badDetailsContainer}>
+          <View style={styles.badDetailsBody}>
+            <Text style={styles.badDetailsTitle}>{badDetailsTitle}</Text>
+            {badDetails.length > 0 ? (
+              <View style={styles.badDetailsList}>
+                {badDetails.map((detail) => (
+                  <View key={`${place.id}-bad-detail-${detail}`} style={styles.badDetailsItem}>
+                    <Text style={styles.badDetailsBullet}>•</Text>
+                    <Text style={styles.badDetailsItemText}>{detail}</Text>
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <Text style={styles.badDetailsFallback}>{badDetailsFallbackText}</Text>
+            )}
+            {fullReportUrl ? (
+              <Pressable
+                accessibilityRole="link"
+                accessibilityLabel={fullReportLabel}
+                style={({ pressed }) => [styles.reportLink, pressed ? styles.reportLinkPressed : null]}
+                onPress={() => {
+                  void openFullReport(fullReportUrl);
+                }}
+              >
+                <Text style={styles.reportLinkText}>{fullReportLabel}</Text>
+                <Text aria-hidden style={styles.reportLinkIcon}>
+                  ↗
+                </Text>
+              </Pressable>
+            ) : null}
+          </View>
+        </View>
+      ) : null}
     </View>
   );
 };
@@ -208,6 +345,12 @@ const styles = StyleSheet.create({
   actionsColumn: {
     alignItems: 'flex-end',
     gap: 6,
+  },
+  statusChipButton: {
+    borderRadius: 999,
+  },
+  statusChipButtonPressed: {
+    opacity: 0.85,
   },
   favoriteButton: {
     width: 30,
@@ -314,5 +457,70 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#334155',
     flexShrink: 0,
+  },
+  badDetailsContainer: {
+    marginTop: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#F8C6C3',
+    backgroundColor: '#FFF1F1',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  badDetailsBody: {
+    marginTop: 2,
+  },
+  badDetailsTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#7F1D1D',
+  },
+  badDetailsList: {
+    marginTop: 4,
+    gap: 4,
+  },
+  badDetailsItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  badDetailsBullet: {
+    marginTop: 1,
+    marginRight: 6,
+    fontSize: 12,
+    color: '#7F1D1D',
+  },
+  badDetailsItemText: {
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 17,
+    color: '#7F1D1D',
+  },
+  badDetailsFallback: {
+    marginTop: 4,
+    fontSize: 12,
+    color: '#9F1239',
+  },
+  reportLink: {
+    marginTop: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+  },
+  reportLinkPressed: {
+    opacity: 0.8,
+  },
+  reportLinkText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#A92F27',
+    textDecorationLine: 'underline',
+    textDecorationStyle: 'dotted',
+  },
+  reportLinkIcon: {
+    marginLeft: 5,
+    marginTop: 1,
+    fontSize: 12,
+    color: '#A92F27',
+    fontWeight: '700',
   },
 });
