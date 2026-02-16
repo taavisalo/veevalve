@@ -331,7 +331,7 @@ const App = () => {
 
             <Text style={styles.searchHint}>
               {locale === 'et'
-                ? 'Automaatne soovitus otsingule uuendab tulemusi kirjutamise ajal.'
+                ? 'Otsingusoovitused uuenevad kirjutamise ajal.'
                 : 'Autocomplete suggestions update as you type.'}
             </Text>
           </View>

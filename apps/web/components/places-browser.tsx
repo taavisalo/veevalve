@@ -512,7 +512,7 @@ export const PlacesBrowser = ({
 
           <p className="mt-2 text-xs text-slate-500">
             {locale === 'et'
-              ? 'Automaatne soovitus otsingule. Vajuta "/" et kohe otsingusse liikuda.'
+              ? 'Otsingusoovitused uuenevad kirjutamise ajal. Vajuta "/", et otsingusse liikuda.'
               : 'Autocomplete suggestions update as you type. Press "/" to focus search.'}
           </p>
         </div>
