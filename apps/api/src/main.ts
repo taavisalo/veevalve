@@ -53,6 +53,16 @@ const bootstrap = async (): Promise<void> => {
     }),
   );
 
+  const fastify = app.getHttpAdapter().getInstance();
+  fastify.addHook('onSend', (_request, reply, payload, done) => {
+    reply.header('X-Content-Type-Options', 'nosniff');
+    reply.header('X-Frame-Options', 'DENY');
+    reply.header('Referrer-Policy', 'no-referrer');
+    reply.header('Permissions-Policy', 'camera=(), geolocation=(), microphone=()');
+    reply.header('X-Permitted-Cross-Domain-Policies', 'none');
+    done(null, payload);
+  });
+
   app.setGlobalPrefix('api');
   app.useGlobalPipes(
     new ValidationPipe({

@@ -7,7 +7,7 @@ RUN corepack enable && corepack prepare pnpm@9.12.3 --activate && pnpm config se
 WORKDIR /app
 
 FROM base AS build
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.base.json ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.base.json .npmrc ./
 COPY apps/web/package.json ./apps/web/package.json
 COPY packages/core/package.json ./packages/core/package.json
 COPY packages/ui/package.json ./packages/ui/package.json
@@ -24,5 +24,6 @@ ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=build /app/apps/web/.next/standalone ./
 COPY --from=build /app/apps/web/.next/static ./apps/web/.next/static
 COPY --from=build /app/apps/web/public ./apps/web/public
+USER node
 EXPOSE 3000
 CMD ["node", "apps/web/server.js"]

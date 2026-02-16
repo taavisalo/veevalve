@@ -7,7 +7,7 @@ RUN corepack enable && corepack prepare pnpm@9.12.3 --activate && pnpm config se
 WORKDIR /app
 
 FROM base AS build
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.base.json ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.base.json .npmrc ./
 COPY apps/api/package.json ./apps/api/package.json
 COPY packages/core/package.json ./packages/core/package.json
 RUN pnpm install --filter @veevalve/api... --frozen-lockfile
@@ -23,5 +23,6 @@ ENV NODE_ENV=production
 COPY --from=build /app/deploy/api ./
 COPY --from=build /app/apps/api/dist ./dist
 COPY --from=build /app/apps/api/prisma ./prisma
+USER node
 EXPOSE 3001
 CMD ["node", "dist/main.js"]

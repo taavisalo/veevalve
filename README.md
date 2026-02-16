@@ -156,8 +156,14 @@ Important variables:
 - `TERVISEAMET_POOL_SAMPLES_URL_TEMPLATE`
 - `TERVISEAMET_BEACH_SAMPLES_URL_TEMPLATE`
 - `TERVISEAMET_SAMPLE_YEARS_BACK`
+- `TERVISEAMET_ALLOWED_HOSTS`
 - `NEXT_PUBLIC_API_BASE_URL`
 - `CORS_ORIGIN`
+- `SYNC_API_TOKEN`
+- `ALLOW_UNAUTHENTICATED_SYNC` (dev-only fallback; ignored in production)
+- `SYNC_RATE_LIMIT_MAX`
+- `SYNC_RATE_LIMIT_WINDOW_MS`
+- `SYNC_RATE_LIMIT_MAX_TRACKED_IPS`
 - Expo/EAS credentials for production builds
 
 ## Data Schema
@@ -190,6 +196,7 @@ Change detection:
 - Tries conditional requests with `If-None-Match` and `If-Modified-Since`
 - Falls back to SHA-256 content hash comparison when headers are not useful
 - Stores state in `SourceSyncState`
+- Rejects non-HTTPS/non-allowlisted feed URLs (`TERVISEAMET_ALLOWED_HOSTS`, default `vtiav.sm.ee`)
 
 Year handling:
 - Automatically checks current year and previous year feeds (`TERVISEAMET_SAMPLE_YEARS_BACK`, default `1`)
@@ -266,6 +273,7 @@ Implemented now:
   - BAD details expand inline
   - direct link to full Terviseamet report (`frontpage/show?id=...`)
 - API hardening for sync trigger (token + rate limiting)
+- Additional hardening: feed host allowlist + HTTPS-only, production-safe sync auth behavior, baseline security headers
 - Docker/devcontainer setup and OSS governance docs
 
 Planned next:

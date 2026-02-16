@@ -1,4 +1,4 @@
-import { timingSafeEqual } from 'node:crypto';
+import { createHash, timingSafeEqual } from 'node:crypto';
 
 import {
   Controller,
@@ -6,6 +6,7 @@ import {
   HttpException,
   HttpCode,
   HttpStatus,
+  Logger,
   Post,
   Req,
   UnauthorizedException,
@@ -16,6 +17,7 @@ import { WaterQualityService } from './water-quality.service';
 
 const DEFAULT_SYNC_RATE_LIMIT_MAX = 20;
 const DEFAULT_SYNC_RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
+const DEFAULT_SYNC_RATE_LIMIT_MAX_TRACKED_IPS = 10_000;
 
 const readPositiveInteger = (value: string | undefined, fallback: number): number => {
   const parsed = Number.parseInt(value ?? '', 10);
@@ -27,18 +29,15 @@ const readPositiveInteger = (value: string | undefined, fallback: number): numbe
 };
 
 const safeTokenEquals = (left: string, right: string): boolean => {
-  const leftBuffer = Buffer.from(left);
-  const rightBuffer = Buffer.from(right);
-
-  if (leftBuffer.byteLength !== rightBuffer.byteLength) {
-    return false;
-  }
+  const leftBuffer = createHash('sha256').update(left).digest();
+  const rightBuffer = createHash('sha256').update(right).digest();
 
   return timingSafeEqual(leftBuffer, rightBuffer);
 };
 
 @Controller('water-quality')
 export class WaterQualityController {
+  private readonly logger = new Logger(WaterQualityController.name);
   private readonly syncRateLimitState = new Map<string, { startedAt: number; count: number }>();
   private readonly syncRateLimitMax = readPositiveInteger(
     process.env.SYNC_RATE_LIMIT_MAX,
@@ -47,6 +46,10 @@ export class WaterQualityController {
   private readonly syncRateLimitWindowMs = readPositiveInteger(
     process.env.SYNC_RATE_LIMIT_WINDOW_MS,
     DEFAULT_SYNC_RATE_LIMIT_WINDOW_MS,
+  );
+  private readonly syncRateLimitMaxTrackedIps = readPositiveInteger(
+    process.env.SYNC_RATE_LIMIT_MAX_TRACKED_IPS,
+    DEFAULT_SYNC_RATE_LIMIT_MAX_TRACKED_IPS,
   );
 
   constructor(private readonly waterQualityService: WaterQualityService) {}
@@ -64,16 +67,23 @@ export class WaterQualityController {
 
   private ensureSyncAuthorized(syncTokenHeader: string | string[] | undefined): void {
     const allowUnauthenticatedSync = process.env.ALLOW_UNAUTHENTICATED_SYNC === 'true';
+    const isProduction = process.env.NODE_ENV === 'production';
     const expectedSyncToken = process.env.SYNC_API_TOKEN?.trim();
-    if (allowUnauthenticatedSync && !expectedSyncToken) {
+    if (allowUnauthenticatedSync && isProduction) {
+      this.logger.warn(
+        'ALLOW_UNAUTHENTICATED_SYNC=true is ignored in production; SYNC_API_TOKEN is required.',
+      );
+    }
+
+    if (allowUnauthenticatedSync && !isProduction && !expectedSyncToken) {
       return;
     }
 
     const providedSyncToken =
       typeof syncTokenHeader === 'string'
-        ? syncTokenHeader
+        ? syncTokenHeader.trim()
         : Array.isArray(syncTokenHeader)
-          ? syncTokenHeader[0]
+          ? syncTokenHeader[0]?.trim()
           : undefined;
     if (!expectedSyncToken || !providedSyncToken) {
       throw new UnauthorizedException('Missing sync token');
@@ -87,12 +97,18 @@ export class WaterQualityController {
   private assertSyncRateLimit(ip: string): void {
     const now = Date.now();
 
-    if (this.syncRateLimitState.size > 2_000) {
-      for (const [key, value] of this.syncRateLimitState) {
-        if (now - value.startedAt > this.syncRateLimitWindowMs) {
-          this.syncRateLimitState.delete(key);
-        }
-      }
+    this.purgeExpiredRateLimitEntries(now);
+
+    if (this.syncRateLimitState.size > this.syncRateLimitMaxTrackedIps) {
+      this.purgeExpiredRateLimitEntries(now);
+    }
+
+    if (this.syncRateLimitState.size > this.syncRateLimitMaxTrackedIps) {
+      const trackedIpCount = this.syncRateLimitState.size;
+      this.syncRateLimitState.clear();
+      this.logger.warn(
+        `Reset sync rate-limit state after reaching ${String(trackedIpCount)} tracked IPs.`,
+      );
     }
 
     const previous = this.syncRateLimitState.get(ip);
@@ -109,5 +125,13 @@ export class WaterQualityController {
       startedAt: previous.startedAt,
       count: previous.count + 1,
     });
+  }
+
+  private purgeExpiredRateLimitEntries(now: number): void {
+    for (const [key, value] of this.syncRateLimitState) {
+      if (now - value.startedAt > this.syncRateLimitWindowMs) {
+        this.syncRateLimitState.delete(key);
+      }
+    }
   }
 }

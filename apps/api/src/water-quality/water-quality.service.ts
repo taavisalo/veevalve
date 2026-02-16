@@ -35,6 +35,7 @@ const DEFAULT_POOL_FACILITIES_URL =
 const DEFAULT_BEACH_LOCATIONS_URL =
   'https://vtiav.sm.ee/index.php/opendata/supluskohad.xml';
 const DEFAULT_SAMPLE_YEARS_BACK = 1;
+const DEFAULT_ALLOWED_FEED_HOSTS = ['vtiav.sm.ee'];
 const UNKNOWN_MUNICIPALITY = 'Teadmata';
 const DEFAULT_FEED_FETCH_TIMEOUT_MS = 20_000;
 const DEFAULT_MAX_FEED_BYTES = 10 * 1024 * 1024; // 10 MiB
@@ -84,6 +85,7 @@ interface UpsertPlaceInput {
 export class WaterQualityService {
   private readonly logger = new Logger(WaterQualityService.name);
   private readonly placeCache = new Map<string, Place>();
+  private syncInFlight: Promise<SyncSummary> | null = null;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -96,6 +98,23 @@ export class WaterQualityService {
   }
 
   async syncFromTerviseamet(
+    options: { force?: boolean } = {},
+  ): Promise<SyncSummary> {
+    if (this.syncInFlight) {
+      this.logger.warn('Sync requested while a previous sync is still running. Reusing active run.');
+      return this.syncInFlight;
+    }
+
+    const runningSync = this.runSyncFromTerviseamet(options).finally(() => {
+      if (this.syncInFlight === runningSync) {
+        this.syncInFlight = null;
+      }
+    });
+    this.syncInFlight = runningSync;
+    return runningSync;
+  }
+
+  private async runSyncFromTerviseamet(
     options: { force?: boolean } = {},
   ): Promise<SyncSummary> {
     this.placeCache.clear();
@@ -185,6 +204,52 @@ export class WaterQualityService {
 
     summary.statusChanges = await this.refreshLatestStatuses(affectedPlaceIds);
     return summary;
+  }
+
+  private resolveAllowedFeedHosts(): Set<string> {
+    const configuredHosts = (process.env.TERVISEAMET_ALLOWED_HOSTS ?? '')
+      .split(',')
+      .map((host) => host.trim().toLowerCase().replace(/\.$/, ''))
+      .filter((host) => host.length > 0);
+
+    const hosts = new Set<string>(
+      configuredHosts.length > 0 ? configuredHosts : DEFAULT_ALLOWED_FEED_HOSTS,
+    );
+
+    if (process.env.NODE_ENV !== 'production') {
+      hosts.add('localhost');
+      hosts.add('127.0.0.1');
+      hosts.add('::1');
+      hosts.add('[::1]');
+    }
+
+    return hosts;
+  }
+
+  private validateFeedUrl(url: string): string | null {
+    let parsedUrl: URL;
+    try {
+      parsedUrl = new URL(url);
+    } catch {
+      return `Invalid feed URL: ${url}`;
+    }
+
+    const host = parsedUrl.hostname.toLowerCase().replace(/\.$/, '');
+    const allowedHosts = this.resolveAllowedFeedHosts();
+    if (!allowedHosts.has(host)) {
+      return `Feed host is not allowlisted: ${host}`;
+    }
+
+    const isLocalDevHost =
+      host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '[::1]';
+    const isHttpLocalDevAllowed =
+      process.env.NODE_ENV !== 'production' && isLocalDevHost && parsedUrl.protocol === 'http:';
+
+    if (parsedUrl.protocol !== 'https:' && !isHttpLocalDevAllowed) {
+      return `Feed URL must use HTTPS (got ${parsedUrl.protocol})`;
+    }
+
+    return null;
   }
 
   private buildFeedDescriptors(): FeedDescriptor[] {
@@ -277,6 +342,16 @@ export class WaterQualityService {
     descriptor: FeedDescriptor,
     force: boolean,
   ): Promise<FeedFetchResult> {
+    const feedUrlValidationError = this.validateFeedUrl(descriptor.url);
+    if (feedUrlValidationError) {
+      await this.recordFeedState({
+        descriptor,
+        statusCode: null,
+        error: feedUrlValidationError,
+      });
+      return { status: 'error', descriptor, error: feedUrlValidationError };
+    }
+
     const state = await this.prisma.sourceSyncState.findUnique({
       where: {
         fileKind_year: {
