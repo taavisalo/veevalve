@@ -1,4 +1,4 @@
-import type { PlaceType, PlaceWithLatestReading, QualityStatus } from '@veevalve/core';
+import type { PlaceType, PlaceWithLatestReading, QualityStatus } from '@veevalve/core/client';
 
 import { mapPlaceApiRows, type PlaceApiRow } from './place-api';
 

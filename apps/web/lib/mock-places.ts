@@ -1,4 +1,4 @@
-import type { PlaceWithLatestReading } from '@veevalve/core';
+import type { PlaceWithLatestReading } from '@veevalve/core/client';
 
 export const mockPlaces: PlaceWithLatestReading[] = [
   {

@@ -15,12 +15,13 @@ COPY . .
 RUN pnpm --filter @veevalve/core build
 RUN pnpm --filter @veevalve/api prisma:generate
 RUN pnpm --filter @veevalve/api build
-RUN pnpm --filter @veevalve/api deploy --prod /app/deploy/api
+RUN pnpm --filter @veevalve/api deploy --prod --no-optional /app/deploy/api
 
 FROM node:20-bookworm-slim AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
-COPY --from=build /app/deploy/api ./
+COPY --from=build /app/deploy/api/node_modules ./node_modules
+COPY --from=build /app/deploy/api/package.json ./package.json
 COPY --from=build /app/apps/api/dist ./dist
 COPY --from=build /app/apps/api/prisma ./prisma
 USER node

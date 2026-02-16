@@ -1,4 +1,4 @@
-import type { PlaceWithLatestReading, PlaceType, QualityStatus } from '@veevalve/core';
+import type { PlaceWithLatestReading, PlaceType, QualityStatus } from '@veevalve/core/client';
 
 interface FilterInput {
   places: PlaceWithLatestReading[];

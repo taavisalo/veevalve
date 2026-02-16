@@ -6,9 +6,6 @@
     "orientation": "portrait",
     "scheme": "veevalve",
     "userInterfaceStyle": "light",
-    "plugins": [
-      "expo-notifications"
-    ],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "ee.veevalve.app"

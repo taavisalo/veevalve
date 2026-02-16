@@ -1,4 +1,4 @@
-import type { AppLocale, PlaceType, QualityStatus } from '@veevalve/core';
+import type { AppLocale, PlaceType, QualityStatus } from '@veevalve/core/client';
 
 import { PlacesBrowser } from '../components/places-browser';
 import { fetchPlaceMetrics, fetchPlaces } from '../lib/fetch-places';

@@ -1,4 +1,4 @@
-import { t, type AppLocale, type QualityStatus } from '@veevalve/core';
+import { t, type AppLocale, type QualityStatus } from '@veevalve/core/client';
 import { cva } from 'class-variance-authority';
 
 import { cn } from './cn';

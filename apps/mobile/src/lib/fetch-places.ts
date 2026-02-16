@@ -5,7 +5,7 @@ import {
   type PlaceType,
   type PlaceWithLatestReading,
   type QualityStatus,
-} from '@veevalve/core';
+} from '@veevalve/core/client';
 
 interface FetchPlacesOptions {
   locale: AppLocale;

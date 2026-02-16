@@ -1,1 +1,1 @@
-export { mapPlaceApiRows, type PlaceApiRow } from '@veevalve/core';
+export { mapPlaceApiRows, type PlaceApiRow } from '@veevalve/core/client';

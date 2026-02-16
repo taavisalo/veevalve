@@ -1,4 +1,4 @@
-import { t, type AppLocale, type QualityStatus } from '@veevalve/core';
+import { t, type AppLocale, type QualityStatus } from '@veevalve/core/client';
 import { memo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 

@@ -253,7 +253,10 @@ Backend identity model supports multiple providers per user.
 
 - Peer auto-install is disabled to avoid pulling unnecessary packages.
 - Optional peers are used in shared UI package so web builds do not require native runtime packages.
+- Client apps import `@veevalve/core/client` so web/mobile bundles do not include server-only XML parsing code.
 - Next.js uses `output: standalone` for smaller production containers.
+- Next.js build lint is skipped (`next.config.ts`) because linting runs in dedicated CI/local scripts, reducing build time.
+- Mobile package keeps only currently used Expo dependencies; push/location modules can be added when those flows are implemented.
 - API Prisma client generation is cached by schema hash to reduce repeated build/dev overhead.
 - Docker dev startup avoids re-running `pnpm install` on every service start.
 

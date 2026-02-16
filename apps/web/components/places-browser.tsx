@@ -9,7 +9,7 @@ import {
   type PlaceType,
   type PlaceWithLatestReading,
   type QualityStatus,
-} from '@veevalve/core';
+} from '@veevalve/core/client';
 import { PlaceCard } from '@veevalve/ui/web';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 

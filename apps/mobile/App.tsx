@@ -7,7 +7,7 @@ import {
   type PlaceType,
   type PlaceWithLatestReading,
   type QualityStatus,
-} from '@veevalve/core';
+} from '@veevalve/core/client';
 import { NativePlaceCard } from '@veevalve/ui/native';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useRef, useState } from 'react';

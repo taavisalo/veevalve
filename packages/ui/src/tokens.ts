@@ -1,4 +1,4 @@
-import type { QualityStatus } from '@veevalve/core';
+import type { QualityStatus } from '@veevalve/core/client';
 
 export const statusStyles: Record<QualityStatus, { label: string; colorHex: string }> = {
   GOOD: { label: 'Hea', colorHex: '#1E8A4A' },

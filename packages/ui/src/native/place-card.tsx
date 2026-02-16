@@ -1,4 +1,4 @@
-import { t, type AppLocale, type PlaceType, type PlaceWithLatestReading, type QualityStatus } from '@veevalve/core';
+import { t, type AppLocale, type PlaceType, type PlaceWithLatestReading, type QualityStatus } from '@veevalve/core/client';
 import { useState } from 'react';
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 
