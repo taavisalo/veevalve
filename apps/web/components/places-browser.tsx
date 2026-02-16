@@ -16,6 +16,7 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { fetchPlacesByIds, type PlaceMetrics } from '../lib/fetch-places';
 import { readFavoritePlaceIds, writeFavoritePlaceIds } from '../lib/favorites-storage';
 import { mapPlaceApiRows, type PlaceApiRow } from '../lib/place-api';
+import { readMetricsUiPreferences, writeMetricsUiPreferences } from '../lib/ui-preferences-storage';
 
 const LATEST_RESULTS_LIMIT = 10;
 const SEARCH_RESULTS_LIMIT = 20;
@@ -197,6 +198,8 @@ export const PlacesBrowser = ({
   const [referenceTimeIso, setReferenceTimeIso] = useState(initialNowIso);
   const [metrics, setMetrics] = useState<PlaceMetrics>(initialMetrics);
   const [metricsExpanded, setMetricsExpanded] = useState(false);
+  const [metricsVisible, setMetricsVisible] = useState(false);
+  const [metricsPreferencesHydrated, setMetricsPreferencesHydrated] = useState(false);
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
   const [favoritesHydrated, setFavoritesHydrated] = useState(false);
   const [favoritesLoading, setFavoritesLoading] = useState(false);
@@ -267,6 +270,24 @@ export const PlacesBrowser = ({
   useEffect(() => {
     setMetrics(initialMetrics);
   }, [initialMetrics]);
+
+  useEffect(() => {
+    const preferences = readMetricsUiPreferences();
+    setMetricsVisible(preferences.metricsVisible);
+    setMetricsExpanded(preferences.metricsExpanded);
+    setMetricsPreferencesHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!metricsPreferencesHydrated) {
+      return;
+    }
+
+    writeMetricsUiPreferences({
+      metricsVisible,
+      metricsExpanded,
+    });
+  }, [metricsExpanded, metricsPreferencesHydrated, metricsVisible]);
 
   useEffect(() => {
     setFavoriteIds(readFavoritePlaceIds());
@@ -480,46 +501,60 @@ export const PlacesBrowser = ({
   return (
     <main className="mx-auto max-w-6xl px-4 pb-20 pt-10 md:px-8 md:pt-14">
       <section className="fade-up relative overflow-hidden rounded-3xl border border-emerald-200/70 bg-white/75 p-8 shadow-card backdrop-blur">
-        <div className="absolute right-6 top-4" ref={languageContainerRef}>
+        <div className="absolute right-6 top-4 z-10 flex items-start gap-2" ref={languageContainerRef}>
           <button
             type="button"
-            onClick={() => setLanguageMenuOpen((value) => !value)}
-            className="rounded-full border border-emerald-100 bg-white px-3 py-1 text-xs font-semibold text-accent transition hover:border-accent"
+            aria-pressed={metricsVisible}
+            onClick={() => setMetricsVisible((value) => !value)}
+            className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+              metricsVisible
+                ? 'border-accent bg-accent text-white'
+                : 'border-emerald-100 bg-white text-accent hover:border-accent'
+            }`}
           >
-            {locale === 'et' ? 'Keel: Eesti' : 'Language: English'}
+            {locale === 'et' ? 'Mõõdikud' : 'Metrics'}
           </button>
-          {languageMenuOpen ? (
-            <div className="absolute right-0 z-10 mt-2 w-40 overflow-hidden rounded-xl border border-emerald-100 bg-white shadow-card">
-              <button
-                type="button"
-                onClick={() => {
-                  setLocale('et');
-                  setLanguageMenuOpen(false);
-                }}
-                className={`block w-full px-3 py-2 text-left text-sm transition ${
-                  locale === 'et'
-                    ? 'bg-emerald-50 font-semibold text-accent'
-                    : 'text-ink hover:bg-emerald-50'
-                }`}
-              >
-                Eesti
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setLocale('en');
-                  setLanguageMenuOpen(false);
-                }}
-                className={`block w-full px-3 py-2 text-left text-sm transition ${
-                  locale === 'en'
-                    ? 'bg-emerald-50 font-semibold text-accent'
-                    : 'text-ink hover:bg-emerald-50'
-                }`}
-              >
-                English
-              </button>
-            </div>
-          ) : null}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setLanguageMenuOpen((value) => !value)}
+              className="rounded-full border border-emerald-100 bg-white px-3 py-1 text-xs font-semibold text-accent transition hover:border-accent"
+            >
+              {locale === 'et' ? 'Keel: Eesti' : 'Language: English'}
+            </button>
+            {languageMenuOpen ? (
+              <div className="absolute right-0 z-10 mt-2 w-40 overflow-hidden rounded-xl border border-emerald-100 bg-white shadow-card">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLocale('et');
+                    setLanguageMenuOpen(false);
+                  }}
+                  className={`block w-full px-3 py-2 text-left text-sm transition ${
+                    locale === 'et'
+                      ? 'bg-emerald-50 font-semibold text-accent'
+                      : 'text-ink hover:bg-emerald-50'
+                  }`}
+                >
+                  Eesti
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLocale('en');
+                    setLanguageMenuOpen(false);
+                  }}
+                  className={`block w-full px-3 py-2 text-left text-sm transition ${
+                    locale === 'en'
+                      ? 'bg-emerald-50 font-semibold text-accent'
+                      : 'text-ink hover:bg-emerald-50'
+                  }`}
+                >
+                  English
+                </button>
+              </div>
+            ) : null}
+          </div>
         </div>
         <p className="text-sm uppercase tracking-[0.14em] text-accent">{t('appName', locale)}</p>
         <h1 className="mt-3 max-w-3xl text-4xl leading-tight text-ink md:text-5xl">
@@ -528,94 +563,98 @@ export const PlacesBrowser = ({
             : 'Water quality for beaches and pools'}
         </h1>
 
-        <div className="mt-4 grid gap-2 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)]">
-          <div className="rounded-2xl border border-rose-200 bg-rose-50/80 px-3 py-2">
-            <p className="text-[11px] uppercase tracking-[0.08em] text-rose-700">
-              {locale === 'et' ? 'Halva kvaliteediga' : 'Bad quality'}
-            </p>
-            <div className="mt-1 flex items-end gap-2">
-              <p className="text-2xl font-semibold leading-none text-rose-700">
-                {metrics.badQualityEntries}
-              </p>
-              <p className="text-xs font-semibold text-rose-600">{badShare}</p>
+        {metricsVisible ? (
+          <div id="metrics-panel" className="mt-4">
+            <div className="grid gap-2 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)]">
+              <div className="rounded-2xl border border-rose-200 bg-rose-50/80 px-3 py-2">
+                <p className="text-[11px] uppercase tracking-[0.08em] text-rose-700">
+                  {locale === 'et' ? 'Halva kvaliteediga' : 'Bad quality'}
+                </p>
+                <div className="mt-1 flex items-end gap-2">
+                  <p className="text-2xl font-semibold leading-none text-rose-700">
+                    {metrics.badQualityEntries}
+                  </p>
+                  <p className="text-xs font-semibold text-rose-600">{badShare}</p>
+                </div>
+                <p className="mt-1 text-xs text-rose-700/90">
+                  {locale === 'et'
+                    ? `Basseinid ${metrics.badPoolEntries} • rannad ${metrics.badBeachEntries}`
+                    : `Pools ${metrics.badPoolEntries} • beaches ${metrics.badBeachEntries}`}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-emerald-100 bg-white/80 px-3 py-2">
+                <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500">
+                  {locale === 'et' ? 'Viimane uuendus' : 'Last update'}
+                </p>
+                <p className="mt-1 text-sm font-semibold text-ink">
+                  {formatMetricsDate(metrics.latestSourceUpdatedAt, locale)}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-emerald-100 bg-white/80 px-3 py-2">
+                <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500">
+                  {locale === 'et' ? 'Kohti kokku' : 'Total places'}
+                </p>
+                <p className="mt-1 text-sm font-semibold text-ink">{metrics.totalEntries}</p>
+              </div>
             </div>
-            <p className="mt-1 text-xs text-rose-700/90">
-              {locale === 'et'
-                ? `Basseinid ${metrics.badPoolEntries} • rannad ${metrics.badBeachEntries}`
-                : `Pools ${metrics.badPoolEntries} • beaches ${metrics.badBeachEntries}`}
-            </p>
-          </div>
-          <div className="rounded-2xl border border-emerald-100 bg-white/80 px-3 py-2">
-            <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500">
-              {locale === 'et' ? 'Viimane uuendus' : 'Last update'}
-            </p>
-            <p className="mt-1 text-sm font-semibold text-ink">
-              {formatMetricsDate(metrics.latestSourceUpdatedAt, locale)}
-            </p>
-          </div>
-          <div className="rounded-2xl border border-emerald-100 bg-white/80 px-3 py-2">
-            <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500">
-              {locale === 'et' ? 'Kohti kokku' : 'Total places'}
-            </p>
-            <p className="mt-1 text-sm font-semibold text-ink">{metrics.totalEntries}</p>
-          </div>
-        </div>
 
-        <div className="mt-1 flex justify-end">
-          <button
-            type="button"
-            onClick={() => setMetricsExpanded((value) => !value)}
-            aria-expanded={metricsExpanded}
-            aria-controls="extra-metrics"
-            className="text-[11px] font-semibold text-accent underline decoration-dotted underline-offset-2 transition hover:text-emerald-700"
-          >
-            {metricsExpanded
-              ? (locale === 'et' ? 'Peida lisamõõdikud' : 'Hide extra metrics')
-              : (locale === 'et' ? 'Näita lisamõõdikuid' : 'Show extra metrics')}
-          </button>
-        </div>
+            <div className="mt-1 flex justify-end">
+              <button
+                type="button"
+                aria-pressed={metricsExpanded}
+                onClick={() => setMetricsExpanded((value) => !value)}
+                className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                  metricsExpanded
+                    ? 'border-accent bg-accent text-white'
+                    : 'border-emerald-100 bg-white text-accent hover:border-accent'
+                }`}
+              >
+                {locale === 'et' ? 'Detailid' : 'Details'}
+              </button>
+            </div>
 
-        {metricsExpanded ? (
-          <div id="extra-metrics" className="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-            <div className="rounded-xl border border-emerald-100 bg-white/80 px-3 py-2">
-              <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500">
-                {locale === 'et' ? 'Hea kvaliteet' : 'Good quality'}
-              </p>
-              <p className="mt-1 text-sm font-semibold text-emerald-700">{metrics.goodQualityEntries}</p>
-            </div>
-            <div className="rounded-xl border border-emerald-100 bg-white/80 px-3 py-2">
-              <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500">
-                {locale === 'et' ? 'Teadmata kvaliteet' : 'Unknown quality'}
-              </p>
-              <p className="mt-1 text-sm font-semibold text-slate-700">{metrics.unknownQualityEntries}</p>
-            </div>
-            <div className="rounded-xl border border-emerald-100 bg-white/80 px-3 py-2">
-              <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500">
-                {locale === 'et' ? 'Jälgitavad basseinid' : 'Pools monitored'}
-              </p>
-              <p className="mt-1 text-sm font-semibold text-ink">{metrics.poolEntries}</p>
-            </div>
-            <div className="rounded-xl border border-emerald-100 bg-white/80 px-3 py-2">
-              <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500">
-                {locale === 'et' ? 'Jälgitavad rannad' : 'Beaches monitored'}
-              </p>
-              <p className="mt-1 text-sm font-semibold text-ink">{metrics.beachEntries}</p>
-            </div>
-            <div className="rounded-xl border border-emerald-100 bg-white/80 px-3 py-2">
-              <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500">
-                {locale === 'et' ? 'Uuendatud viimase 24 h jooksul' : 'Updated in last 24h'}
-              </p>
-              <p className="mt-1 text-sm font-semibold text-ink">{metrics.updatedWithin24hEntries}</p>
-            </div>
-            <div className="rounded-xl border border-emerald-100 bg-white/80 px-3 py-2">
-              <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500">
-                {locale === 'et' ? 'Viimane proov üle 7 päeva tagasi' : 'Latest sample older than 7 days'}
-              </p>
-              <p className="mt-1 text-sm font-semibold text-ink">{metrics.staleOver7dEntries}</p>
-            </div>
+            {metricsExpanded ? (
+              <div id="extra-metrics" className="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                <div className="rounded-xl border border-emerald-100 bg-white/80 px-3 py-2">
+                  <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500">
+                    {locale === 'et' ? 'Hea kvaliteet' : 'Good quality'}
+                  </p>
+                  <p className="mt-1 text-sm font-semibold text-emerald-700">{metrics.goodQualityEntries}</p>
+                </div>
+                <div className="rounded-xl border border-emerald-100 bg-white/80 px-3 py-2">
+                  <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500">
+                    {locale === 'et' ? 'Teadmata kvaliteet' : 'Unknown quality'}
+                  </p>
+                  <p className="mt-1 text-sm font-semibold text-slate-700">{metrics.unknownQualityEntries}</p>
+                </div>
+                <div className="rounded-xl border border-emerald-100 bg-white/80 px-3 py-2">
+                  <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500">
+                    {locale === 'et' ? 'Jälgitavad basseinid' : 'Pools monitored'}
+                  </p>
+                  <p className="mt-1 text-sm font-semibold text-ink">{metrics.poolEntries}</p>
+                </div>
+                <div className="rounded-xl border border-emerald-100 bg-white/80 px-3 py-2">
+                  <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500">
+                    {locale === 'et' ? 'Jälgitavad rannad' : 'Beaches monitored'}
+                  </p>
+                  <p className="mt-1 text-sm font-semibold text-ink">{metrics.beachEntries}</p>
+                </div>
+                <div className="rounded-xl border border-emerald-100 bg-white/80 px-3 py-2">
+                  <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500">
+                    {locale === 'et' ? 'Uuendatud viimase 24 h jooksul' : 'Updated in last 24h'}
+                  </p>
+                  <p className="mt-1 text-sm font-semibold text-ink">{metrics.updatedWithin24hEntries}</p>
+                </div>
+                <div className="rounded-xl border border-emerald-100 bg-white/80 px-3 py-2">
+                  <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500">
+                    {locale === 'et' ? 'Viimane proov üle 7 päeva tagasi' : 'Latest sample older than 7 days'}
+                  </p>
+                  <p className="mt-1 text-sm font-semibold text-ink">{metrics.staleOver7dEntries}</p>
+                </div>
+              </div>
+            ) : null}
           </div>
         ) : null}
-
         <div className="mt-5 max-w-3xl" ref={searchContainerRef}>
           <label htmlFor="place-search" className="sr-only">
             {locale === 'et' ? 'Otsi ujumiskohta' : 'Search swimming places'}
@@ -801,50 +840,44 @@ export const PlacesBrowser = ({
         </div>
       </section>
 
-      <section className="mt-8">
-        <div className="mb-3 flex items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold uppercase tracking-[0.12em] text-accent">
-            {t('favorites', locale)}
-          </h2>
-          {hasFavorites ? (
+      {hasFavorites ? (
+        <section className="mt-8">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold uppercase tracking-[0.12em] text-accent">
+              {t('favorites', locale)}
+            </h2>
             <span className="rounded-full border border-emerald-100 bg-white px-2 py-0.5 text-xs font-medium text-slate-600">
               {favoritePlaces.length}
             </span>
-          ) : null}
-        </div>
+          </div>
 
-        {!hasFavorites ? (
-          <div className="rounded-xl border border-emerald-100 bg-card p-4 text-sm text-slate-600">
-            {locale === 'et'
-              ? 'Lemmikuid veel ei ole. Märgi kohad tärniga, et need oleksid alati nähtaval.'
-              : 'No favorites yet. Star places to keep them pinned here.'}
-          </div>
-        ) : favoritesLoading && favoritePlaces.length === 0 ? (
-          <div className="rounded-xl border border-emerald-100 bg-card p-4 text-sm text-slate-600">
-            {locale === 'et' ? 'Laadin lemmikuid...' : 'Loading favorites...'}
-          </div>
-        ) : favoritePlaces.length === 0 ? (
-          <div className="rounded-xl border border-emerald-100 bg-card p-4 text-sm text-slate-600">
-            {locale === 'et'
-              ? 'Lemmikuid ei õnnestunud hetkel laadida.'
-              : 'Could not load favorites right now.'}
-          </div>
-        ) : (
-          <div className="grid gap-4 md:grid-cols-2">
-            {favoritePlaces.map((place, index) => (
-              <div className="fade-up" style={{ animationDelay: `${index * 70}ms` }} key={`favorite-${place.id}`}>
-                <PlaceCard
-                  place={place}
-                  locale={locale}
-                  referenceTimeIso={referenceTimeIso}
-                  isFavorite
-                  onToggleFavorite={toggleFavorite}
-                />
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
+          {favoritesLoading && favoritePlaces.length === 0 ? (
+            <div className="rounded-xl border border-emerald-100 bg-card p-4 text-sm text-slate-600">
+              {locale === 'et' ? 'Laadin lemmikuid...' : 'Loading favorites...'}
+            </div>
+          ) : favoritePlaces.length === 0 ? (
+            <div className="rounded-xl border border-emerald-100 bg-card p-4 text-sm text-slate-600">
+              {locale === 'et'
+                ? 'Lemmikuid ei õnnestunud hetkel laadida.'
+                : 'Could not load favorites right now.'}
+            </div>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2">
+              {favoritePlaces.map((place, index) => (
+                <div className="fade-up" style={{ animationDelay: `${index * 70}ms` }} key={`favorite-${place.id}`}>
+                  <PlaceCard
+                    place={place}
+                    locale={locale}
+                    referenceTimeIso={referenceTimeIso}
+                    isFavorite
+                    onToggleFavorite={toggleFavorite}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      ) : null}
 
       <section className="mt-8">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">

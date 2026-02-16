@@ -98,7 +98,11 @@ export const PlaceCard = ({
       : (isFavorite ? 'Eemalda lemmikutest' : 'Lisa lemmikutesse');
 
   return (
-    <article className="rounded-xl border border-emerald-100 bg-card p-4 shadow-card transition hover:-translate-y-0.5">
+    <article
+      className={`relative overflow-visible rounded-xl border border-emerald-100 bg-card p-4 shadow-card transition hover:-translate-y-0.5 ${
+        showExactSampledAt ? 'z-30' : ''
+      }`}
+    >
       <header className="flex items-start justify-between gap-2">
         <div>
           <h3 className="text-base font-semibold text-ink">{placeName}</h3>
@@ -151,7 +155,7 @@ export const PlaceCard = ({
       <p className="mt-3 text-xs text-slate-500">
         {latestSampleLabel}{' '}
         {place.latestReading && exactSampledAtIso && relativeSampledAt ? (
-          <>
+          <span className="relative inline-flex items-center">
             <button
               type="button"
               title={exactSampledAtIso}
@@ -161,11 +165,11 @@ export const PlaceCard = ({
               <time dateTime={exactSampledAtIso}>{relativeSampledAt}</time>
             </button>
             {showExactSampledAt ? (
-              <span className="ml-2 rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] text-slate-700">
+              <span className="pointer-events-none absolute left-0 top-full z-30 mt-1 whitespace-nowrap rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] text-slate-700 shadow-sm">
                 {exactSampledAtIso}
               </span>
             ) : null}
-          </>
+          </span>
         ) : (
           '—'
         )}

@@ -114,7 +114,7 @@ export const NativePlaceCard = ({
   };
 
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, showExactSampledAt ? styles.cardOverlay : null]}>
       <View style={styles.headerRow}>
         <View style={styles.textBlock}>
           <Text style={styles.name}>{placeName}</Text>
@@ -170,7 +170,11 @@ export const NativePlaceCard = ({
               <Text style={styles.latestSampleLink}>{relativeSampledAt}</Text>
             </Pressable>
             {showExactSampledAt ? (
-              <Text style={styles.latestSampleIso}>{exactSampledAtIso}</Text>
+              <View style={styles.latestSampleIsoTooltip}>
+                <Text style={styles.latestSampleIso} numberOfLines={1}>
+                  {exactSampledAtIso}
+                </Text>
+              </View>
             ) : null}
           </View>
         ) : (
@@ -191,6 +195,10 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.15,
     shadowRadius: 24,
+  },
+  cardOverlay: {
+    zIndex: 30,
+    elevation: 30,
   },
   headerRow: {
     flexDirection: 'row',
@@ -272,8 +280,8 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   latestSampleInline: {
+    position: 'relative',
     flexDirection: 'row',
-    flexWrap: 'wrap',
     alignItems: 'center',
     gap: 6,
   },
@@ -291,13 +299,20 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#6B7280',
   },
-  latestSampleIso: {
+  latestSampleIsoTooltip: {
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    marginTop: 6,
+    zIndex: 20,
     borderRadius: 6,
     backgroundColor: '#F1F5F9',
     paddingHorizontal: 6,
     paddingVertical: 2,
+  },
+  latestSampleIso: {
     fontSize: 11,
     color: '#334155',
-    overflow: 'hidden',
+    flexShrink: 0,
   },
 });

@@ -26,6 +26,7 @@ import {
 import { ToggleRow } from './src/components/toggle-row';
 import { fetchPlaceMetrics, fetchPlaces, fetchPlacesByIds, type PlaceMetrics } from './src/lib/fetch-places';
 import { readFavoritePlaceIds, writeFavoritePlaceIds } from './src/lib/favorites-storage';
+import { readMetricsUiPreferences, writeMetricsUiPreferences } from './src/lib/ui-preferences-storage';
 
 const LATEST_RESULTS_LIMIT = 10;
 const SEARCH_RESULTS_LIMIT = 20;
@@ -97,6 +98,8 @@ const App = () => {
   const [referenceTimeIso, setReferenceTimeIso] = useState(() => new Date().toISOString());
   const [metrics, setMetrics] = useState<PlaceMetrics | null>(null);
   const [metricsExpanded, setMetricsExpanded] = useState(false);
+  const [metricsVisible, setMetricsVisible] = useState(false);
+  const [metricsPreferencesHydrated, setMetricsPreferencesHydrated] = useState(false);
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
   const [favoritesHydrated, setFavoritesHydrated] = useState(false);
   const [favoritesLoading, setFavoritesLoading] = useState(false);
@@ -184,6 +187,40 @@ const App = () => {
   useEffect(() => {
     let mounted = true;
 
+    readMetricsUiPreferences()
+      .then((preferences) => {
+        if (!mounted) {
+          return;
+        }
+
+        setMetricsVisible(preferences.metricsVisible);
+        setMetricsExpanded(preferences.metricsExpanded);
+      })
+      .finally(() => {
+        if (mounted) {
+          setMetricsPreferencesHydrated(true);
+        }
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!metricsPreferencesHydrated) {
+      return;
+    }
+
+    void writeMetricsUiPreferences({
+      metricsVisible,
+      metricsExpanded,
+    });
+  }, [metricsExpanded, metricsPreferencesHydrated, metricsVisible]);
+
+  useEffect(() => {
+    let mounted = true;
+
     readFavoritePlaceIds()
       .then((storedIds) => {
         if (!mounted) {
@@ -262,6 +299,14 @@ const App = () => {
   const badShare = formatShare(metrics?.badQualityEntries ?? 0, metrics?.totalEntries ?? 0);
   const favoriteIdSet = useMemo(() => new Set(favoriteIds), [favoriteIds]);
   const hasFavorites = favoriteIds.length > 0;
+
+  const toggleMetricsVisible = () => {
+    setMetricsVisible((value) => !value);
+  };
+
+  const toggleMetricsExpanded = () => {
+    setMetricsExpanded((value) => !value);
+  };
 
   const toggleFavorite = (placeId: string) => {
     setFavoriteIds((currentIds) => {
@@ -414,49 +459,67 @@ const App = () => {
         <View style={styles.heroCard}>
           <View style={styles.languageMenu}>
             <Pressable
-              style={styles.languageTrigger}
-              onPress={() => setLanguageMenuOpen((value) => !value)}
+              style={[
+                styles.metricsHeaderToggle,
+                metricsVisible ? styles.metricsHeaderToggleActive : undefined,
+              ]}
+              onPress={toggleMetricsVisible}
             >
-              <Text style={styles.languageTriggerText}>
-                {locale === 'et' ? 'Keel: Eesti' : 'Language: English'}
+              <Text
+                style={[
+                  styles.metricsHeaderToggleText,
+                  metricsVisible ? styles.metricsHeaderToggleTextActive : undefined,
+                ]}
+              >
+                {locale === 'et' ? 'Mõõdikud' : 'Metrics'}
               </Text>
             </Pressable>
-            {languageMenuOpen ? (
-              <View style={styles.languageDropdown}>
-                <Pressable
-                  style={styles.languageOption}
-                  onPress={() => {
-                    setLocale('et');
-                    setLanguageMenuOpen(false);
-                  }}
-                >
-                  <Text
-                    style={[
-                      styles.languageOptionText,
-                      locale === 'et' ? styles.languageOptionTextActive : undefined,
-                    ]}
+            <View style={styles.languageControl}>
+              <Pressable
+                style={styles.languageTrigger}
+                onPress={() => setLanguageMenuOpen((value) => !value)}
+              >
+                <Text style={styles.languageTriggerText}>
+                  {locale === 'et' ? 'Keel: Eesti' : 'Language: English'}
+                </Text>
+              </Pressable>
+              {languageMenuOpen ? (
+                <View style={styles.languageDropdown}>
+                  <Pressable
+                    style={styles.languageOption}
+                    onPress={() => {
+                      setLocale('et');
+                      setLanguageMenuOpen(false);
+                    }}
                   >
-                    Eesti
-                  </Text>
-                </Pressable>
-                <Pressable
-                  style={styles.languageOption}
-                  onPress={() => {
-                    setLocale('en');
-                    setLanguageMenuOpen(false);
-                  }}
-                >
-                  <Text
-                    style={[
-                      styles.languageOptionText,
-                      locale === 'en' ? styles.languageOptionTextActive : undefined,
-                    ]}
+                    <Text
+                      style={[
+                        styles.languageOptionText,
+                        locale === 'et' ? styles.languageOptionTextActive : undefined,
+                      ]}
+                    >
+                      Eesti
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    style={styles.languageOption}
+                    onPress={() => {
+                      setLocale('en');
+                      setLanguageMenuOpen(false);
+                    }}
                   >
-                    English
-                  </Text>
-                </Pressable>
-              </View>
-            ) : null}
+                    <Text
+                      style={[
+                        styles.languageOptionText,
+                        locale === 'en' ? styles.languageOptionTextActive : undefined,
+                      ]}
+                    >
+                      English
+                    </Text>
+                  </Pressable>
+                </View>
+              ) : null}
+            </View>
           </View>
 
           <Text style={styles.heroLabel}>
@@ -468,107 +531,117 @@ const App = () => {
               : 'Water quality for swimming places in Estonia'}
           </Text>
 
-          <View style={styles.metricsWrap}>
-            <View style={[styles.metricCard, styles.metricCardPrimary]}>
-              <Text style={[styles.metricLabel, styles.metricLabelDanger]}>
-                {locale === 'et' ? 'Halva kvaliteediga' : 'Bad quality'}
-              </Text>
-              <View style={styles.metricPrimaryValueRow}>
-                <Text style={[styles.metricValue, styles.metricValueBad, styles.metricValuePrimary]}>
-                  {metrics?.badQualityEntries ?? 0}
+          {metricsVisible ? (
+            <View style={styles.metricsWrap}>
+              <View style={[styles.metricCard, styles.metricCardPrimary]}>
+                <Text style={[styles.metricLabel, styles.metricLabelDanger]}>
+                  {locale === 'et' ? 'Halva kvaliteediga' : 'Bad quality'}
                 </Text>
-                <Text style={styles.metricShareText}>{badShare}</Text>
+                <View style={styles.metricPrimaryValueRow}>
+                  <Text style={[styles.metricValue, styles.metricValueBad, styles.metricValuePrimary]}>
+                    {metrics?.badQualityEntries ?? 0}
+                  </Text>
+                  <Text style={styles.metricShareText}>{badShare}</Text>
+                </View>
+                <Text style={styles.metricMetaText}>
+                  {locale === 'et'
+                    ? `Basseinid ${metrics?.badPoolEntries ?? 0} • rannad ${metrics?.badBeachEntries ?? 0}`
+                    : `Pools ${metrics?.badPoolEntries ?? 0} • beaches ${metrics?.badBeachEntries ?? 0}`}
+                </Text>
               </View>
-              <Text style={styles.metricMetaText}>
-                {locale === 'et'
-                  ? `Basseinid ${metrics?.badPoolEntries ?? 0} • rannad ${metrics?.badBeachEntries ?? 0}`
-                  : `Pools ${metrics?.badPoolEntries ?? 0} • beaches ${metrics?.badBeachEntries ?? 0}`}
-              </Text>
+
+              <View style={styles.metricsRow}>
+                <View style={[styles.metricCard, styles.metricCardCompact]}>
+                  <Text style={styles.metricLabel}>
+                    {locale === 'et' ? 'Viimane uuendus' : 'Last update'}
+                  </Text>
+                  <Text style={styles.metricValue}>
+                    {formatMetricsDate(metrics?.latestSourceUpdatedAt ?? null, locale)}
+                  </Text>
+                </View>
+                <View style={[styles.metricCard, styles.metricCardCompact]}>
+                  <Text style={styles.metricLabel}>
+                    {locale === 'et' ? 'Kohti kokku' : 'Total places'}
+                  </Text>
+                  <Text style={styles.metricValue}>
+                    {metrics?.totalEntries ?? 0}
+                  </Text>
+                </View>
+              </View>
+
+              <Pressable
+                style={[
+                  styles.metricsDetailsToggle,
+                  metricsExpanded ? styles.metricsDetailsToggleActive : styles.metricsDetailsToggleInactive,
+                ]}
+                onPress={toggleMetricsExpanded}
+              >
+                <Text
+                  style={[
+                    styles.metricsDetailsToggleText,
+                    metricsExpanded
+                      ? styles.metricsDetailsToggleTextActive
+                      : styles.metricsDetailsToggleTextInactive,
+                  ]}
+                >
+                  {locale === 'et' ? 'Detailid' : 'Details'}
+                </Text>
+              </Pressable>
+
+              {metricsExpanded ? (
+                <View style={styles.metricsExtraGrid}>
+                  <View style={styles.metricMiniCard}>
+                    <Text style={styles.metricLabel}>
+                      {locale === 'et' ? 'Hea kvaliteet' : 'Good quality'}
+                    </Text>
+                    <Text style={[styles.metricValue, styles.metricValueGood]}>
+                      {metrics?.goodQualityEntries ?? 0}
+                    </Text>
+                  </View>
+                  <View style={styles.metricMiniCard}>
+                    <Text style={styles.metricLabel}>
+                      {locale === 'et' ? 'Teadmata kvaliteet' : 'Unknown quality'}
+                    </Text>
+                    <Text style={styles.metricValue}>
+                      {metrics?.unknownQualityEntries ?? 0}
+                    </Text>
+                  </View>
+                  <View style={styles.metricMiniCard}>
+                    <Text style={styles.metricLabel}>
+                      {locale === 'et' ? 'Jälgitavad basseinid' : 'Pools monitored'}
+                    </Text>
+                    <Text style={styles.metricValue}>
+                      {metrics?.poolEntries ?? 0}
+                    </Text>
+                  </View>
+                  <View style={styles.metricMiniCard}>
+                    <Text style={styles.metricLabel}>
+                      {locale === 'et' ? 'Jälgitavad rannad' : 'Beaches monitored'}
+                    </Text>
+                    <Text style={styles.metricValue}>
+                      {metrics?.beachEntries ?? 0}
+                    </Text>
+                  </View>
+                  <View style={styles.metricMiniCard}>
+                    <Text style={styles.metricLabel}>
+                      {locale === 'et' ? 'Uuendatud viimase 24 h jooksul' : 'Updated in last 24h'}
+                    </Text>
+                    <Text style={styles.metricValue}>
+                      {metrics?.updatedWithin24hEntries ?? 0}
+                    </Text>
+                  </View>
+                  <View style={styles.metricMiniCard}>
+                    <Text style={styles.metricLabel}>
+                      {locale === 'et' ? 'Viimane proov üle 7 päeva tagasi' : 'Latest sample older than 7 days'}
+                    </Text>
+                    <Text style={styles.metricValue}>
+                      {metrics?.staleOver7dEntries ?? 0}
+                    </Text>
+                  </View>
+                </View>
+              ) : null}
             </View>
-
-            <View style={styles.metricsRow}>
-              <View style={[styles.metricCard, styles.metricCardCompact]}>
-                <Text style={styles.metricLabel}>
-                  {locale === 'et' ? 'Viimane uuendus' : 'Last update'}
-                </Text>
-                <Text style={styles.metricValue}>
-                  {formatMetricsDate(metrics?.latestSourceUpdatedAt ?? null, locale)}
-                </Text>
-              </View>
-              <View style={[styles.metricCard, styles.metricCardCompact]}>
-                <Text style={styles.metricLabel}>
-                  {locale === 'et' ? 'Kohti kokku' : 'Total places'}
-                </Text>
-                <Text style={styles.metricValue}>
-                  {metrics?.totalEntries ?? 0}
-                </Text>
-              </View>
-            </View>
-
-            <Pressable
-              style={styles.metricsToggle}
-              onPress={() => setMetricsExpanded((value) => !value)}
-            >
-              <Text style={styles.metricsToggleText}>
-                {metricsExpanded
-                  ? (locale === 'et' ? 'Peida lisamõõdikud' : 'Hide extra metrics')
-                  : (locale === 'et' ? 'Näita lisamõõdikuid' : 'Show extra metrics')}
-              </Text>
-            </Pressable>
-
-            {metricsExpanded ? (
-              <View style={styles.metricsExtraGrid}>
-                <View style={styles.metricMiniCard}>
-                  <Text style={styles.metricLabel}>
-                    {locale === 'et' ? 'Hea kvaliteet' : 'Good quality'}
-                  </Text>
-                  <Text style={[styles.metricValue, styles.metricValueGood]}>
-                    {metrics?.goodQualityEntries ?? 0}
-                  </Text>
-                </View>
-                <View style={styles.metricMiniCard}>
-                  <Text style={styles.metricLabel}>
-                    {locale === 'et' ? 'Teadmata kvaliteet' : 'Unknown quality'}
-                  </Text>
-                  <Text style={styles.metricValue}>
-                    {metrics?.unknownQualityEntries ?? 0}
-                  </Text>
-                </View>
-                <View style={styles.metricMiniCard}>
-                  <Text style={styles.metricLabel}>
-                    {locale === 'et' ? 'Jälgitavad basseinid' : 'Pools monitored'}
-                  </Text>
-                  <Text style={styles.metricValue}>
-                    {metrics?.poolEntries ?? 0}
-                  </Text>
-                </View>
-                <View style={styles.metricMiniCard}>
-                  <Text style={styles.metricLabel}>
-                    {locale === 'et' ? 'Jälgitavad rannad' : 'Beaches monitored'}
-                  </Text>
-                  <Text style={styles.metricValue}>
-                    {metrics?.beachEntries ?? 0}
-                  </Text>
-                </View>
-                <View style={styles.metricMiniCard}>
-                  <Text style={styles.metricLabel}>
-                    {locale === 'et' ? 'Uuendatud viimase 24 h jooksul' : 'Updated in last 24h'}
-                  </Text>
-                  <Text style={styles.metricValue}>
-                    {metrics?.updatedWithin24hEntries ?? 0}
-                  </Text>
-                </View>
-                <View style={styles.metricMiniCard}>
-                  <Text style={styles.metricLabel}>
-                    {locale === 'et' ? 'Viimane proov üle 7 päeva tagasi' : 'Latest sample older than 7 days'}
-                  </Text>
-                  <Text style={styles.metricValue}>
-                    {metrics?.staleOver7dEntries ?? 0}
-                  </Text>
-                </View>
-              </View>
-            ) : null}
-          </View>
+          ) : null}
 
           <View style={styles.searchSection}>
             <View style={styles.searchInputWrap}>
@@ -753,49 +826,41 @@ const App = () => {
           </View>
         </View>
 
-        <View style={styles.favoritesSection}>
-          <View style={styles.favoritesHeaderRow}>
-            <Text style={styles.favoritesTitle}>{t('favorites', locale)}</Text>
-            {hasFavorites ? (
+        {hasFavorites ? (
+          <View style={styles.favoritesSection}>
+            <View style={styles.favoritesHeaderRow}>
+              <Text style={styles.favoritesTitle}>{t('favorites', locale)}</Text>
               <Text style={styles.favoritesCountBadge}>{favoritePlaces.length}</Text>
-            ) : null}
-          </View>
+            </View>
 
-          {!hasFavorites ? (
-            <View style={styles.emptyCard}>
-              <Text style={styles.emptyText}>
-                {locale === 'et'
-                  ? 'Lemmikuid veel ei ole. Märgi kohad tärniga, et need oleksid alati nähtaval.'
-                  : 'No favorites yet. Star places to keep them pinned here.'}
-              </Text>
-            </View>
-          ) : favoritesLoading && favoritePlaces.length === 0 ? (
-            <View style={styles.emptyCard}>
-              <Text style={styles.emptyText}>
-                {locale === 'et' ? 'Laadin lemmikuid...' : 'Loading favorites...'}
-              </Text>
-            </View>
-          ) : favoritePlaces.length === 0 ? (
-            <View style={styles.emptyCard}>
-              <Text style={styles.emptyText}>
-                {locale === 'et'
-                  ? 'Lemmikuid ei õnnestunud hetkel laadida.'
-                  : 'Could not load favorites right now.'}
-              </Text>
-            </View>
-          ) : (
-            favoritePlaces.map((place) => (
-              <NativePlaceCard
-                key={`favorite-${place.id}`}
-                place={place}
-                locale={locale}
-                referenceTimeIso={referenceTimeIso}
-                isFavorite
-                onToggleFavorite={toggleFavorite}
-              />
-            ))
-          )}
-        </View>
+            {favoritesLoading && favoritePlaces.length === 0 ? (
+              <View style={styles.emptyCard}>
+                <Text style={styles.emptyText}>
+                  {locale === 'et' ? 'Laadin lemmikuid...' : 'Loading favorites...'}
+                </Text>
+              </View>
+            ) : favoritePlaces.length === 0 ? (
+              <View style={styles.emptyCard}>
+                <Text style={styles.emptyText}>
+                  {locale === 'et'
+                    ? 'Lemmikuid ei õnnestunud hetkel laadida.'
+                    : 'Could not load favorites right now.'}
+                </Text>
+              </View>
+            ) : (
+              favoritePlaces.map((place) => (
+                <NativePlaceCard
+                  key={`favorite-${place.id}`}
+                  place={place}
+                  locale={locale}
+                  referenceTimeIso={referenceTimeIso}
+                  isFavorite
+                  onToggleFavorite={toggleFavorite}
+                />
+              ))
+            )}
+          </View>
+        ) : null}
 
         <View style={styles.notificationsCard}>
           <Text style={styles.notificationsTitle}>
@@ -972,16 +1037,51 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#9F1239',
   },
-  metricsToggle: {
-    alignSelf: 'flex-end',
-    paddingHorizontal: 2,
-    paddingVertical: 2,
+  metricsHeaderToggle: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#CDE6DF',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
   },
-  metricsToggleText: {
-    fontSize: 11,
+  metricsHeaderToggleActive: {
+    backgroundColor: '#0A8F78',
+    borderColor: '#0A8F78',
+  },
+  metricsHeaderToggleText: {
+    fontSize: 12,
     fontWeight: '700',
     color: '#0A8F78',
-    textDecorationLine: 'underline',
+  },
+  metricsHeaderToggleTextActive: {
+    color: '#FFFFFF',
+  },
+  metricsDetailsToggle: {
+    marginTop: 4,
+    alignSelf: 'flex-end',
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  metricsDetailsToggleActive: {
+    borderColor: '#0A8F78',
+    backgroundColor: '#0A8F78',
+  },
+  metricsDetailsToggleInactive: {
+    borderColor: '#CDE6DF',
+    backgroundColor: '#FFFFFF',
+  },
+  metricsDetailsToggleText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  metricsDetailsToggleTextActive: {
+    color: '#FFFFFF',
+  },
+  metricsDetailsToggleTextInactive: {
+    color: '#0A8F78',
   },
   metricsExtraGrid: {
     flexDirection: 'row',
@@ -1081,8 +1181,13 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 14,
     top: 12,
-    alignItems: 'flex-end',
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
     zIndex: 20,
+  },
+  languageControl: {
+    alignItems: 'flex-end',
   },
   languageTrigger: {
     borderRadius: 999,
