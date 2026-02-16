@@ -40,13 +40,15 @@ const HomePage = async ({ searchParams }: HomePageProps) => {
   const type = normalizeType(readParam(resolvedSearchParams, 'type'));
   const status = normalizeStatus(readParam(resolvedSearchParams, 'status'));
   const search = readParam(resolvedSearchParams, 'q')?.trim();
+  const initialLimit = search ? 20 : 10;
+  const initialNowIso = new Date().toISOString();
 
   const initialPlaces = await fetchPlaces({
     locale,
     type: type === 'ALL' ? undefined : type,
     status: status === 'ALL' ? undefined : status,
     search,
-    limit: 10,
+    limit: initialLimit,
   });
 
   return (
@@ -56,6 +58,7 @@ const HomePage = async ({ searchParams }: HomePageProps) => {
       initialStatus={status}
       initialSearch={search}
       initialPlaces={initialPlaces}
+      initialNowIso={initialNowIso}
     />
   );
 };

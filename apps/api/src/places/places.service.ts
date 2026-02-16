@@ -26,6 +26,7 @@ interface RankedPlaceId {
 }
 
 const DEFAULT_LIST_LIMIT = 10;
+const SEARCH_LIST_LIMIT = 20;
 
 @Injectable()
 export class PlacesService {
@@ -33,9 +34,9 @@ export class PlacesService {
 
   async listPlaces(query: ListPlacesQuery): Promise<PlaceListResponse[]> {
     const locale = query.locale ?? 'et';
-    const limit = query.limit ?? DEFAULT_LIST_LIMIT;
-    const offset = query.offset ?? 0;
     const search = query.search?.trim();
+    const limit = query.limit ?? (search ? SEARCH_LIST_LIMIT : DEFAULT_LIST_LIMIT);
+    const offset = query.offset ?? 0;
 
     if (search) {
       const rankedPlaceIds = await this.findRankedPlaceIds({

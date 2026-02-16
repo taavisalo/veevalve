@@ -25,7 +25,7 @@ export const fetchPlaces = async ({
   type,
   status,
   search,
-  limit = DEFAULT_LIMIT,
+  limit = search?.trim() ? 20 : DEFAULT_LIMIT,
 }: FetchPlacesOptions): Promise<PlaceWithLatestReading[]> => {
   const baseUrl = resolveApiBaseUrl();
   const params = new URLSearchParams();
