@@ -36,6 +36,8 @@ const DEFAULT_BEACH_LOCATIONS_URL =
   'https://vtiav.sm.ee/index.php/opendata/supluskohad.xml';
 const DEFAULT_SAMPLE_YEARS_BACK = 1;
 const UNKNOWN_MUNICIPALITY = 'Teadmata';
+const DEFAULT_FEED_FETCH_TIMEOUT_MS = 20_000;
+const DEFAULT_MAX_FEED_BYTES = 10 * 1024 * 1024; // 10 MiB
 
 interface FeedDescriptor {
   fileKind: SourceFileKind;
@@ -301,7 +303,18 @@ export class WaterQualityService {
 
     let response: Response;
     try {
-      response = await fetch(descriptor.url, { headers: requestHeaders });
+      const timeoutMs = Math.max(
+        1,
+        this.readPositiveInteger(
+          process.env.TERVISEAMET_FETCH_TIMEOUT_MS,
+          DEFAULT_FEED_FETCH_TIMEOUT_MS,
+        ),
+      );
+      response = await fetch(descriptor.url, {
+        headers: requestHeaders,
+        redirect: 'error',
+        signal: AbortSignal.timeout(timeoutMs),
+      });
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Unknown network error';
@@ -341,12 +354,57 @@ export class WaterQualityService {
       return { status: 'error', descriptor, error: message };
     }
 
-    const xml = await response.text();
-    const contentHash = createHash('sha256').update(xml).digest('hex');
+    const contentType = response.headers.get('content-type')?.toLowerCase() ?? '';
+    const isAllowedContentType =
+      !contentType ||
+      contentType.includes('xml') ||
+      contentType.includes('text/plain') ||
+      contentType.includes('application/octet-stream');
+    if (!isAllowedContentType) {
+      const message = `Unexpected feed content type: ${contentType}`;
+      await this.recordFeedState({
+        descriptor,
+        statusCode: response.status,
+        error: message,
+      });
+      return { status: 'error', descriptor, error: message };
+    }
+
+    const maxFeedBytes = Math.max(
+      1,
+      this.readPositiveInteger(
+        process.env.TERVISEAMET_MAX_FEED_BYTES,
+        DEFAULT_MAX_FEED_BYTES,
+      ),
+    );
     const contentLengthHeader = response.headers.get('content-length');
     const parsedLength = contentLengthHeader
       ? Number.parseInt(contentLengthHeader, 10)
       : Number.NaN;
+    if (Number.isFinite(parsedLength) && parsedLength > maxFeedBytes) {
+      const message = `Feed exceeds max allowed size (${String(maxFeedBytes)} bytes)`;
+      await this.recordFeedState({
+        descriptor,
+        statusCode: response.status,
+        error: message,
+      });
+      return { status: 'error', descriptor, error: message };
+    }
+
+    let xml: string;
+    try {
+      xml = await this.readResponseTextWithLimit(response, maxFeedBytes);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to read feed response';
+      await this.recordFeedState({
+        descriptor,
+        statusCode: response.status,
+        error: message,
+      });
+      return { status: 'error', descriptor, error: message };
+    }
+
+    const contentHash = createHash('sha256').update(xml).digest('hex');
     const contentLength = Number.isFinite(parsedLength)
       ? parsedLength
       : Buffer.byteLength(xml, 'utf8');
@@ -368,6 +426,52 @@ export class WaterQualityService {
     }
 
     return { status: 'changed', descriptor, xml };
+  }
+
+  private async readResponseTextWithLimit(
+    response: Response,
+    maxBytes: number,
+  ): Promise<string> {
+    const reader = response.body?.getReader();
+    if (!reader) {
+      const text = await response.text();
+      const byteLength = Buffer.byteLength(text, 'utf8');
+      if (byteLength > maxBytes) {
+        throw new Error(`Feed exceeds max allowed size (${String(maxBytes)} bytes)`);
+      }
+      return text;
+    }
+
+    const chunks: Uint8Array[] = [];
+    let totalLength = 0;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+
+      if (!value) {
+        continue;
+      }
+
+      totalLength += value.byteLength;
+      if (totalLength > maxBytes) {
+        await reader.cancel();
+        throw new Error(`Feed exceeds max allowed size (${String(maxBytes)} bytes)`);
+      }
+
+      chunks.push(value);
+    }
+
+    const merged = new Uint8Array(totalLength);
+    let offset = 0;
+    for (const chunk of chunks) {
+      merged.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+
+    return new TextDecoder('utf-8').decode(merged);
   }
 
   private async recordFeedState(args: {

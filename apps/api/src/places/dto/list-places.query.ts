@@ -1,5 +1,5 @@
 import { Transform, Type } from 'class-transformer';
-import { IsIn, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import { IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 
 export class ListPlacesQuery {
   @IsOptional()
@@ -11,7 +11,9 @@ export class ListPlacesQuery {
   status?: 'GOOD' | 'BAD' | 'UNKNOWN';
 
   @IsOptional()
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsString()
+  @MaxLength(120)
   search?: string;
 
   @IsOptional()
@@ -22,13 +24,14 @@ export class ListPlacesQuery {
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  @Max(500)
+  @Max(100)
   limit?: number;
 
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(0)
+  @Max(10_000)
   offset?: number;
 
   @IsOptional()

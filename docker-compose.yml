@@ -55,7 +55,14 @@ services:
       TERVISEAMET_POOL_SAMPLES_URL_TEMPLATE: https://vtiav.sm.ee/index.php/opendata/basseini_veeproovid_{year}.xml
       TERVISEAMET_BEACH_SAMPLES_URL_TEMPLATE: https://vtiav.sm.ee/index.php/opendata/supluskoha_veeproovid_{year}.xml
       TERVISEAMET_SAMPLE_YEARS_BACK: 1
+      TERVISEAMET_FETCH_TIMEOUT_MS: 20000
+      TERVISEAMET_MAX_FEED_BYTES: 10485760
       CORS_ORIGIN: http://localhost:3000
+      BODY_LIMIT_BYTES: 1048576
+      SYNC_API_TOKEN: dev-sync-token
+      ALLOW_UNAUTHENTICATED_SYNC: 'false'
+      SYNC_RATE_LIMIT_MAX: 20
+      SYNC_RATE_LIMIT_WINDOW_MS: 600000
       PORT: 3001
     ports:
       - '3001:3001'
