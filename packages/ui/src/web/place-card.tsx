@@ -125,7 +125,7 @@ export const PlaceCard = ({
               {isFavorite ? '★' : '☆'}
             </button>
           ) : null}
-          <QualityBadge status={place.latestReading?.status ?? 'UNKNOWN'} />
+          <QualityBadge status={place.latestReading?.status ?? 'UNKNOWN'} locale={locale} />
         </div>
       </header>
       {placeAddress && mapsAddressUrl ? (

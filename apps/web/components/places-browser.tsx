@@ -887,7 +887,7 @@ export const PlacesBrowser = ({
                 ? `Otsing: "${searchQuery}". Näitan ${shownResultsCount} tulemust (maksimaalselt ${visibleResultsLimit}).`
                 : `Search: "${searchQuery}". Showing ${shownResultsCount} of up to ${visibleResultsLimit} results.`
               : locale === 'et'
-                ? `Näitan ${shownResultsCount} värskeimat kohta.`
+                ? `Kuvan ${shownResultsCount} viimati uuendatud kohta.`
                 : `Showing ${shownResultsCount} most recently updated places.`}
           </p>
           {loading ? <p>{locale === 'et' ? 'Uuendan tulemusi...' : 'Updating results...'}</p> : null}

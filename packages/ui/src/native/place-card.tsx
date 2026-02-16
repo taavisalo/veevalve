@@ -137,7 +137,7 @@ export const NativePlaceCard = ({
               </Text>
             </Pressable>
           ) : null}
-          <StatusChip status={place.latestReading?.status ?? 'UNKNOWN'} />
+          <StatusChip status={place.latestReading?.status ?? 'UNKNOWN'} locale={locale} />
         </View>
       </View>
       {mapsSearchQuery ? (

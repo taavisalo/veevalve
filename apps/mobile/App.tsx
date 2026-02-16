@@ -893,7 +893,7 @@ const App = () => {
                 ? `Otsing: "${searchQuery}". Näitan ${shownResultsCount} tulemust (maksimaalselt ${visibleResultsLimit}).`
                 : `Search: "${searchQuery}". Showing ${shownResultsCount} of up to ${visibleResultsLimit} results.`
               : locale === 'et'
-                ? `Näitan ${shownResultsCount} värskeimat kohta.`
+                ? `Kuvan ${shownResultsCount} viimati uuendatud kohta.`
                 : `Showing ${shownResultsCount} most recently updated places.`}
           </Text>
           {loading ? <ActivityIndicator size="small" color="#0A8F78" /> : null}

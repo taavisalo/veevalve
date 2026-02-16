@@ -1,4 +1,4 @@
-import type { QualityStatus } from '@veevalve/core';
+import { t, type AppLocale, type QualityStatus } from '@veevalve/core';
 import { cva } from 'class-variance-authority';
 
 import { cn } from './cn';
@@ -16,17 +16,18 @@ const styles = cva('inline-flex items-center rounded-full px-3 py-1 text-xs font
   },
 });
 
-const labels: Record<QualityStatus, string> = {
-  GOOD: 'Hea',
-  BAD: 'Halb',
-  UNKNOWN: 'Teadmata',
+const labelKeys: Record<QualityStatus, 'qualityGood' | 'qualityBad' | 'qualityUnknown'> = {
+  GOOD: 'qualityGood',
+  BAD: 'qualityBad',
+  UNKNOWN: 'qualityUnknown',
 };
 
 export interface QualityBadgeProps {
   status: QualityStatus;
+  locale?: AppLocale;
   className?: string;
 }
 
-export const QualityBadge = ({ status, className }: QualityBadgeProps) => {
-  return <span className={cn(styles({ status }), className)}>{labels[status]}</span>;
+export const QualityBadge = ({ status, locale = 'et', className }: QualityBadgeProps) => {
+  return <span className={cn(styles({ status }), className)}>{t(labelKeys[status], locale)}</span>;
 };
