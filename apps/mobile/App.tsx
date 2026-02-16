@@ -38,7 +38,17 @@ interface Suggestion {
   id: string;
   name: string;
   municipality: string;
+  address?: string;
+  matchedBy: 'name' | 'municipality' | 'address';
 }
+
+const containsSearchTerm = (value: string | undefined, normalizedQuery: string): boolean => {
+  if (!value || !normalizedQuery) {
+    return false;
+  }
+
+  return normalizeFuzzyText(value).includes(normalizedQuery);
+};
 
 const App = () => {
   const [locale, setLocale] = useState<AppLocale>('et');
@@ -130,23 +140,53 @@ const App = () => {
 
     const threshold = fuzzySuggestionThreshold(normalizedSearch);
     const rankedPlaces = places
-      .map((place) => ({
-        place,
-        score: scoreFuzzyMatch({
+      .map((place) => {
+        const name = locale === 'en' ? place.nameEn : place.nameEt;
+        const address = locale === 'en'
+          ? (place.addressEn ?? place.addressEt)
+          : (place.addressEt ?? place.addressEn);
+        const nameScore = scoreFuzzyMatch({
           query: normalizedSearch,
-          primary: locale === 'en' ? place.nameEn : place.nameEt,
+          primary: name,
           secondary: place.municipality,
-        }),
-      }))
+        });
+        const addressScore = address
+          ? scoreFuzzyMatch({
+              query: normalizedSearch,
+              primary: address,
+            }) * 0.95
+          : 0;
+        const nameMatched = containsSearchTerm(name, normalizedSearch);
+        const municipalityMatched = containsSearchTerm(place.municipality, normalizedSearch);
+        const addressMatched = containsSearchTerm(address, normalizedSearch);
+
+        let matchedBy: Suggestion['matchedBy'] = 'name';
+        if (nameMatched) {
+          matchedBy = 'name';
+        } else if (addressMatched) {
+          matchedBy = 'address';
+        } else if (municipalityMatched) {
+          matchedBy = 'municipality';
+        } else {
+          matchedBy = addressScore > nameScore ? 'address' : 'name';
+        }
+
+        return {
+          place,
+          name,
+          address,
+          score: Math.max(nameScore, addressScore),
+          matchedBy,
+        };
+      })
       .filter(({ score }) => score >= threshold)
       .sort((left, right) => right.score - left.score);
 
     const seen = new Set<string>();
     const nextSuggestions: Suggestion[] = [];
 
-    for (const { place } of rankedPlaces) {
-      const name = locale === 'en' ? place.nameEn : place.nameEt;
-      const key = `${name}|${place.municipality}`;
+    for (const { place, name, address, matchedBy } of rankedPlaces) {
+      const key = `${name}|${place.municipality}|${address ?? ''}`;
       if (seen.has(key)) {
         continue;
       }
@@ -156,6 +196,8 @@ const App = () => {
         id: place.id,
         name,
         municipality: place.municipality,
+        address,
+        matchedBy,
       });
 
       if (nextSuggestions.length >= SUGGESTION_LIMIT) {
@@ -187,6 +229,25 @@ const App = () => {
 
     return (
       <Text style={styles.suggestionName}>
+        {value.slice(0, startIndex)}
+        <Text style={styles.suggestionNameHighlight}>{value.slice(startIndex, endIndex)}</Text>
+        {value.slice(endIndex)}
+      </Text>
+    );
+  };
+
+  const renderHighlightedSecondary = (value: string, query: string) => {
+    const normalizedQuery = query.trim().toLowerCase();
+    const startIndex = value.toLowerCase().indexOf(normalizedQuery);
+
+    if (!normalizedQuery || startIndex < 0) {
+      return <Text style={styles.suggestionSecondary}>{value}</Text>;
+    }
+
+    const endIndex = startIndex + normalizedQuery.length;
+
+    return (
+      <Text style={styles.suggestionSecondary}>
         {value.slice(0, startIndex)}
         <Text style={styles.suggestionNameHighlight}>{value.slice(startIndex, endIndex)}</Text>
         {value.slice(endIndex)}
@@ -323,7 +384,16 @@ const App = () => {
                     onPress={() => applySuggestion(suggestion)}
                   >
                     {renderHighlightedSuggestion(suggestion.name, searchQuery)}
-                    <Text style={styles.suggestionMunicipality}>{suggestion.municipality}</Text>
+                    {suggestion.matchedBy === 'address' && suggestion.address
+                      ? renderHighlightedSecondary(suggestion.address, searchQuery)
+                      : renderHighlightedSecondary(suggestion.municipality, searchQuery)}
+                    {suggestion.matchedBy !== 'name' ? (
+                      <Text style={styles.suggestionReason}>
+                        {suggestion.matchedBy === 'address'
+                          ? (locale === 'et' ? 'Aadressi vaste' : 'Address match')
+                          : (locale === 'et' ? 'Omavalitsuse vaste' : 'Municipality match')}
+                      </Text>
+                    ) : null}
                   </Pressable>
                 ))}
               </View>
@@ -608,10 +678,18 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#0A8F78',
   },
-  suggestionMunicipality: {
+  suggestionSecondary: {
     marginTop: 2,
     fontSize: 12,
     color: '#64748B',
+  },
+  suggestionReason: {
+    marginTop: 4,
+    fontSize: 10,
+    fontWeight: '600',
+    letterSpacing: 0.5,
+    color: '#94A3B8',
+    textTransform: 'uppercase',
   },
   searchHint: {
     marginTop: 6,

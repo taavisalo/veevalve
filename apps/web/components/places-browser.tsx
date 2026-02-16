@@ -37,6 +37,8 @@ interface Suggestion {
   id: string;
   name: string;
   municipality: string;
+  address?: string;
+  matchedBy: 'name' | 'municipality' | 'address';
 }
 
 interface FilterButtonProps {
@@ -127,6 +129,14 @@ const highlightMatch = (value: string, search: string) => {
       {value.slice(endIndex)}
     </>
   );
+};
+
+const containsSearchTerm = (value: string | undefined, normalizedQuery: string): boolean => {
+  if (!value || !normalizedQuery) {
+    return false;
+  }
+
+  return normalizeFuzzyText(value).includes(normalizedQuery);
 };
 
 export const PlacesBrowser = ({
@@ -271,23 +281,53 @@ export const PlacesBrowser = ({
 
     const threshold = fuzzySuggestionThreshold(normalizedSearch);
     const rankedPlaces = places
-      .map((place) => ({
-        place,
-        score: scoreFuzzyMatch({
+      .map((place) => {
+        const name = locale === 'en' ? place.nameEn : place.nameEt;
+        const address = locale === 'en'
+          ? (place.addressEn ?? place.addressEt)
+          : (place.addressEt ?? place.addressEn);
+        const nameScore = scoreFuzzyMatch({
           query: normalizedSearch,
-          primary: place.nameEt,
+          primary: name,
           secondary: place.municipality,
-        }),
-      }))
+        });
+        const addressScore = address
+          ? scoreFuzzyMatch({
+              query: normalizedSearch,
+              primary: address,
+            }) * 0.95
+          : 0;
+        const nameMatched = containsSearchTerm(name, normalizedSearch);
+        const municipalityMatched = containsSearchTerm(place.municipality, normalizedSearch);
+        const addressMatched = containsSearchTerm(address, normalizedSearch);
+
+        let matchedBy: Suggestion['matchedBy'] = 'name';
+        if (nameMatched) {
+          matchedBy = 'name';
+        } else if (addressMatched) {
+          matchedBy = 'address';
+        } else if (municipalityMatched) {
+          matchedBy = 'municipality';
+        } else {
+          matchedBy = addressScore > nameScore ? 'address' : 'name';
+        }
+
+        return {
+          place,
+          name,
+          address,
+          score: Math.max(nameScore, addressScore),
+          matchedBy,
+        };
+      })
       .filter(({ score }) => score >= threshold)
       .sort((left, right) => right.score - left.score);
 
     const seen = new Set<string>();
     const nextSuggestions: Suggestion[] = [];
 
-    for (const { place } of rankedPlaces) {
-      const name = place.nameEt;
-      const key = `${name}|${place.municipality}`;
+    for (const { place, name, address, matchedBy } of rankedPlaces) {
+      const key = `${name}|${place.municipality}|${address ?? ''}`;
       if (seen.has(key)) {
         continue;
       }
@@ -297,6 +337,8 @@ export const PlacesBrowser = ({
         id: place.id,
         name,
         municipality: place.municipality,
+        address,
+        matchedBy,
       });
 
       if (nextSuggestions.length >= SUGGESTION_LIMIT) {
@@ -305,7 +347,7 @@ export const PlacesBrowser = ({
     }
 
     return nextSuggestions;
-  }, [places, searchQuery]);
+  }, [locale, places, searchQuery]);
 
   useEffect(() => {
     if (activeSuggestionIndex >= suggestions.length) {
@@ -503,7 +545,18 @@ export const PlacesBrowser = ({
                     <p className="text-sm text-ink">
                       {highlightMatch(suggestion.name, searchQuery)}
                     </p>
-                    <p className="mt-0.5 text-xs text-slate-500">{suggestion.municipality}</p>
+                    <p className="mt-0.5 text-xs text-slate-500">
+                      {suggestion.matchedBy === 'address' && suggestion.address
+                        ? highlightMatch(suggestion.address, searchQuery)
+                        : highlightMatch(suggestion.municipality, searchQuery)}
+                    </p>
+                    {suggestion.matchedBy !== 'name' ? (
+                      <p className="mt-1 text-[11px] uppercase tracking-[0.08em] text-slate-400">
+                        {suggestion.matchedBy === 'address'
+                          ? (locale === 'et' ? 'Aadressi vaste' : 'Address match')
+                          : (locale === 'et' ? 'Omavalitsuse vaste' : 'Municipality match')}
+                      </p>
+                    ) : null}
                   </button>
                 </li>
               ))}
