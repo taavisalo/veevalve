@@ -144,6 +144,7 @@ pnpm --filter @veevalve/mobile dev
 See `.env.example` for full defaults.
 
 Important variables:
+- `API_BASE_URL`
 - `DATABASE_URL`
 - `TERVISEAMET_POOL_FACILITIES_URL`
 - `TERVISEAMET_POOL_LOCATIONS_URL`

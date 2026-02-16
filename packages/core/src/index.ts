@@ -6,3 +6,5 @@ export * from './quality/parse-terviseamet-xml';
 export * from './quality/terviseamet-opendata';
 export * from './notifications/status-change';
 export * from './notifications/location';
+export * from './places/place-api';
+export * from './search/fuzzy';

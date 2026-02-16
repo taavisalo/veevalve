@@ -667,9 +667,13 @@ export class WaterQualityService {
       affectedPlaceIds.add(place.id);
 
       let samplingPointId: string | undefined;
-      if (row.samplingPointExternalId && row.samplingPointName) {
+      const samplingPointExternalId =
+        row.samplingPointExternalId ??
+        this.fallbackSamplingPointExternalId(row.samplingPointName);
+
+      if (samplingPointExternalId && row.samplingPointName) {
         const point = await this.upsertSamplingPoint(place.id, {
-          externalId: row.samplingPointExternalId,
+          externalId: samplingPointExternalId,
           name: row.samplingPointName,
         });
         samplingPointId = point.id;
@@ -938,6 +942,22 @@ export class WaterQualityService {
 
   private externalKey(type: PlaceType, externalId: string): string {
     return `${type}:${externalId}`;
+  }
+
+  private fallbackSamplingPointExternalId(
+    samplingPointName: string | undefined,
+  ): string | undefined {
+    if (!samplingPointName) {
+      return undefined;
+    }
+
+    const normalizedName = samplingPointName.trim().toLowerCase();
+    if (!normalizedName) {
+      return undefined;
+    }
+
+    const hash = createHash('sha1').update(normalizedName).digest('hex').slice(0, 20);
+    return `name:${hash}`;
   }
 
   private async upsertPlace(input: UpsertPlaceInput): Promise<Place> {

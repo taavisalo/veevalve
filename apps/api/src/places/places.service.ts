@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import type { Place, PlaceLatestStatus, PlaceType, QualityStatus } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
 import type { ListPlacesQuery } from './dto/list-places.query';
@@ -20,21 +21,81 @@ export interface PlaceListResponse {
   };
 }
 
+interface RankedPlaceId {
+  id: string;
+}
+
+const DEFAULT_LIST_LIMIT = 10;
+
 @Injectable()
 export class PlacesService {
   constructor(private readonly prisma: PrismaService) {}
 
   async listPlaces(query: ListPlacesQuery): Promise<PlaceListResponse[]> {
     const locale = query.locale ?? 'et';
+    const limit = query.limit ?? DEFAULT_LIST_LIMIT;
+    const offset = query.offset ?? 0;
+    const search = query.search?.trim();
+
+    if (search) {
+      const rankedPlaceIds = await this.findRankedPlaceIds({
+        search,
+        type: query.type,
+        status: query.status,
+        limit,
+        offset,
+      });
+
+      if (rankedPlaceIds) {
+        if (rankedPlaceIds.length === 0) {
+          return [];
+        }
+
+        const placeMap = new Map(
+          (
+            await this.prisma.place.findMany({
+              where: {
+                id: { in: rankedPlaceIds },
+              },
+              include: {
+                latestStatus: true,
+              },
+            })
+          ).map((place) => [place.id, place] as const),
+        );
+
+        return rankedPlaceIds
+          .map((placeId) => placeMap.get(placeId))
+          .filter((place): place is Place & { latestStatus: PlaceLatestStatus | null } => Boolean(place))
+          .map((place) => this.toListResponse(place, locale));
+      }
+    }
+
+    const orderBy: Prisma.PlaceOrderByWithRelationInput[] =
+      query.sort === 'NAME'
+        ? [{ nameEt: 'asc' }]
+        : [{ latestStatus: { sampledAt: 'desc' } }, { nameEt: 'asc' }];
 
     const places = await this.prisma.place.findMany({
       where: {
         type: query.type,
-        OR: query.search
+        OR: search
           ? [
-              { nameEt: { contains: query.search, mode: 'insensitive' } },
-              { nameEn: { contains: query.search, mode: 'insensitive' } },
-              { municipality: { contains: query.search, mode: 'insensitive' } },
+              { nameEt: { contains: search, mode: 'insensitive' } },
+              { nameEn: { contains: search, mode: 'insensitive' } },
+              { municipality: { contains: search, mode: 'insensitive' } },
+              { addressEt: { contains: search, mode: 'insensitive' } },
+              { addressEn: { contains: search, mode: 'insensitive' } },
+              {
+                samplingPoints: {
+                  some: {
+                    OR: [
+                      { name: { contains: search, mode: 'insensitive' } },
+                      { address: { contains: search, mode: 'insensitive' } },
+                    ],
+                  },
+                },
+              },
             ]
           : undefined,
         latestStatus: query.status
@@ -43,16 +104,16 @@ export class PlacesService {
                 status: query.status,
               },
             }
-          : undefined,
+          : {
+              isNot: null,
+            },
       },
       include: {
         latestStatus: true,
       },
-      skip: query.offset ?? 0,
-      take: query.limit ?? 100,
-      orderBy: {
-        nameEt: 'asc',
-      },
+      skip: offset,
+      take: limit,
+      orderBy,
     });
 
     return places.map((place) => this.toListResponse(place, locale));
@@ -71,6 +132,84 @@ export class PlacesService {
     }
 
     return this.toListResponse(place, 'et');
+  }
+
+  private async findRankedPlaceIds(input: {
+    search: string;
+    type?: PlaceType;
+    status?: QualityStatus;
+    limit: number;
+    offset: number;
+  }): Promise<string[] | null> {
+    const { search, type, status, limit, offset } = input;
+    const threshold = search.length <= 3 ? 0.2 : 0.12;
+
+    const typeFilter = type ? Prisma.sql`AND p.type = ${type}` : Prisma.empty;
+    const statusFilter = status ? Prisma.sql`AND ls.status = ${status}` : Prisma.empty;
+
+    try {
+      const rankedRows = await this.prisma.$queryRaw<RankedPlaceId[]>(Prisma.sql`
+        SELECT p.id
+        FROM "Place" p
+        INNER JOIN "PlaceLatestStatus" ls ON ls."placeId" = p.id
+        LEFT JOIN LATERAL (
+          SELECT
+            MAX(similarity(lower(sp.name), lower(${search}))) AS "nameSimilarity",
+            MAX(similarity(lower(coalesce(sp.address, '')), lower(${search}))) AS "addressSimilarity",
+            MAX(CASE WHEN lower(sp.name) LIKE lower(${search}) || '%' THEN 1 ELSE 0 END) AS "namePrefixMatch",
+            MAX(CASE WHEN lower(sp.name) LIKE '%' || lower(${search}) || '%' THEN 1 ELSE 0 END) AS "nameContainsMatch",
+            MAX(CASE WHEN lower(coalesce(sp.address, '')) LIKE '%' || lower(${search}) || '%' THEN 1 ELSE 0 END) AS "addressContainsMatch"
+          FROM "SamplingPoint" sp
+          WHERE sp."placeId" = p.id
+        ) spx ON TRUE
+        WHERE (
+          similarity(lower(p."nameEt"), lower(${search})) > ${threshold}
+          OR similarity(lower(p."nameEn"), lower(${search})) > ${threshold}
+          OR similarity(lower(p."municipality"), lower(${search})) > ${threshold}
+          OR similarity(lower(coalesce(p."addressEt", '')), lower(${search})) > ${threshold}
+          OR similarity(lower(coalesce(p."addressEn", '')), lower(${search})) > ${threshold}
+          OR coalesce(spx."nameSimilarity", 0) > ${threshold}
+          OR coalesce(spx."addressSimilarity", 0) > ${threshold}
+          OR lower(p."nameEt") LIKE '%' || lower(${search}) || '%'
+          OR lower(p."nameEn") LIKE '%' || lower(${search}) || '%'
+          OR lower(p."municipality") LIKE '%' || lower(${search}) || '%'
+          OR lower(coalesce(p."addressEt", '')) LIKE '%' || lower(${search}) || '%'
+          OR lower(coalesce(p."addressEn", '')) LIKE '%' || lower(${search}) || '%'
+          OR coalesce(spx."nameContainsMatch", 0) = 1
+          OR coalesce(spx."addressContainsMatch", 0) = 1
+        )
+        ${typeFilter}
+        ${statusFilter}
+        ORDER BY (
+          GREATEST(
+            similarity(lower(p."nameEt"), lower(${search})) * 1.35,
+            similarity(lower(p."nameEn"), lower(${search})) * 1.25,
+            similarity(lower(p."municipality"), lower(${search})) * 1.0,
+            similarity(lower(coalesce(p."addressEt", '')), lower(${search})) * 0.55,
+            similarity(lower(coalesce(p."addressEn", '')), lower(${search})) * 0.55,
+            coalesce(spx."nameSimilarity", 0) * 1.2,
+            coalesce(spx."addressSimilarity", 0) * 0.4
+          )
+          + CASE WHEN lower(p."nameEt") LIKE lower(${search}) || '%' THEN 0.9 ELSE 0 END
+          + CASE WHEN lower(p."nameEn") LIKE lower(${search}) || '%' THEN 0.8 ELSE 0 END
+          + CASE WHEN lower(p."municipality") LIKE lower(${search}) || '%' THEN 0.45 ELSE 0 END
+          + CASE WHEN lower(p."nameEt") LIKE '%' || lower(${search}) || '%' THEN 0.25 ELSE 0 END
+          + CASE WHEN lower(p."nameEn") LIKE '%' || lower(${search}) || '%' THEN 0.2 ELSE 0 END
+          + CASE WHEN coalesce(spx."namePrefixMatch", 0) = 1 THEN 0.75 ELSE 0 END
+          + CASE WHEN coalesce(spx."nameContainsMatch", 0) = 1 THEN 0.3 ELSE 0 END
+          + CASE WHEN coalesce(spx."addressContainsMatch", 0) = 1 THEN 0.1 ELSE 0 END
+        ) DESC,
+        ls."sampledAt" DESC,
+        p."nameEt" ASC
+        LIMIT ${limit}
+        OFFSET ${offset}
+      `);
+
+      return rankedRows.map((row) => row.id);
+    } catch {
+      // Extension/index may not be applied yet; fall back to standard contains search.
+      return null;
+    }
   }
 
   private toListResponse(

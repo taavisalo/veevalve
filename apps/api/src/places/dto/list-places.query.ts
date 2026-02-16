@@ -15,6 +15,10 @@ export class ListPlacesQuery {
   search?: string;
 
   @IsOptional()
+  @IsIn(['LATEST', 'NAME'])
+  sort?: 'LATEST' | 'NAME';
+
+  @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
