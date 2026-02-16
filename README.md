@@ -6,7 +6,8 @@ The app is designed for:
 - iOS + Android native apps
 - web browser access
 - guest browsing without account creation
-- optional account-based favorites and notifications
+- persistent local favorites and UI preferences (no account required)
+- optional future account-based notifications
 
 Primary language is Estonian (`et`) with English (`en`) support.
 
@@ -14,10 +15,13 @@ Primary language is Estonian (`et`) with English (`en`) support.
 
 - Ingests public water quality data from Terviseamet XML source
 - Shows up-to-date status for beaches and pools
-- Lets users filter and browse locations
-- Supports favorites and notification preferences
-- Sends quality-change alerts (good -> bad, bad -> good)
-- Supports optional location-based alerts when users are near monitored places
+- Defaults to 10 latest places; search shows up to 20 results
+- Provides predictive search suggestions with fuzzy matching
+- Lets users filter by place type and quality status
+- Supports local favorites (web `localStorage`, mobile `AsyncStorage`)
+- Shows compact metrics and an About panel with source/update details
+- Uses status-first cards where BAD entries can expand inline details and open the full Terviseamet report
+- Generates backend status-change notifications when new data changes quality state
 
 Data source:
 - [Terviseamet VTIAV](https://vtiav.sm.ee/index.php/?active_tab_id=A)
@@ -222,8 +226,8 @@ Backend identity model supports multiple providers per user.
 ## Notifications Strategy
 
 - Status change alerts are generated when fresh reading status differs from previous reading
-- Location alerts are user-controlled and can be disabled
-- Mobile push is the primary channel (Expo push integration scaffolded)
+- Notification preference and event tables are in schema
+- Expo/mobile push delivery is still planned and not fully wired end-to-end yet
 
 ## Quality and Contribution Standards
 
@@ -248,23 +252,27 @@ Backend identity model supports multiple providers per user.
 
 ## Current Status
 
-This repository is a production-oriented scaffold.
+This repository is an actively implemented MVP, not just a scaffold.
 
-Already included:
-- Monorepo architecture and tooling
-- Mobile/web/api app shells
-- Prisma schema for domain entities
-- XML ingest service skeleton
-- Shared UI and domain packages
-- Docker + Dev Container setup
-- Open-source project governance files
+Implemented now:
+- Live API-backed web and mobile list/search flows
+- Hourly scheduled XML sync (`:15` each hour) with per-feed interval optimization and change detection
+- Normalized PostgreSQL schema with Prisma migrations and seed data
+- Metrics endpoint and compact metrics UI (with persisted visibility preferences)
+- About panel with source and status explanation
+- Local favorites persistence on web and mobile
+- Status-first place cards:
+  - clear GOOD/BAD/UNKNOWN visual hierarchy
+  - BAD details expand inline
+  - direct link to full Terviseamet report (`frontpage/show?id=...`)
+- API hardening for sync trigger (token + rate limiting)
+- Docker/devcontainer setup and OSS governance docs
 
-Next implementation steps:
-1. Add WGS84 coordinate transformation from source coordinate system for geofence precision.
-2. Build real auth flows (OIDC and session/token lifecycle).
-3. Integrate Expo push token registration and delivery pipeline.
-4. Replace mock data in web/mobile with live API data.
-5. Add advanced place/sample detail endpoints for protocol and indicator drill-down UI.
+Planned next:
+1. Add complete auth/session implementation for OIDC providers.
+2. Implement full push pipeline (token registration, delivery, retries, observability).
+3. Finalize geofencing/location-alert precision with coordinate transformation.
+4. Add end-to-end tests for sync -> API -> web/mobile rendering flows.
 
 ## License
 
