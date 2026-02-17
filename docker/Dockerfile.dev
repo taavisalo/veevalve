@@ -9,7 +9,7 @@ ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
 ENV PNPM_STORE_PATH=/pnpm/store
 
-RUN corepack enable && corepack prepare pnpm@9.12.3 --activate \
+RUN corepack enable && corepack prepare pnpm@10.29.3 --activate \
   && pnpm config set store-dir /pnpm/store
 
 WORKDIR /workspace

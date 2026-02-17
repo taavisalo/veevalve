@@ -3,7 +3,7 @@ FROM node:20-bookworm-slim AS base
 ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
 
-RUN corepack enable && corepack prepare pnpm@9.12.3 --activate && pnpm config set store-dir /pnpm/store
+RUN corepack enable && corepack prepare pnpm@10.29.3 --activate && pnpm config set store-dir /pnpm/store
 WORKDIR /app
 
 FROM base AS build

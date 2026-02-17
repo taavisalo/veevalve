@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "Water quality alerts for Estonian pools and beaches.",
-  "packageManager": "pnpm@9.12.3",
+  "packageManager": "pnpm@10.29.3",
   "engines": {
     "node": ">=20.11.1"
   },

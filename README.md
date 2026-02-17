@@ -103,7 +103,7 @@ docker compose run --rm \
 
 Prerequisites:
 - Node.js 20+
-- pnpm 9+
+- pnpm 10+
 - Docker (for local PostgreSQL) or a local PostgreSQL instance
 
 1. Install dependencies:
@@ -297,8 +297,6 @@ For a dedicated API project on Vercel:
 - Framework preset: `NestJS` (or `Other`, but not `Next.js`)
 - Root directory: `apps/api`
 - Output directory: leave empty
-- Install command: `cd ../.. && pnpm install --frozen-lockfile`
-- Build command: `cd ../.. && pnpm --filter @veevalve/core build && pnpm --filter @veevalve/api build`
 
 If your API project has many environment variables set in Vercel, `turbo.json` already allowlists them for the `build` task so they are available during build execution.
 

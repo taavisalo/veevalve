@@ -25,6 +25,9 @@
         "SYNC_RATE_LIMIT_MAX_TRACKED_IPS"
       ]
     },
+    "@veevalve/api#build": {
+      "cache": false
+    },
     "dev": {
       "cache": false,
       "persistent": true
