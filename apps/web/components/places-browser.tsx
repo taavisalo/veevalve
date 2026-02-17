@@ -70,7 +70,7 @@ const FilterButton = ({ label, active, onClick }: FilterButtonProps) => {
     <button
       type="button"
       onClick={onClick}
-      className={`inline-flex shrink-0 items-center rounded-full border px-2.5 py-0.5 text-xs font-medium transition sm:px-3 sm:py-1 sm:text-sm ${
+      className={`inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-xs font-medium transition sm:px-3 sm:py-1 sm:text-sm ${
         active
           ? 'border-accent bg-accent text-white'
           : 'border-emerald-100 bg-white text-ink hover:border-accent hover:text-accent'
@@ -678,11 +678,11 @@ export const PlacesBrowser = ({
     <main className="mx-auto max-w-6xl px-3 pb-16 pt-6 sm:px-4 sm:pt-8 md:px-8 md:pt-14">
       <section className="fade-up relative overflow-hidden rounded-3xl border border-emerald-200/70 bg-white/75 p-4 shadow-card backdrop-blur sm:p-6 md:p-8">
         <div className="flex items-start justify-between gap-2">
-          <p className="shrink-0 text-sm uppercase tracking-[0.14em] text-accent">
+          <p className="shrink-0 text-xs uppercase tracking-[0.08em] text-accent sm:text-sm sm:tracking-[0.14em]">
             {t('appName', locale)}
           </p>
-          <div className="relative z-10 ml-auto min-w-0 max-w-[72%]" ref={languageContainerRef}>
-            <div className="flex flex-wrap items-center justify-end gap-1 sm:gap-1.5">
+          <div className="relative z-10 ml-auto min-w-0 max-w-[76%]" ref={languageContainerRef}>
+            <div className="flex flex-nowrap items-center justify-end gap-1 whitespace-nowrap sm:gap-1.5">
           <button
             type="button"
             aria-pressed={aboutVisible}
@@ -744,7 +744,12 @@ export const PlacesBrowser = ({
                 className="h-3 w-3 animate-spin rounded-full border-2 border-current border-r-transparent"
               />
             ) : null}
-            <span>{notificationsButtonLabel}</span>
+            <span className="sm:hidden">
+              {notificationsActive
+                ? (locale === 'et' ? 'Sees' : 'On')
+                : (locale === 'et' ? 'Väljas' : 'Off')}
+            </span>
+            <span className="hidden sm:inline">{notificationsButtonLabel}</span>
           </button>
           <div className="relative">
             <button
@@ -752,7 +757,8 @@ export const PlacesBrowser = ({
               onClick={() => setLanguageMenuOpen((value) => !value)}
               className="rounded-full border border-emerald-100 bg-white px-2 py-0.5 text-[11px] font-semibold text-accent transition hover:border-accent sm:px-3 sm:py-1 sm:text-xs"
             >
-              {locale === 'et' ? 'Keel: Eesti' : 'Language: English'}
+              <span className="sm:hidden">{locale === 'et' ? 'ET' : 'EN'}</span>
+              <span className="hidden sm:inline">{locale === 'et' ? 'Keel: Eesti' : 'Language: English'}</span>
             </button>
             {languageMenuOpen ? (
               <div className="absolute right-0 z-10 mt-2 w-40 overflow-hidden rounded-xl border border-emerald-100 bg-white shadow-card">
@@ -804,13 +810,13 @@ export const PlacesBrowser = ({
         {aboutVisible ? (
           <div className="mt-4 rounded-2xl border border-emerald-100 bg-white/85 p-4 text-sm text-slate-700">
             <p className="font-semibold text-ink">
-              {locale === 'et' ? 'Kust andmed tulevad?' : 'Where does this data come from?'}
+              {locale === 'et' ? 'Abi: andmeallikas ja uuendused' : 'Help: data source and updates'}
             </p>
             <p className="mt-1">
               {locale === 'et'
                 ? (
                     <>
-                      Andmed pärinevad Terviseameti avalikest XML-andmetest (
+                      VeeValve kasutab Terviseameti avalikke XML-andmeid (
                       <a
                         href={TERVISEAMET_DATA_URL}
                         target="_blank"
@@ -819,12 +825,12 @@ export const PlacesBrowser = ({
                       >
                         vtiav.sm.ee
                       </a>
-                      ).
+                      ). Kuvatakse viimased teadaolevad tulemused.
                     </>
                   )
                 : (
                     <>
-                      Data comes from public XML feeds by the Estonian Health Board (
+                      VeeValve uses public XML feeds by the Estonian Health Board (
                       <a
                         href={TERVISEAMET_DATA_URL}
                         target="_blank"
@@ -833,7 +839,7 @@ export const PlacesBrowser = ({
                       >
                         vtiav.sm.ee
                       </a>
-                      ).
+                      ). The app shows the latest known sample status.
                     </>
                   )}
             </p>
@@ -842,7 +848,7 @@ export const PlacesBrowser = ({
                 <>
                   <li>Ujulate ja basseinide allikad: `ujulad.xml`, `basseinid.xml`, `basseini_veeproovid_{'{year}'}.xml`.</li>
                   <li>Supluskohtade allikad: `supluskohad.xml`, `supluskoha_veeproovid_{'{year}'}.xml`.</li>
-                  <li>Andmete uuendamine käivitub iga tunni 15. minutil.</li>
+                  <li>Automaatne sünkroon käivitub iga tunni 15. minutil.</li>
                   <li>Muutuseid kontrollitakse `ETag`/`Last-Modified` päistega ja sisuräsi abil.</li>
                   <li>Asukohafaile kontrollitakse umbes kord ööpäevas; proovifaile sagedamini (basseinid ~2 h, rannad hooajal ~2 h, väljaspool hooaega ~24 h).</li>
                 </>
@@ -872,6 +878,31 @@ export const PlacesBrowser = ({
                   <li>`Good`: the latest sample meets requirements.</li>
                   <li>`Bad`: the latest sample does not meet requirements.</li>
                   <li>`Unknown`: no recent rating is available, or a status could not be determined.</li>
+                </>
+              )}
+            </ul>
+
+            <p className="mt-3 font-semibold text-ink">
+              {locale === 'et'
+                ? 'Kuidas brauseri tõuketeavitused töötavad?'
+                : 'How do browser push notifications work?'}
+            </p>
+            <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-slate-600">
+              {locale === 'et' ? (
+                <>
+                  <li>Teavitused on valikulised: esmalt lisa koht lemmikutesse, siis lülita teavitused sisse.</li>
+                  <li>Teavitusi saadetakse ainult lemmikutes olevatele kohtadele.</li>
+                  <li>Märguanne tuleb staatuse muutuse korral (`Hea` ↔ `Halb`), mitte iga uuenduse peale.</li>
+                  <li>Teavitused töötavad ka siis, kui leht on suletud (service workeri kaudu).</li>
+                  <li>Kui teavitused on blokeeritud, ava need brauseri saidi seadetes uuesti.</li>
+                </>
+              ) : (
+                <>
+                  <li>Push alerts are opt-in: add a place to favorites first, then enable alerts.</li>
+                  <li>Notifications are sent only for favorited places.</li>
+                  <li>An alert is sent on status transition (`Good` ↔ `Bad`), not on every sync run.</li>
+                  <li>Alerts can be delivered even when the page is closed (via service worker).</li>
+                  <li>If notifications are blocked, re-enable them in browser site settings.</li>
                 </>
               )}
             </ul>
@@ -1043,8 +1074,8 @@ export const PlacesBrowser = ({
               }}
               placeholder={
                 locale === 'et'
-                  ? 'Sisesta koha nimi või omavalitsus...'
-                  : 'Type place name or municipality...'
+                  ? 'Otsi koha nime või omavalitsust...'
+                  : 'Search place or municipality...'
               }
               role="combobox"
               aria-autocomplete="list"
@@ -1055,7 +1086,7 @@ export const PlacesBrowser = ({
                   ? `${suggestionsListId}-${activeSuggestionIndex}`
                   : undefined
               }
-              className="h-14 w-full rounded-2xl border border-emerald-200 bg-white pl-12 pr-28 text-base text-ink shadow-card outline-none transition placeholder:text-slate-400 focus:border-accent focus:ring-2 focus:ring-emerald-200"
+              className="h-14 w-full rounded-2xl border border-emerald-200 bg-white pl-12 pr-12 text-sm text-ink shadow-card outline-none transition placeholder:text-slate-400 focus:border-accent focus:ring-2 focus:ring-emerald-200 sm:text-base"
             />
             {searchInput ? (
               <button
@@ -1067,12 +1098,14 @@ export const PlacesBrowser = ({
                   setActiveSuggestionIndex(-1);
                   inputRef.current?.focus();
                 }}
-                className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full border border-emerald-100 px-2 py-1 text-xs font-medium text-slate-600 transition hover:border-accent hover:text-accent"
+                aria-label={locale === 'et' ? 'Puhasta otsing' : 'Clear search'}
+                title={locale === 'et' ? 'Puhasta otsing' : 'Clear search'}
+                className="absolute right-2 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-emerald-200 bg-emerald-50/80 text-sm font-semibold leading-none text-accent shadow-sm transition hover:border-accent hover:bg-white sm:right-3"
               >
-                {locale === 'et' ? 'Puhasta' : 'Clear'}
+                <span aria-hidden="true">×</span>
               </button>
             ) : (
-              <kbd className="absolute right-4 top-1/2 -translate-y-1/2 rounded border border-emerald-100 bg-emerald-50 px-2 py-0.5 text-[11px] text-slate-500">
+              <kbd className="absolute right-2 top-1/2 -translate-y-1/2 rounded border border-emerald-100 bg-emerald-50 px-1.5 py-0.5 text-[11px] text-slate-500 sm:right-4 sm:px-2">
                 /
               </kbd>
             )}
@@ -1127,8 +1160,8 @@ export const PlacesBrowser = ({
           </p>
         </div>
 
-        <div className="-mx-1 mt-5 overflow-x-auto pb-1">
-          <div className="flex min-w-max items-center gap-2 px-1">
+        <div className="-mx-0.5 mt-5 overflow-x-auto pb-1">
+          <div className="flex min-w-max items-center gap-1 px-0.5">
             <FilterButton
               label={locale === 'et' ? 'Kõik kohad' : 'All places'}
               active={typeFilter === 'ALL' && statusFilter === 'ALL'}
