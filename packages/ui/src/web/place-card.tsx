@@ -295,7 +295,6 @@ export const PlaceCard = ({
             type="button"
             onClick={() => setShowBadDetails((value) => !value)}
             aria-expanded={showBadDetails}
-            aria-label={badDetailsToggleLabel}
             title={badDetailsToggleLabel}
             className="w-full text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:ring-offset-2"
           >

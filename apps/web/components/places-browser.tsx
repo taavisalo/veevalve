@@ -71,10 +71,11 @@ const FilterButton = ({ label, active, onClick }: FilterButtonProps) => {
     <button
       type="button"
       onClick={onClick}
+      aria-pressed={active}
       className={`inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-xs font-medium transition sm:px-3 sm:py-1 sm:text-sm ${
         active
-          ? 'border-accent bg-accent text-white'
-          : 'border-emerald-100 bg-white text-ink hover:border-accent hover:text-accent'
+          ? 'border-emerald-700 bg-emerald-700 text-white'
+          : 'border-emerald-100 bg-white text-ink hover:border-emerald-700 hover:text-emerald-800'
       }`}
     >
       {label}
@@ -773,8 +774,8 @@ export const PlacesBrowser = ({
             onClick={() => setAboutVisible((value) => !value)}
             className={`inline-flex h-6 w-6 items-center justify-center rounded-full border text-xs font-semibold leading-none transition sm:h-7 sm:w-7 sm:text-sm ${
               aboutVisible
-                ? 'border-accent bg-accent text-white'
-                : 'border-emerald-100 bg-white text-accent hover:border-accent'
+                ? 'border-emerald-700 bg-emerald-700 text-white'
+                : 'border-emerald-100 bg-white text-emerald-800 hover:border-emerald-700'
             }`}
             aria-label={locale === 'et' ? 'Ava info andmete kohta' : 'Open data info'}
             title={locale === 'et' ? 'Info' : 'About'}
@@ -787,8 +788,8 @@ export const PlacesBrowser = ({
             onClick={() => setMetricsVisible((value) => !value)}
             className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold transition sm:px-3 sm:py-1 sm:text-xs ${
               metricsVisible
-                ? 'border-accent bg-accent text-white'
-                : 'border-emerald-100 bg-white text-accent hover:border-accent'
+                ? 'border-emerald-700 bg-emerald-700 text-white'
+                : 'border-emerald-100 bg-white text-emerald-800 hover:border-emerald-700'
             }`}
           >
             {locale === 'et' ? 'Mõõdikud' : 'Metrics'}
@@ -818,8 +819,8 @@ export const PlacesBrowser = ({
             }
             className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold transition sm:gap-1.5 sm:px-3 sm:py-1 sm:text-xs ${
               notificationsActive
-                ? 'border-accent bg-accent text-white'
-                : 'border-emerald-100 bg-white text-accent hover:border-accent'
+                ? 'border-emerald-700 bg-emerald-700 text-white'
+                : 'border-emerald-100 bg-white text-emerald-800 hover:border-emerald-700'
             } disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400`}
           >
             {notificationsSyncing ? (
@@ -839,22 +840,32 @@ export const PlacesBrowser = ({
             <button
               type="button"
               onClick={() => setLanguageMenuOpen((value) => !value)}
-              className="rounded-full border border-emerald-100 bg-white px-2 py-0.5 text-[11px] font-semibold text-accent transition hover:border-accent sm:px-3 sm:py-1 sm:text-xs"
+              aria-haspopup="menu"
+              aria-expanded={languageMenuOpen}
+              aria-controls="language-menu"
+              className="rounded-full border border-emerald-100 bg-white px-2 py-0.5 text-[11px] font-semibold text-emerald-800 transition hover:border-emerald-700 sm:px-3 sm:py-1 sm:text-xs"
             >
               <span className="sm:hidden">{locale === 'et' ? 'ET' : 'EN'}</span>
               <span className="hidden sm:inline">{locale === 'et' ? 'Keel: Eesti' : 'Language: English'}</span>
             </button>
             {languageMenuOpen ? (
-              <div className="absolute right-0 z-10 mt-2 w-40 overflow-hidden rounded-xl border border-emerald-100 bg-white shadow-card">
+              <div
+                id="language-menu"
+                role="menu"
+                aria-label={locale === 'et' ? 'Keele valik' : 'Language selection'}
+                className="absolute right-0 z-10 mt-2 w-40 overflow-hidden rounded-xl border border-emerald-100 bg-white shadow-card"
+              >
                 <button
                   type="button"
+                  role="menuitemradio"
+                  aria-checked={locale === 'et'}
                   onClick={() => {
                     setLocale('et');
                     setLanguageMenuOpen(false);
                   }}
                   className={`block w-full px-3 py-2 text-left text-sm transition ${
                     locale === 'et'
-                      ? 'bg-emerald-50 font-semibold text-accent'
+                      ? 'bg-emerald-50 font-semibold text-emerald-900'
                       : 'text-ink hover:bg-emerald-50'
                   }`}
                 >
@@ -862,13 +873,15 @@ export const PlacesBrowser = ({
                 </button>
                 <button
                   type="button"
+                  role="menuitemradio"
+                  aria-checked={locale === 'en'}
                   onClick={() => {
                     setLocale('en');
                     setLanguageMenuOpen(false);
                   }}
                   className={`block w-full px-3 py-2 text-left text-sm transition ${
                     locale === 'en'
-                      ? 'bg-emerald-50 font-semibold text-accent'
+                      ? 'bg-emerald-50 font-semibold text-emerald-900'
                       : 'text-ink hover:bg-emerald-50'
                   }`}
                 >
@@ -1040,8 +1053,8 @@ export const PlacesBrowser = ({
                 onClick={() => setMetricsExpanded((value) => !value)}
                 className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
                   metricsExpanded
-                    ? 'border-accent bg-accent text-white'
-                    : 'border-emerald-100 bg-white text-accent hover:border-accent'
+                    ? 'border-emerald-700 bg-emerald-700 text-white'
+                    : 'border-emerald-100 bg-white text-emerald-800 hover:border-emerald-700'
                 }`}
               >
                 {locale === 'et' ? 'Detailid' : 'Details'}
@@ -1339,6 +1352,7 @@ export const PlacesBrowser = ({
       ) : null}
 
       <section className="mt-8">
+        <h2 className="sr-only">{locale === 'et' ? 'Tulemused' : 'Results'}</h2>
         <div className="relative mb-3 pr-10 text-xs text-slate-500">
           <p>
             {searchQuery
