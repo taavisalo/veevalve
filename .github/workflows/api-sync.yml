@@ -12,10 +12,31 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    if: ${{ secrets.SYNC_API_URL != '' && secrets.SYNC_API_TOKEN != '' }}
 
     steps:
+      - name: Preflight secrets
+        id: preflight
+        env:
+          SYNC_API_URL: ${{ secrets.SYNC_API_URL }}
+          SYNC_API_TOKEN: ${{ secrets.SYNC_API_TOKEN }}
+        run: |
+          missing=0
+          for secret_name in SYNC_API_URL SYNC_API_TOKEN; do
+            if [ -z "${!secret_name:-}" ]; then
+              echo "Missing required secret: $secret_name"
+              missing=1
+            fi
+          done
+
+          if [ "$missing" -eq 1 ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "Skipping sync because SYNC_API_URL or SYNC_API_TOKEN is missing."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Trigger sync endpoint
+        if: steps.preflight.outputs.skip != 'true'
         env:
           SYNC_API_URL: ${{ secrets.SYNC_API_URL }}
           SYNC_API_TOKEN: ${{ secrets.SYNC_API_TOKEN }}

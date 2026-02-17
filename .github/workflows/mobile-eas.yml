@@ -21,25 +21,41 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    if: ${{ secrets.EXPO_TOKEN != '' }}
 
     steps:
+      - name: Preflight secrets
+        id: preflight
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          if [ -z "${EXPO_TOKEN:-}" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "Skipping mobile build because EXPO_TOKEN is missing."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Checkout
+        if: steps.preflight.outputs.skip != 'true'
         uses: actions/checkout@v4
 
       - name: Setup pnpm
+        if: steps.preflight.outputs.skip != 'true'
         uses: pnpm/action-setup@v4
 
       - name: Setup Node
+        if: steps.preflight.outputs.skip != 'true'
         uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: pnpm
 
       - name: Install dependencies
+        if: steps.preflight.outputs.skip != 'true'
         run: pnpm install --no-frozen-lockfile
 
       - name: Setup Expo and EAS
+        if: steps.preflight.outputs.skip != 'true'
         uses: expo/expo-github-action@v8
         with:
           expo-version: latest
@@ -47,8 +63,9 @@ jobs:
           token: ${{ secrets.EXPO_TOKEN }}
 
       - name: Build mobile app
+        if: steps.preflight.outputs.skip != 'true'
         run: pnpm --filter @veevalve/mobile exec eas build --non-interactive --platform ${{ inputs.platform }} --profile production
 
       - name: Submit mobile app
-        if: ${{ inputs.submit && inputs.platform != 'all' }}
+        if: steps.preflight.outputs.skip != 'true' && inputs.submit && inputs.platform != 'all'
         run: pnpm --filter @veevalve/mobile exec eas submit --non-interactive --platform ${{ inputs.platform }} --profile production
