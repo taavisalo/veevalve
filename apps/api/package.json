@@ -19,7 +19,8 @@
     "prisma:migrate:deploy": "XDG_CACHE_HOME=../../.cache prisma migrate deploy",
     "prisma:reset": "XDG_CACHE_HOME=../../.cache prisma migrate reset --force",
     "prisma:studio": "XDG_CACHE_HOME=../../.cache prisma studio",
-    "prisma:seed": "tsx prisma/seed.ts"
+    "prisma:seed": "tsx prisma/seed.ts",
+    "sync:token": "node ./scripts/generate-sync-token.mjs"
   },
   "dependencies": {
     "@nestjs/common": "^11.1.13",

@@ -168,6 +168,18 @@ Important variables:
 - `SYNC_RATE_LIMIT_MAX_TRACKED_IPS`
 - Expo/EAS credentials for production builds
 
+Generate a secure sync token locally:
+
+```bash
+pnpm --filter @veevalve/api sync:token
+```
+
+Print as `.env` line (for copy/paste):
+
+```bash
+pnpm --filter @veevalve/api sync:token -- --env
+```
+
 ## Data Schema
 
 The API uses a normalized Prisma/PostgreSQL schema for Terviseamet open-data ingestion:
@@ -231,6 +243,11 @@ Recommended setup:
   - `SYNC_API_URL` (for example `https://api.example.com/api/water-quality/sync`)
   - `SYNC_API_TOKEN` (must match API `SYNC_API_TOKEN`)
 - Schedule currently runs every 2 hours (`17 */2 * * *`) and can also be run manually with `workflow_dispatch`
+
+Suggested secure setup flow:
+1. Generate a token: `pnpm --filter @veevalve/api sync:token`
+2. Set the same value in API env as `SYNC_API_TOKEN`
+3. Set the same value in GitHub Actions repository secret `SYNC_API_TOKEN`
 
 ## Auth Strategy
 
