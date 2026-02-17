@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Manrope, Newsreader } from 'next/font/google';
 
+import { resolveSiteUrl } from '../lib/site-url';
 import './globals.css';
 
 const bodyFont = Manrope({
@@ -20,8 +21,59 @@ const titleFont = Newsreader({
 });
 
 export const metadata: Metadata = {
-  title: 'VeeValve',
+  metadataBase: new URL(resolveSiteUrl()),
+  title: {
+    default: 'VeeValve',
+    template: '%s | VeeValve',
+  },
   description: 'Avalike randade ja basseinide vee kvaliteedi teavitused Eestis.',
+  applicationName: 'VeeValve',
+  generator: 'Next.js',
+  referrer: 'strict-origin-when-cross-origin',
+  keywords: [
+    'vee kvaliteet',
+    'rannad',
+    'basseinid',
+    'Eesti',
+    'water quality',
+    'beaches',
+    'pools',
+    'Estonia',
+  ],
+  alternates: {
+    canonical: '/',
+    languages: {
+      et: '/',
+      en: '/?locale=en',
+      'x-default': '/',
+    },
+  },
+  openGraph: {
+    type: 'website',
+    locale: 'et_EE',
+    alternateLocale: 'en_GB',
+    siteName: 'VeeValve',
+    title: 'VeeValve',
+    description: 'Avalike randade ja basseinide vee kvaliteedi teavitused Eestis.',
+    url: '/',
+  },
+  twitter: {
+    card: 'summary',
+    title: 'VeeValve',
+    description: 'Avalike randade ja basseinide vee kvaliteedi teavitused Eestis.',
+  },
+  robots: {
+    index: true,
+    follow: true,
+    nocache: false,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+      'max-video-preview': -1,
+    },
+  },
   icons: {
     icon: [
       { url: '/favicon.ico', sizes: 'any' },
@@ -29,6 +81,8 @@ export const metadata: Metadata = {
     ],
     apple: [{ url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }],
   },
+  manifest: '/manifest.webmanifest',
+  category: 'health',
 };
 
 interface RootLayoutProps {

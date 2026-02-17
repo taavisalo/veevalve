@@ -1,4 +1,20 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
+
+export const metadata: Metadata = {
+  title: '404',
+  robots: {
+    index: false,
+    follow: false,
+    googleBot: {
+      index: false,
+      follow: false,
+      'max-image-preview': 'none',
+      'max-snippet': 0,
+      'max-video-preview': 0,
+    },
+  },
+};
 
 const NotFoundPage = () => {
   return (
