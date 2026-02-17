@@ -26,6 +26,13 @@
     "typescript-eslint": "^8.55.0"
   },
   "pnpm": {
+    "onlyBuiltDependencies": [
+      "@nestjs/core",
+      "@prisma/engines",
+      "esbuild",
+      "prisma",
+      "sharp"
+    ],
     "allowedDeprecatedVersions": {
       "glob": "*",
       "inflight": "*",
