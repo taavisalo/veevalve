@@ -15,12 +15,26 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 
 import { fetchPlaces, fetchPlacesByIds, type PlaceMetrics } from '../lib/fetch-places';
 import { readFavoritePlaceIds, writeFavoritePlaceIds } from '../lib/favorites-storage';
+import {
+  readFavoriteStatusNotificationsEnabled,
+  writeFavoriteStatusNotificationsEnabled,
+} from '../lib/favorite-status-notifications-storage';
 import { readMetricsUiPreferences, writeMetricsUiPreferences } from '../lib/ui-preferences-storage';
+import {
+  ensureWebPushSubscription,
+  getExistingSubscription,
+  isWebPushSupported,
+  readNotificationPermission,
+  removeWebPushSubscription,
+  requestNotificationPermission,
+  syncWebPushSubscription,
+} from '../lib/web-push-client';
 
 const LATEST_RESULTS_LIMIT = 10;
 const SEARCH_RESULTS_LIMIT = 20;
 const SUGGESTION_LIMIT = 8;
 const SEARCH_DEBOUNCE_MS = 180;
+const WEB_PUSH_VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY ?? '';
 const TERVISEAMET_DATA_URL = 'https://vtiav.sm.ee/index.php/?active_tab_id=A';
 
 const getResultsLimit = (search?: string): number =>
@@ -161,6 +175,12 @@ export const PlacesBrowser = ({
   const [favoritesHydrated, setFavoritesHydrated] = useState(false);
   const [favoritesLoading, setFavoritesLoading] = useState(false);
   const [favoritePlaces, setFavoritePlaces] = useState<PlaceWithLatestReading[]>([]);
+  const [notificationsSupported, setNotificationsSupported] = useState(false);
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
+  const [statusNotificationsEnabled, setStatusNotificationsEnabled] = useState(false);
+  const [notificationsPreferencesHydrated, setNotificationsPreferencesHydrated] = useState(false);
+  const [notificationsSyncing, setNotificationsSyncing] = useState(false);
+  const [notificationsError, setNotificationsError] = useState<string | null>(null);
 
   const isInitialRender = useRef(true);
   const searchContainerRef = useRef<HTMLDivElement | null>(null);
@@ -248,6 +268,47 @@ export const PlacesBrowser = ({
   }, [metricsExpanded, metricsPreferencesHydrated, metricsVisible]);
 
   useEffect(() => {
+    const supported = isWebPushSupported();
+    setNotificationsSupported(supported);
+
+    if (!supported) {
+      setNotificationPermission('denied');
+      setStatusNotificationsEnabled(false);
+      setNotificationsPreferencesHydrated(true);
+      return;
+    }
+
+    setNotificationPermission(readNotificationPermission());
+    setStatusNotificationsEnabled(readFavoriteStatusNotificationsEnabled());
+    setNotificationsPreferencesHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!notificationsSupported) {
+      return;
+    }
+
+    const syncPermission = () => {
+      setNotificationPermission(readNotificationPermission());
+    };
+
+    window.addEventListener('focus', syncPermission);
+    document.addEventListener('visibilitychange', syncPermission);
+    return () => {
+      window.removeEventListener('focus', syncPermission);
+      document.removeEventListener('visibilitychange', syncPermission);
+    };
+  }, [notificationsSupported]);
+
+  useEffect(() => {
+    if (!notificationsPreferencesHydrated) {
+      return;
+    }
+
+    writeFavoriteStatusNotificationsEnabled(statusNotificationsEnabled);
+  }, [notificationsPreferencesHydrated, statusNotificationsEnabled]);
+
+  useEffect(() => {
     setFavoriteIds(readFavoritePlaceIds());
     setFavoritesHydrated(true);
   }, []);
@@ -274,6 +335,7 @@ export const PlacesBrowser = ({
       locale,
       ids: favoriteIds,
       signal: controller.signal,
+      cacheMode: 'no-store',
     })
       .then((fetchedPlaces) => {
         if (controller.signal.aborted) {
@@ -301,6 +363,69 @@ export const PlacesBrowser = ({
 
     return () => controller.abort();
   }, [favoriteIds, locale]);
+
+  useEffect(() => {
+    if (!notificationsSupported || !notificationsPreferencesHydrated) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const syncSubscription = async () => {
+      setNotificationsSyncing(true);
+      setNotificationsError(null);
+
+      try {
+        const latestPermission = readNotificationPermission();
+        if (!cancelled) {
+          setNotificationPermission(latestPermission);
+        }
+
+        if (!statusNotificationsEnabled || latestPermission !== 'granted') {
+          const existingSubscription = await getExistingSubscription();
+          if (existingSubscription) {
+            await removeWebPushSubscription(existingSubscription);
+            await existingSubscription.unsubscribe();
+          }
+
+          if (latestPermission === 'denied' && !cancelled) {
+            setStatusNotificationsEnabled(false);
+          }
+          return;
+        }
+
+        if (!WEB_PUSH_VAPID_PUBLIC_KEY.trim()) {
+          throw new Error('Missing NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY');
+        }
+
+        const subscription = await ensureWebPushSubscription(WEB_PUSH_VAPID_PUBLIC_KEY);
+        await syncWebPushSubscription({
+          subscription,
+          favoritePlaceIds: favoriteIds,
+          locale,
+        });
+      } catch (error) {
+        if (!cancelled) {
+          setNotificationsError(
+            locale === 'et'
+              ? 'Teavituste seadistamine ebaõnnestus. Proovi uuesti.'
+              : 'Failed to configure push alerts. Please try again.',
+          );
+        }
+        console.error(error);
+      } finally {
+        if (!cancelled) {
+          setNotificationsSyncing(false);
+        }
+      }
+    };
+
+    void syncSubscription();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [favoriteIds, locale, notificationsPreferencesHydrated, notificationsSupported, statusNotificationsEnabled]);
 
   useEffect(() => {
     const onPointerDown = (event: MouseEvent) => {
@@ -349,6 +474,54 @@ export const PlacesBrowser = ({
   const badShare = formatShare(metrics.badQualityEntries, metrics.totalEntries);
   const favoriteIdSet = useMemo(() => new Set(favoriteIds), [favoriteIds]);
   const hasFavorites = favoriteIds.length > 0;
+  const webPushConfigured = WEB_PUSH_VAPID_PUBLIC_KEY.trim().length > 0;
+  const notificationsReady =
+    notificationsSupported &&
+    webPushConfigured &&
+    notificationPermission === 'granted';
+  const notificationsActive = notificationsReady && statusNotificationsEnabled;
+  const notificationsButtonDisabled =
+    !notificationsSupported ||
+    !webPushConfigured ||
+    notificationPermission === 'denied' ||
+    notificationsSyncing;
+  const notificationsButtonLabel = notificationsSyncing
+    ? (locale === 'et' ? 'Uuendan…' : 'Updating…')
+    : notificationsActive
+      ? (locale === 'et' ? 'Teavitused sees' : 'Alerts on')
+      : (locale === 'et' ? 'Teavitused väljas' : 'Alerts off');
+
+  const toggleStatusNotifications = async () => {
+    if (!notificationsSupported || !webPushConfigured) {
+      return;
+    }
+
+    const currentPermission = readNotificationPermission();
+    setNotificationPermission(currentPermission);
+
+    if (statusNotificationsEnabled) {
+      setStatusNotificationsEnabled(false);
+      return;
+    }
+
+    if (currentPermission === 'granted') {
+      setStatusNotificationsEnabled(true);
+      return;
+    }
+
+    if (currentPermission === 'default') {
+      try {
+        const nextPermission = await requestNotificationPermission();
+        setNotificationPermission(nextPermission);
+        setStatusNotificationsEnabled(nextPermission === 'granted');
+      } catch {
+        setStatusNotificationsEnabled(false);
+      }
+      return;
+    }
+
+    setStatusNotificationsEnabled(false);
+  };
 
   const toggleFavorite = (placeId: string) => {
     setFavoriteIds((currentIds) => {
@@ -486,6 +659,43 @@ export const PlacesBrowser = ({
           >
             {locale === 'et' ? 'Mõõdikud' : 'Metrics'}
           </button>
+          <button
+            type="button"
+            aria-pressed={notificationsActive}
+            aria-busy={notificationsSyncing}
+            onClick={() => {
+              void toggleStatusNotifications();
+            }}
+            disabled={notificationsButtonDisabled}
+            title={
+              !notificationsSupported
+                ? (locale === 'et' ? 'Brauser ei toeta teavitusi' : 'This browser does not support notifications')
+                : !webPushConfigured
+                  ? (locale === 'et'
+                      ? 'Teavituste võti puudub seadistusest'
+                      : 'Push key is missing from configuration')
+                : notificationPermission === 'denied'
+                  ? (locale === 'et'
+                      ? 'Teavitused on brauseris blokeeritud'
+                      : 'Notifications are blocked in browser settings')
+                  : (locale === 'et'
+                      ? 'Teavita lemmikute staatuse muutusest'
+                      : 'Notify when favorite statuses change')
+            }
+            className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition ${
+              notificationsActive
+                ? 'border-accent bg-accent text-white'
+                : 'border-emerald-100 bg-white text-accent hover:border-accent'
+            } disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400`}
+          >
+            {notificationsSyncing ? (
+              <span
+                aria-hidden="true"
+                className="h-3 w-3 animate-spin rounded-full border-2 border-current border-r-transparent"
+              />
+            ) : null}
+            <span>{notificationsButtonLabel}</span>
+          </button>
           <div className="relative">
             <button
               type="button"
@@ -528,6 +738,11 @@ export const PlacesBrowser = ({
             ) : null}
           </div>
         </div>
+        {notificationsError ? (
+          <p className="absolute right-6 top-14 z-10 max-w-64 text-right text-[11px] text-rose-600">
+            {notificationsError}
+          </p>
+        ) : null}
         <p className="text-sm uppercase tracking-[0.14em] text-accent">{t('appName', locale)}</p>
         <h1 className="mt-3 max-w-3xl text-4xl leading-tight text-ink md:text-5xl">
           {locale === 'et'
@@ -899,7 +1114,23 @@ export const PlacesBrowser = ({
               {favoritePlaces.length}
             </span>
           </div>
-
+          <p className="mb-3 text-xs text-slate-500">
+            {!webPushConfigured
+              ? locale === 'et'
+                ? 'Brauseri tõuketeavitused pole veel seadistatud.'
+                : 'Browser push notifications are not configured yet.'
+              : notificationsSupported
+              ? notificationsActive
+                ? (locale === 'et'
+                    ? 'Brauseri tõuketeavitused on sees. Lemmikute staatuse muutused saadetakse ka siis, kui leht on suletud.'
+                    : 'Browser push alerts are on. Favorite status changes are delivered even when the site is closed.')
+                : (locale === 'et'
+                    ? 'Lülita tõuketeavitused sisse, et saada märguanne lemmikute staatuse muutustest.'
+                    : 'Enable push alerts to get notified when favorite statuses change.')
+              : (locale === 'et'
+                  ? 'Sinu brauser ei toeta tõuketeavitusi.'
+                  : 'Your browser does not support push notifications.')}
+          </p>
           {favoritesLoading && favoritePlaces.length === 0 ? (
             <div className="rounded-xl border border-emerald-100 bg-card p-4 text-sm text-slate-600">
               {locale === 'et' ? 'Laadin lemmikuid...' : 'Loading favorites...'}

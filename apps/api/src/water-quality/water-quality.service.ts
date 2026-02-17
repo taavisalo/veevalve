@@ -23,6 +23,7 @@ import {
 
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { WebPushService } from '../web-push/web-push.service';
 
 const DEFAULT_POOL_SAMPLES_URL_TEMPLATE =
   'https://vtiav.sm.ee/index.php/opendata/basseini_veeproovid_{year}.xml';
@@ -120,6 +121,7 @@ export class WaterQualityService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notificationsService: NotificationsService,
+    private readonly webPushService: WebPushService,
   ) {}
 
   @Cron('15 * * * *')
@@ -1136,6 +1138,12 @@ export class WaterQualityService {
         currentStatus,
       });
     }
+
+    await this.webPushService.sendStatusChangeNotifications({
+      placeId,
+      previousStatus,
+      currentStatus,
+    });
   }
 
   private pickPrimarySamplingPoint(

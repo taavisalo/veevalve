@@ -85,6 +85,7 @@ model Place {
   latestStatus   PlaceLatestStatus?
   favorites      Favorite[]
   preferences    NotificationPreference[]
+  webPushFavorites WebPushFavorite[]
 
   @@unique([type, externalId])
   @@index([type])
@@ -353,5 +354,36 @@ model NotificationEvent {
   createdAt        DateTime @default(now())
 
   @@index([preferenceId])
+  @@index([placeId])
+}
+
+model WebPushSubscription {
+  id             String            @id @default(cuid())
+  endpoint       String            @unique
+  p256dh         String
+  auth           String
+  expirationTime BigInt?
+  locale         String            @default("et")
+  enabled        Boolean           @default(true)
+  userAgent      String?
+  lastError      String?
+  lastNotifiedAt DateTime?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  lastSeenAt     DateTime          @default(now())
+  favorites      WebPushFavorite[]
+
+  @@index([enabled, updatedAt(sort: Desc)])
+}
+
+model WebPushFavorite {
+  id             String              @id @default(cuid())
+  subscriptionId String
+  placeId        String
+  createdAt      DateTime            @default(now())
+  subscription   WebPushSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  place          Place               @relation(fields: [placeId], references: [id], onDelete: Cascade)
+
+  @@unique([subscriptionId, placeId])
   @@index([placeId])
 }

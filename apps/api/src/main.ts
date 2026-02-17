@@ -87,7 +87,7 @@ const bootstrap = async (): Promise<void> => {
       callback(new Error('CORS origin not allowed'), false);
     },
     credentials: true,
-    methods: ['GET', 'HEAD', 'POST', 'OPTIONS'],
+    methods: ['GET', 'HEAD', 'POST', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Sync-Token'],
   });
 

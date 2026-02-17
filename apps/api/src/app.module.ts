@@ -8,12 +8,20 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { PlacesModule } from './places/places.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { WaterQualityModule } from './water-quality/water-quality.module';
+import { WebPushModule } from './web-push/web-push.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: ['.env.local', '.env'],
+      envFilePath: [
+        '.env.local',
+        '.env',
+        'apps/api/.env.local',
+        'apps/api/.env',
+        '../../.env.local',
+        '../../.env',
+      ],
     }),
     ScheduleModule.forRoot(),
     PrismaModule,
@@ -21,6 +29,7 @@ import { WaterQualityModule } from './water-quality/water-quality.module';
     PlacesModule,
     WaterQualityModule,
     NotificationsModule,
+    WebPushModule,
     AuthModule,
   ],
 })
