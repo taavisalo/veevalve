@@ -1,4 +1,4 @@
-FROM node:24.13.1-bookworm-slim AS base
+FROM node:24-bookworm-slim AS base
 
 ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
@@ -17,7 +17,7 @@ RUN pnpm --filter @veevalve/api prisma:generate
 RUN pnpm --filter @veevalve/api build
 RUN pnpm --filter @veevalve/api deploy --prod --no-optional /app/deploy/api
 
-FROM node:24.13.1-bookworm-slim AS runtime
+FROM node:24-bookworm-slim AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=build /app/deploy/api/node_modules ./node_modules

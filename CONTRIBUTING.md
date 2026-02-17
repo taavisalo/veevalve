@@ -4,7 +4,7 @@ Thanks for contributing.
 
 ## Development Setup
 
-1. Install Node.js 24.13.1 and pnpm 10+.
+1. Install Node.js 24.x and pnpm 10+.
 2. Run `corepack enable`.
 3. Run `pnpm install`.
 4. Copy `.env.example` to `.env`.

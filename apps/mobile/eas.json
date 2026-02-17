@@ -4,16 +4,16 @@
   },
   "build": {
     "development": {
-      "node": "24.13.1",
+      "node": "24",
       "developmentClient": true,
       "distribution": "internal"
     },
     "preview": {
-      "node": "24.13.1",
+      "node": "24",
       "distribution": "internal"
     },
     "production": {
-      "node": "24.13.1",
+      "node": "24",
       "autoIncrement": true
     }
   },
