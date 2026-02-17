@@ -130,12 +130,6 @@ importers:
 
   apps/web:
     dependencies:
-      '@fontsource/manrope':
-        specifier: ^5.2.8
-        version: 5.2.8
-      '@fontsource/newsreader':
-        specifier: ^5.2.10
-        version: 5.2.10
       '@veevalve/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -1083,12 +1077,6 @@ packages:
 
   '@fastify/proxy-addr@5.1.0':
     resolution: {integrity: sha512-INS+6gh91cLUjB+PVHfu1UqcB76Sqtpyp7bnL+FYojhjygvOPA9ctiD/JDKsyD9Xgu4hUhCSJBPig/w7duNajw==}
-
-  '@fontsource/manrope@5.2.8':
-    resolution: {integrity: sha512-gJHJmcuUk7qWcNCfcAri/DJQtXtBYqi9yKratr4jXhSo0I3xUtNNKI+igQIcw5c+m95g0vounk8ZnX/kb8o0TA==}
-
-  '@fontsource/newsreader@5.2.10':
-    resolution: {integrity: sha512-TFaYzoFhDqarUyV2yYjgZZEwT4bpaj6sGBnXSnFknQ/QB8/9LzfY6IO9+inHOX4zzPp87Z7/KuG1OI5gr91Q3A==}
 
   '@hono/node-server@1.19.9':
     resolution: {integrity: sha512-vHL6w3ecZsky+8P5MD+eFfaGTyCeOHUIFYMGpQGbrBTSmNNoxv0if69rEZ5giu36weC5saFuznL411gRX7bJDw==}
@@ -6686,10 +6674,6 @@ snapshots:
     dependencies:
       '@fastify/forwarded': 3.0.1
       ipaddr.js: 2.3.0
-
-  '@fontsource/manrope@5.2.8': {}
-
-  '@fontsource/newsreader@5.2.10': {}
 
   '@hono/node-server@1.19.9(hono@4.11.4)':
     dependencies:

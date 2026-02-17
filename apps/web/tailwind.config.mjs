@@ -1,7 +1,6 @@
-import type { Config } from 'tailwindcss';
 import tailwindPreset from '@veevalve/ui/tailwind-preset';
 
-const config: Config = {
+const config = {
   presets: [tailwindPreset],
   content: [
     './app/**/*.{ts,tsx}',

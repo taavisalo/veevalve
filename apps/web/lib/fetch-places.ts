@@ -1,6 +1,10 @@
-import type { PlaceType, PlaceWithLatestReading, QualityStatus } from '@veevalve/core/client';
-
-import { mapPlaceApiRows, type PlaceApiRow } from './place-api';
+import {
+  mapPlaceApiRows,
+  type PlaceApiRow,
+  type PlaceType,
+  type PlaceWithLatestReading,
+  type QualityStatus,
+} from '@veevalve/core/client';
 
 interface FetchPlacesOptions {
   locale: 'et' | 'en';
@@ -8,6 +12,7 @@ interface FetchPlacesOptions {
   status?: QualityStatus;
   search?: string;
   limit?: number;
+  signal?: AbortSignal;
 }
 
 interface FetchPlacesByIdsOptions {
@@ -106,6 +111,7 @@ export const fetchPlaces = async ({
   status,
   search,
   limit = search?.trim() ? 20 : DEFAULT_LIMIT,
+  signal,
 }: FetchPlacesOptions): Promise<PlaceWithLatestReading[]> => {
   const baseUrl = resolveApiBaseUrl();
   const params = new URLSearchParams();
@@ -127,6 +133,7 @@ export const fetchPlaces = async ({
 
   const response = await fetch(`${baseUrl}/places?${params.toString()}`, {
     cache: 'no-store',
+    signal,
   });
 
   if (!response.ok) {

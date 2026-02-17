@@ -1,14 +1,9 @@
 @import 'tailwindcss';
-@config '../tailwind.config.ts';
+@config '../tailwind.config.mjs';
 @source '../../../packages/ui/src/web';
 
-:root {
-  --font-body: 'Manrope', 'Avenir Next', 'Segoe UI', sans-serif;
-  --font-title: 'Newsreader', 'Iowan Old Style', 'Georgia', serif;
-}
-
 body {
-  font-family: var(--font-body);
+  font-family: var(--font-body), 'Avenir Next', 'Segoe UI', sans-serif;
 }
 
 a[href],
@@ -26,7 +21,7 @@ h1,
 h2,
 h3,
 h4 {
-  font-family: var(--font-title);
+  font-family: var(--font-title), 'Iowan Old Style', 'Georgia', serif;
 }
 
 .bg-grid-pattern {

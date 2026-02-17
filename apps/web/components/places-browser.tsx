@@ -13,16 +13,14 @@ import {
 import { PlaceCard } from '@veevalve/ui/web';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 
-import { fetchPlacesByIds, type PlaceMetrics } from '../lib/fetch-places';
+import { fetchPlaces, fetchPlacesByIds, type PlaceMetrics } from '../lib/fetch-places';
 import { readFavoritePlaceIds, writeFavoritePlaceIds } from '../lib/favorites-storage';
-import { mapPlaceApiRows, type PlaceApiRow } from '../lib/place-api';
 import { readMetricsUiPreferences, writeMetricsUiPreferences } from '../lib/ui-preferences-storage';
 
 const LATEST_RESULTS_LIMIT = 10;
 const SEARCH_RESULTS_LIMIT = 20;
 const SUGGESTION_LIMIT = 8;
 const SEARCH_DEBOUNCE_MS = 180;
-const API_BASE_URL = (process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:3001').replace(/\/+$/, '');
 const TERVISEAMET_DATA_URL = 'https://vtiav.sm.ee/index.php/?active_tab_id=A';
 
 const getResultsLimit = (search?: string): number =>
@@ -66,49 +64,6 @@ const FilterButton = ({ label, active, onClick }: FilterButtonProps) => {
       {label}
     </button>
   );
-};
-
-const fetchPlacesFromApi = async ({
-  locale,
-  type,
-  status,
-  search,
-  signal,
-}: {
-  locale: AppLocale;
-  type: PlaceType | 'ALL';
-  status: QualityStatus | 'ALL';
-  search?: string;
-  signal: AbortSignal;
-}): Promise<PlaceWithLatestReading[]> => {
-  const params = new URLSearchParams();
-  params.set('locale', locale);
-  params.set('limit', String(getResultsLimit(search)));
-  params.set('sort', 'LATEST');
-
-  if (type !== 'ALL') {
-    params.set('type', type);
-  }
-
-  if (status !== 'ALL') {
-    params.set('status', status);
-  }
-
-  if (search) {
-    params.set('search', search);
-  }
-
-  const response = await fetch(`${API_BASE_URL}/places?${params.toString()}`, {
-    cache: 'no-store',
-    signal,
-  });
-
-  if (!response.ok) {
-    throw new Error(`Failed to fetch places: ${response.status}`);
-  }
-
-  const rows = (await response.json()) as PlaceApiRow[];
-  return mapPlaceApiRows(rows);
 };
 
 const highlightMatch = (value: string, search: string) => {
@@ -231,15 +186,16 @@ export const PlacesBrowser = ({
     setLoading(true);
     setError(null);
 
-    fetchPlacesFromApi({
+    fetchPlaces({
       locale,
-      type: typeFilter,
-      status: statusFilter,
+      type: typeFilter === 'ALL' ? undefined : typeFilter,
+      status: statusFilter === 'ALL' ? undefined : statusFilter,
       search: debouncedSearch || undefined,
+      limit: getResultsLimit(debouncedSearch),
       signal: controller.signal,
     })
       .then((nextPlaces) => {
-        setPlaces(nextPlaces.slice(0, getResultsLimit(debouncedSearch)));
+        setPlaces(nextPlaces);
       })
       .catch((fetchError: unknown) => {
         if (controller.signal.aborted) {

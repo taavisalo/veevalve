@@ -7,15 +7,13 @@
     "dev:docker": "next dev --turbopack --hostname 0.0.0.0 --port 3000",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint \"app/**/*.{ts,tsx}\" \"components/**/*.{ts,tsx}\" \"lib/**/*.{ts,tsx}\" \"test/**/*.{ts,tsx}\" \"next.config.ts\" \"tailwind.config.ts\"",
+    "lint": "eslint \"app/**/*.{ts,tsx}\" \"components/**/*.{ts,tsx}\" \"lib/**/*.{ts,tsx}\" \"test/**/*.{ts,tsx}\" \"next.config.ts\"",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "format": "prettier --check \"**/*.{ts,tsx,css,json}\"",
     "clean": "rm -rf .next"
   },
   "dependencies": {
-    "@fontsource/manrope": "^5.2.8",
-    "@fontsource/newsreader": "^5.2.10",
     "@veevalve/core": "workspace:*",
     "@veevalve/ui": "workspace:*",
     "next": "^16.1.6",

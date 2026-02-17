@@ -1,12 +1,21 @@
 import type { Metadata } from 'next';
-import '@fontsource/manrope/400.css';
-import '@fontsource/manrope/600.css';
-import '@fontsource/manrope/700.css';
-import '@fontsource/newsreader/400.css';
-import '@fontsource/newsreader/600.css';
-import '@fontsource/newsreader/700.css';
+import { Manrope, Newsreader } from 'next/font/google';
 
 import './globals.css';
+
+const bodyFont = Manrope({
+  subsets: ['latin'],
+  weight: ['400', '600', '700'],
+  display: 'swap',
+  variable: '--font-body',
+});
+
+const titleFont = Newsreader({
+  subsets: ['latin'],
+  weight: ['400', '600', '700'],
+  display: 'swap',
+  variable: '--font-title',
+});
 
 export const metadata: Metadata = {
   title: 'VeeValve',
@@ -20,7 +29,7 @@ interface RootLayoutProps {
 const RootLayout = ({ children }: RootLayoutProps) => {
   return (
     <html lang="et">
-      <body className="bg-surface text-ink antialiased">
+      <body className={`${bodyFont.variable} ${titleFont.variable} bg-surface text-ink antialiased`}>
         <div className="min-h-screen bg-grid-pattern">{children}</div>
       </body>
     </html>
