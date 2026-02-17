@@ -19,7 +19,11 @@ export class PlacesController {
   @Get('by-ids')
   @Header('Cache-Control', 'public, max-age=0, s-maxage=30, stale-while-revalidate=300')
   getPlacesByIds(@Query() query: GetPlacesByIdsQuery) {
-    return this.placesService.getPlacesByIds(query.ids, query.locale ?? 'et');
+    return this.placesService.getPlacesByIds(
+      query.ids,
+      query.locale ?? 'et',
+      query.includeBadDetails,
+    );
   }
 
   @Get('metrics')

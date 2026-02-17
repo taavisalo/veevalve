@@ -1,6 +1,7 @@
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
+import type { FastifyRequest } from 'fastify';
 
 import { AppModule } from './app.module';
 
@@ -54,7 +55,21 @@ const bootstrap = async (): Promise<void> => {
   );
 
   const fastify = app.getHttpAdapter().getInstance();
+  fastify.addHook('onRequest', (request, _reply, done) => {
+    (request as FastifyRequest & { startTimeNs?: bigint }).startTimeNs = process.hrtime.bigint();
+    done();
+  });
+
   fastify.addHook('onSend', (_request, reply, payload, done) => {
+    const request = _request as FastifyRequest & { startTimeNs?: bigint };
+    if (request.startTimeNs) {
+      const durationNs = process.hrtime.bigint() - request.startTimeNs;
+      const durationMs = Number(durationNs) / 1_000_000;
+      const roundedDuration = Math.max(durationMs, 0).toFixed(1);
+      reply.header('Server-Timing', `app;dur=${roundedDuration}`);
+      reply.header('X-Response-Time', `${roundedDuration}ms`);
+    }
+
     reply.header('X-Content-Type-Options', 'nosniff');
     reply.header('X-Frame-Options', 'DENY');
     reply.header('Referrer-Policy', 'no-referrer');

@@ -219,8 +219,53 @@ export class PlacesService {
           ? strictlyFilteredPlaces
           : orderedPlaces;
 
-        return this.toListResponsesWithBadDetails(responsePlaces, locale);
+        return this.toListResponsesWithBadDetails(responsePlaces, locale, query.includeBadDetails);
       }
+    }
+
+    if (!search && query.sort !== 'NAME') {
+      const latestStatuses = await this.prisma.placeLatestStatus.findMany({
+        where: {
+          status: query.status,
+          place: query.type
+            ? {
+                type: query.type,
+              }
+            : undefined,
+        },
+        include: {
+          place: {
+            select: {
+              id: true,
+              externalId: true,
+              externalKey: true,
+              nameEt: true,
+              nameEn: true,
+              type: true,
+              municipality: true,
+              addressEt: true,
+              addressEn: true,
+              coordinateX: true,
+              coordinateY: true,
+              latitude: true,
+              longitude: true,
+              sourceUrl: true,
+              createdAt: true,
+              updatedAt: true,
+            },
+          },
+        },
+        skip: offset,
+        take: limit,
+        orderBy: [{ sampledAt: 'desc' }, { placeId: 'asc' }],
+      });
+
+      const places = latestStatuses.map(({ place, ...latestStatus }) => ({
+        ...place,
+        latestStatus,
+      }));
+
+      return this.toListResponsesWithBadDetails(places, locale, query.includeBadDetails);
     }
 
     const orderBy: Prisma.PlaceOrderByWithRelationInput[] =
@@ -268,7 +313,7 @@ export class PlacesService {
       orderBy,
     });
 
-    return this.toListResponsesWithBadDetails(places, locale);
+    return this.toListResponsesWithBadDetails(places, locale, query.includeBadDetails);
   }
 
   async getPlaceById(id: string, locale: 'et' | 'en' = 'et'): Promise<PlaceListResponse> {
@@ -291,7 +336,11 @@ export class PlacesService {
     return response;
   }
 
-  async getPlacesByIds(ids: string[], locale: 'et' | 'en' = 'et'): Promise<PlaceListResponse[]> {
+  async getPlacesByIds(
+    ids: string[],
+    locale: 'et' | 'en' = 'et',
+    includeBadDetails = true,
+  ): Promise<PlaceListResponse[]> {
     const normalizedIds = [...new Set(ids.map((id) => id.trim()).filter((id) => id.length > 0))].slice(0, 50);
     if (normalizedIds.length === 0) {
       return [];
@@ -313,7 +362,7 @@ export class PlacesService {
       .map((id) => placeMap.get(id))
       .filter((place): place is Place & { latestStatus: PlaceLatestStatus | null } => Boolean(place));
 
-    return this.toListResponsesWithBadDetails(orderedPlaces, locale);
+    return this.toListResponsesWithBadDetails(orderedPlaces, locale, includeBadDetails);
   }
 
   private async findRankedPlaceIds(input: {
@@ -591,7 +640,15 @@ export class PlacesService {
 
   private async toListResponsesWithBadDetails<
     T extends Place & { latestStatus: PlaceLatestStatus | null },
-  >(places: T[], locale: 'et' | 'en'): Promise<PlaceListResponse[]> {
+  >(
+    places: T[],
+    locale: 'et' | 'en',
+    includeBadDetails = true,
+  ): Promise<PlaceListResponse[]> {
+    if (!includeBadDetails) {
+      return places.map((place) => this.toListResponse(place, locale));
+    }
+
     const badSampleIds = places.flatMap((place) =>
       place.latestStatus?.status === 'BAD' ? [place.latestStatus.sampleId] : [],
     );

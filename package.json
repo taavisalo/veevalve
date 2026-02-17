@@ -14,6 +14,7 @@
     "typecheck": "turbo run typecheck",
     "vercel:check:api": "pnpm --filter @veevalve/api vercel:check",
     "test": "turbo run test",
+    "perf:smoke": "bash ./scripts/perf-smoke.sh",
     "format": "turbo run format",
     "clean": "turbo run clean"
   },

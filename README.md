@@ -355,6 +355,26 @@ If your API project has many environment variables set in Vercel, `turbo.json` a
 - API Prisma client generation is cached by schema hash to reduce repeated build/dev overhead.
 - Docker dev startup avoids re-running `pnpm install` on every service start.
 
+## Performance Smoke Check
+
+Run a fast local latency check for web + API:
+
+```bash
+pnpm perf:smoke
+```
+
+Defaults:
+- Web URL: `http://localhost:3000`
+- API URL: `http://localhost:3001`
+- Checks first-hit and warm TTFB budgets for `/`, `/places`, `/places?search=...`, `/places/by-ids`, `/places/metrics`
+
+Override URLs or budgets if needed:
+
+```bash
+WEB_URL=http://localhost:3100 API_URL=http://localhost:3001 pnpm perf:smoke
+BUDGET_WEB_FIRST_TTFB_MS=300 BUDGET_API_SEARCH_TTFB_MS=350 pnpm perf:smoke
+```
+
 ## Current Status
 
 This repository is an actively implemented MVP, not just a scaffold.

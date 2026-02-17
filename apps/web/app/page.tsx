@@ -1,7 +1,7 @@
 import type { AppLocale, PlaceType, QualityStatus } from '@veevalve/core/client';
 
 import { PlacesBrowser } from '../components/places-browser';
-import { fetchPlaceMetrics, fetchPlaces } from '../lib/fetch-places';
+import { EMPTY_PLACE_METRICS, fetchPlaces } from '../lib/fetch-places';
 
 interface HomePageProps {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
@@ -44,21 +44,16 @@ const HomePage = async ({ searchParams }: HomePageProps) => {
   const initialNowIso = new Date().toISOString();
   const shouldCacheInitialPlaces = !search;
 
-  const [initialPlaces, initialMetrics] = await Promise.all([
-    fetchPlaces({
-      locale,
-      type: type === 'ALL' ? undefined : type,
-      status: status === 'ALL' ? undefined : status,
-      search,
-      limit: initialLimit,
-      cacheMode: shouldCacheInitialPlaces ? 'force-cache' : 'no-store',
-      revalidateSeconds: shouldCacheInitialPlaces ? 60 : undefined,
-    }),
-    fetchPlaceMetrics({
-      cacheMode: 'force-cache',
-      revalidateSeconds: 60,
-    }),
-  ]);
+  const initialPlaces = await fetchPlaces({
+    locale,
+    type: type === 'ALL' ? undefined : type,
+    status: status === 'ALL' ? undefined : status,
+    search,
+    limit: initialLimit,
+    cacheMode: shouldCacheInitialPlaces ? 'force-cache' : 'no-store',
+    revalidateSeconds: shouldCacheInitialPlaces ? 60 : undefined,
+    includeBadDetails: false,
+  });
 
   return (
     <PlacesBrowser
@@ -68,7 +63,7 @@ const HomePage = async ({ searchParams }: HomePageProps) => {
       initialSearch={search}
       initialPlaces={initialPlaces}
       initialNowIso={initialNowIso}
-      initialMetrics={initialMetrics}
+      initialMetrics={EMPTY_PLACE_METRICS}
     />
   );
 };

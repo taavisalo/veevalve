@@ -2,6 +2,7 @@ import { Transform } from 'class-transformer';
 import {
   ArrayMaxSize,
   ArrayMinSize,
+  IsBoolean,
   IsArray,
   IsIn,
   IsString,
@@ -18,6 +19,25 @@ const normalizeIds = (value: unknown): string[] => {
   return [...new Set(parsed)];
 };
 
+const parseBoolean = (value: unknown, fallback: boolean): boolean => {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (['true', '1', 'yes', 'on'].includes(normalized)) {
+      return true;
+    }
+
+    if (['false', '0', 'no', 'off'].includes(normalized)) {
+      return false;
+    }
+  }
+
+  return fallback;
+};
+
 export class GetPlacesByIdsQuery {
   @Transform(({ value }) => normalizeIds(value))
   @IsArray()
@@ -30,4 +50,8 @@ export class GetPlacesByIdsQuery {
   @Transform(({ value }) => (typeof value === 'string' ? value.toLowerCase() : value))
   @IsIn(['et', 'en'])
   locale: 'et' | 'en' = 'et';
+
+  @Transform(({ value }) => parseBoolean(value, true))
+  @IsBoolean()
+  includeBadDetails: boolean = true;
 }

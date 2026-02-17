@@ -43,5 +43,11 @@ h4 {
 }
 
 .fade-up {
-  animation: fade-up 440ms ease-out both;
+  animation: fade-up 280ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fade-up {
+    animation: none;
+  }
 }

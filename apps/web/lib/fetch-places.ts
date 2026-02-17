@@ -15,6 +15,7 @@ interface FetchPlacesOptions {
   signal?: AbortSignal;
   cacheMode?: RequestCache;
   revalidateSeconds?: number;
+  includeBadDetails?: boolean;
 }
 
 interface FetchPlacesByIdsOptions {
@@ -23,6 +24,7 @@ interface FetchPlacesByIdsOptions {
   signal?: AbortSignal;
   cacheMode?: RequestCache;
   revalidateSeconds?: number;
+  includeBadDetails?: boolean;
 }
 
 export interface PlaceMetrics {
@@ -40,7 +42,7 @@ export interface PlaceMetrics {
 }
 
 const DEFAULT_LIMIT = 10;
-const DEFAULT_PLACE_METRICS: PlaceMetrics = {
+export const EMPTY_PLACE_METRICS: PlaceMetrics = {
   totalEntries: 0,
   poolEntries: 0,
   beachEntries: 0,
@@ -59,43 +61,43 @@ const normalizePlaceMetrics = (raw: Partial<PlaceMetrics>): PlaceMetrics => {
     totalEntries:
       typeof raw.totalEntries === 'number' && Number.isFinite(raw.totalEntries)
         ? raw.totalEntries
-        : DEFAULT_PLACE_METRICS.totalEntries,
+        : EMPTY_PLACE_METRICS.totalEntries,
     poolEntries:
       typeof raw.poolEntries === 'number' && Number.isFinite(raw.poolEntries)
         ? raw.poolEntries
-        : DEFAULT_PLACE_METRICS.poolEntries,
+        : EMPTY_PLACE_METRICS.poolEntries,
     beachEntries:
       typeof raw.beachEntries === 'number' && Number.isFinite(raw.beachEntries)
         ? raw.beachEntries
-        : DEFAULT_PLACE_METRICS.beachEntries,
+        : EMPTY_PLACE_METRICS.beachEntries,
     badQualityEntries:
       typeof raw.badQualityEntries === 'number' && Number.isFinite(raw.badQualityEntries)
         ? raw.badQualityEntries
-        : DEFAULT_PLACE_METRICS.badQualityEntries,
+        : EMPTY_PLACE_METRICS.badQualityEntries,
     goodQualityEntries:
       typeof raw.goodQualityEntries === 'number' && Number.isFinite(raw.goodQualityEntries)
         ? raw.goodQualityEntries
-        : DEFAULT_PLACE_METRICS.goodQualityEntries,
+        : EMPTY_PLACE_METRICS.goodQualityEntries,
     unknownQualityEntries:
       typeof raw.unknownQualityEntries === 'number' && Number.isFinite(raw.unknownQualityEntries)
         ? raw.unknownQualityEntries
-        : DEFAULT_PLACE_METRICS.unknownQualityEntries,
+        : EMPTY_PLACE_METRICS.unknownQualityEntries,
     badPoolEntries:
       typeof raw.badPoolEntries === 'number' && Number.isFinite(raw.badPoolEntries)
         ? raw.badPoolEntries
-        : DEFAULT_PLACE_METRICS.badPoolEntries,
+        : EMPTY_PLACE_METRICS.badPoolEntries,
     badBeachEntries:
       typeof raw.badBeachEntries === 'number' && Number.isFinite(raw.badBeachEntries)
         ? raw.badBeachEntries
-        : DEFAULT_PLACE_METRICS.badBeachEntries,
+        : EMPTY_PLACE_METRICS.badBeachEntries,
     updatedWithin24hEntries:
       typeof raw.updatedWithin24hEntries === 'number' && Number.isFinite(raw.updatedWithin24hEntries)
         ? raw.updatedWithin24hEntries
-        : DEFAULT_PLACE_METRICS.updatedWithin24hEntries,
+        : EMPTY_PLACE_METRICS.updatedWithin24hEntries,
     staleOver7dEntries:
       typeof raw.staleOver7dEntries === 'number' && Number.isFinite(raw.staleOver7dEntries)
         ? raw.staleOver7dEntries
-        : DEFAULT_PLACE_METRICS.staleOver7dEntries,
+        : EMPTY_PLACE_METRICS.staleOver7dEntries,
     latestSourceUpdatedAt:
       typeof raw.latestSourceUpdatedAt === 'string' ? raw.latestSourceUpdatedAt : null,
   };
@@ -150,6 +152,7 @@ export const fetchPlaces = async ({
   signal,
   cacheMode = 'no-store',
   revalidateSeconds,
+  includeBadDetails = true,
 }: FetchPlacesOptions): Promise<PlaceWithLatestReading[]> => {
   const baseUrl = resolveApiBaseUrl();
   const params = new URLSearchParams();
@@ -168,6 +171,7 @@ export const fetchPlaces = async ({
   if (search) {
     params.set('search', search);
   }
+  params.set('includeBadDetails', includeBadDetails ? 'true' : 'false');
 
   const response = await fetch(
     `${baseUrl}/places?${params.toString()}`,
@@ -192,6 +196,7 @@ export const fetchPlacesByIds = async ({
   signal,
   cacheMode = 'no-store',
   revalidateSeconds,
+  includeBadDetails = true,
 }: FetchPlacesByIdsOptions): Promise<PlaceWithLatestReading[]> => {
   const uniqueIds = [...new Set(ids.map((id) => id.trim()).filter((id) => id.length > 0))].slice(0, 50);
   if (uniqueIds.length === 0) {
@@ -201,6 +206,7 @@ export const fetchPlacesByIds = async ({
   const baseUrl = resolveApiBaseUrl();
   const params = new URLSearchParams();
   params.set('locale', locale);
+  params.set('includeBadDetails', includeBadDetails ? 'true' : 'false');
   for (const id of uniqueIds) {
     params.append('ids', id);
   }
@@ -240,12 +246,12 @@ export const fetchPlaceMetrics = async ({
     );
 
     if (!response.ok) {
-      return DEFAULT_PLACE_METRICS;
+      return EMPTY_PLACE_METRICS;
     }
 
     const payload = (await response.json()) as Partial<PlaceMetrics>;
     return normalizePlaceMetrics(payload);
   } catch {
-    return DEFAULT_PLACE_METRICS;
+    return EMPTY_PLACE_METRICS;
   }
 };

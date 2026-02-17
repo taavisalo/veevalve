@@ -13,7 +13,7 @@ import {
 import { PlaceCard } from '@veevalve/ui/web';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 
-import { fetchPlaces, fetchPlacesByIds, type PlaceMetrics } from '../lib/fetch-places';
+import { fetchPlaceMetrics, fetchPlaces, fetchPlacesByIds, type PlaceMetrics } from '../lib/fetch-places';
 import { readFavoritePlaceIds, writeFavoritePlaceIds } from '../lib/favorites-storage';
 import {
   readFavoriteStatusNotificationsEnabled,
@@ -34,6 +34,7 @@ const LATEST_RESULTS_LIMIT = 10;
 const SEARCH_RESULTS_LIMIT = 20;
 const SUGGESTION_LIMIT = 8;
 const SEARCH_DEBOUNCE_MS = 180;
+const CARD_STAGGER_MS = 30;
 const WEB_PUSH_VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY ?? '';
 const TERVISEAMET_DATA_URL = 'https://vtiav.sm.ee/index.php/?active_tab_id=A';
 
@@ -69,7 +70,7 @@ const FilterButton = ({ label, active, onClick }: FilterButtonProps) => {
     <button
       type="button"
       onClick={onClick}
-      className={`inline-flex items-center rounded-full border px-3 py-1 text-sm font-medium transition ${
+      className={`inline-flex shrink-0 items-center rounded-full border px-2.5 py-0.5 text-xs font-medium transition sm:px-3 sm:py-1 sm:text-sm ${
         active
           ? 'border-accent bg-accent text-white'
           : 'border-emerald-100 bg-white text-ink hover:border-accent hover:text-accent'
@@ -167,6 +168,10 @@ export const PlacesBrowser = ({
   const [error, setError] = useState<string | null>(null);
   const [referenceTimeIso, setReferenceTimeIso] = useState(initialNowIso);
   const [metrics, setMetrics] = useState<PlaceMetrics>(initialMetrics);
+  const [metricsLoading, setMetricsLoading] = useState(false);
+  const [metricsLoaded, setMetricsLoaded] = useState(
+    initialMetrics.totalEntries > 0 || initialMetrics.latestSourceUpdatedAt !== null,
+  );
   const [metricsExpanded, setMetricsExpanded] = useState(false);
   const [metricsVisible, setMetricsVisible] = useState(false);
   const [aboutVisible, setAboutVisible] = useState(false);
@@ -212,6 +217,7 @@ export const PlacesBrowser = ({
       status: statusFilter === 'ALL' ? undefined : statusFilter,
       search: debouncedSearch || undefined,
       limit: getResultsLimit(debouncedSearch),
+      includeBadDetails: false,
       signal: controller.signal,
     })
       .then((nextPlaces) => {
@@ -247,7 +253,44 @@ export const PlacesBrowser = ({
 
   useEffect(() => {
     setMetrics(initialMetrics);
+    setMetricsLoaded(initialMetrics.totalEntries > 0 || initialMetrics.latestSourceUpdatedAt !== null);
   }, [initialMetrics]);
+
+  useEffect(() => {
+    if (!metricsVisible || metricsLoaded) {
+      return;
+    }
+
+    let cancelled = false;
+    setMetricsLoading(true);
+
+    fetchPlaceMetrics({
+      cacheMode: 'force-cache',
+      revalidateSeconds: 60,
+    })
+      .then((nextMetrics) => {
+        if (cancelled) {
+          return;
+        }
+
+        setMetrics(nextMetrics);
+        setMetricsLoaded(true);
+      })
+      .catch((fetchError: unknown) => {
+        if (!cancelled) {
+          console.error(fetchError);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setMetricsLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [metricsLoaded, metricsVisible]);
 
   useEffect(() => {
     const preferences = readMetricsUiPreferences();
@@ -336,6 +379,7 @@ export const PlacesBrowser = ({
       ids: favoriteIds,
       signal: controller.signal,
       cacheMode: 'no-store',
+      includeBadDetails: false,
     })
       .then((fetchedPlaces) => {
         if (controller.signal.aborted) {
@@ -485,6 +529,7 @@ export const PlacesBrowser = ({
     !webPushConfigured ||
     notificationPermission === 'denied' ||
     notificationsSyncing;
+  const favoritesNoticeSingleLine = notificationsSupported && notificationsActive;
   const notificationsButtonLabel = notificationsSyncing
     ? (locale === 'et' ? 'Uuendan…' : 'Updating…')
     : notificationsActive
@@ -630,14 +675,19 @@ export const PlacesBrowser = ({
   };
 
   return (
-    <main className="mx-auto max-w-6xl px-4 pb-20 pt-10 md:px-8 md:pt-14">
-      <section className="fade-up relative overflow-hidden rounded-3xl border border-emerald-200/70 bg-white/75 p-8 shadow-card backdrop-blur">
-        <div className="absolute right-6 top-4 z-10 flex items-start gap-2" ref={languageContainerRef}>
+    <main className="mx-auto max-w-6xl px-3 pb-16 pt-6 sm:px-4 sm:pt-8 md:px-8 md:pt-14">
+      <section className="fade-up relative overflow-hidden rounded-3xl border border-emerald-200/70 bg-white/75 p-4 shadow-card backdrop-blur sm:p-6 md:p-8">
+        <div className="flex items-start justify-between gap-2">
+          <p className="shrink-0 text-sm uppercase tracking-[0.14em] text-accent">
+            {t('appName', locale)}
+          </p>
+          <div className="relative z-10 ml-auto min-w-0 max-w-[72%]" ref={languageContainerRef}>
+            <div className="flex flex-wrap items-center justify-end gap-1 sm:gap-1.5">
           <button
             type="button"
             aria-pressed={aboutVisible}
             onClick={() => setAboutVisible((value) => !value)}
-            className={`inline-flex h-7 w-7 items-center justify-center rounded-full border text-sm font-semibold leading-none transition ${
+            className={`inline-flex h-6 w-6 items-center justify-center rounded-full border text-xs font-semibold leading-none transition sm:h-7 sm:w-7 sm:text-sm ${
               aboutVisible
                 ? 'border-accent bg-accent text-white'
                 : 'border-emerald-100 bg-white text-accent hover:border-accent'
@@ -651,7 +701,7 @@ export const PlacesBrowser = ({
             type="button"
             aria-pressed={metricsVisible}
             onClick={() => setMetricsVisible((value) => !value)}
-            className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+            className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold transition sm:px-3 sm:py-1 sm:text-xs ${
               metricsVisible
                 ? 'border-accent bg-accent text-white'
                 : 'border-emerald-100 bg-white text-accent hover:border-accent'
@@ -682,7 +732,7 @@ export const PlacesBrowser = ({
                       ? 'Teavita lemmikute staatuse muutusest'
                       : 'Notify when favorite statuses change')
             }
-            className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition ${
+            className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold transition sm:gap-1.5 sm:px-3 sm:py-1 sm:text-xs ${
               notificationsActive
                 ? 'border-accent bg-accent text-white'
                 : 'border-emerald-100 bg-white text-accent hover:border-accent'
@@ -700,7 +750,7 @@ export const PlacesBrowser = ({
             <button
               type="button"
               onClick={() => setLanguageMenuOpen((value) => !value)}
-              className="rounded-full border border-emerald-100 bg-white px-3 py-1 text-xs font-semibold text-accent transition hover:border-accent"
+              className="rounded-full border border-emerald-100 bg-white px-2 py-0.5 text-[11px] font-semibold text-accent transition hover:border-accent sm:px-3 sm:py-1 sm:text-xs"
             >
               {locale === 'et' ? 'Keel: Eesti' : 'Language: English'}
             </button>
@@ -737,14 +787,15 @@ export const PlacesBrowser = ({
               </div>
             ) : null}
           </div>
+            </div>
+            {notificationsError ? (
+              <p className="mt-1 text-right text-[11px] text-rose-600">
+                {notificationsError}
+              </p>
+            ) : null}
+          </div>
         </div>
-        {notificationsError ? (
-          <p className="absolute right-6 top-14 z-10 max-w-64 text-right text-[11px] text-rose-600">
-            {notificationsError}
-          </p>
-        ) : null}
-        <p className="text-sm uppercase tracking-[0.14em] text-accent">{t('appName', locale)}</p>
-        <h1 className="mt-3 max-w-3xl text-4xl leading-tight text-ink md:text-5xl">
+        <h1 className="mt-3 text-3xl leading-tight text-ink sm:text-4xl md:text-5xl">
           {locale === 'et'
             ? 'Vee kvaliteet randades ja basseinides'
             : 'Water quality for beaches and pools'}
@@ -829,6 +880,11 @@ export const PlacesBrowser = ({
 
         {metricsVisible ? (
           <div id="metrics-panel" className="mt-4">
+            {metricsLoading ? (
+              <p className="mb-2 text-xs text-slate-500">
+                {locale === 'et' ? 'Laadin mõõdikuid…' : 'Loading metrics…'}
+              </p>
+            ) : null}
             <div className="grid gap-2 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)]">
               <div className="rounded-2xl border border-rose-200 bg-rose-50/80 px-3 py-2">
                 <p className="text-[11px] uppercase tracking-[0.08em] text-rose-700">
@@ -938,7 +994,6 @@ export const PlacesBrowser = ({
               id="place-search"
               ref={inputRef}
               type="text"
-              autoFocus
               value={searchInput}
               onFocus={() => setSuggestionsOpen(true)}
               onChange={(event) => {
@@ -1072,35 +1127,37 @@ export const PlacesBrowser = ({
           </p>
         </div>
 
-        <div className="mt-6 flex flex-wrap items-center gap-3">
-          <FilterButton
-            label={locale === 'et' ? 'Kõik kohad' : 'All places'}
-            active={typeFilter === 'ALL' && statusFilter === 'ALL'}
-            onClick={() => {
-              setTypeFilter('ALL');
-              setStatusFilter('ALL');
-            }}
-          />
-          <FilterButton
-            label={t('beaches', locale)}
-            active={typeFilter === 'BEACH'}
-            onClick={() => setTypeFilter((value) => (value === 'BEACH' ? 'ALL' : 'BEACH'))}
-          />
-          <FilterButton
-            label={t('pools', locale)}
-            active={typeFilter === 'POOL'}
-            onClick={() => setTypeFilter((value) => (value === 'POOL' ? 'ALL' : 'POOL'))}
-          />
-          <FilterButton
-            label={t('qualityGood', locale)}
-            active={statusFilter === 'GOOD'}
-            onClick={() => setStatusFilter((value) => (value === 'GOOD' ? 'ALL' : 'GOOD'))}
-          />
-          <FilterButton
-            label={t('qualityBad', locale)}
-            active={statusFilter === 'BAD'}
-            onClick={() => setStatusFilter((value) => (value === 'BAD' ? 'ALL' : 'BAD'))}
-          />
+        <div className="-mx-1 mt-5 overflow-x-auto pb-1">
+          <div className="flex min-w-max items-center gap-2 px-1">
+            <FilterButton
+              label={locale === 'et' ? 'Kõik kohad' : 'All places'}
+              active={typeFilter === 'ALL' && statusFilter === 'ALL'}
+              onClick={() => {
+                setTypeFilter('ALL');
+                setStatusFilter('ALL');
+              }}
+            />
+            <FilterButton
+              label={t('beaches', locale)}
+              active={typeFilter === 'BEACH'}
+              onClick={() => setTypeFilter((value) => (value === 'BEACH' ? 'ALL' : 'BEACH'))}
+            />
+            <FilterButton
+              label={t('pools', locale)}
+              active={typeFilter === 'POOL'}
+              onClick={() => setTypeFilter((value) => (value === 'POOL' ? 'ALL' : 'POOL'))}
+            />
+            <FilterButton
+              label={t('qualityGood', locale)}
+              active={statusFilter === 'GOOD'}
+              onClick={() => setStatusFilter((value) => (value === 'GOOD' ? 'ALL' : 'GOOD'))}
+            />
+            <FilterButton
+              label={t('qualityBad', locale)}
+              active={statusFilter === 'BAD'}
+              onClick={() => setStatusFilter((value) => (value === 'BAD' ? 'ALL' : 'BAD'))}
+            />
+          </div>
         </div>
       </section>
 
@@ -1114,7 +1171,11 @@ export const PlacesBrowser = ({
               {favoritePlaces.length}
             </span>
           </div>
-          <p className="mb-3 text-xs text-slate-500">
+          <p
+            className={`mb-3 text-xs text-slate-500 ${
+              favoritesNoticeSingleLine ? 'whitespace-nowrap' : ''
+            }`}
+          >
             {!webPushConfigured
               ? locale === 'et'
                 ? 'Brauseri tõuketeavitused pole veel seadistatud.'
@@ -1122,8 +1183,8 @@ export const PlacesBrowser = ({
               : notificationsSupported
               ? notificationsActive
                 ? (locale === 'et'
-                    ? 'Brauseri tõuketeavitused on sees. Lemmikute staatuse muutused saadetakse ka siis, kui leht on suletud.'
-                    : 'Browser push alerts are on. Favorite status changes are delivered even when the site is closed.')
+                    ? 'Tõuketeavitused sees: lemmikute muutused ka suletud lehel.'
+                    : 'Push alerts on: favorite changes are sent when closed.')
                 : (locale === 'et'
                     ? 'Lülita tõuketeavitused sisse, et saada märguanne lemmikute staatuse muutustest.'
                     : 'Enable push alerts to get notified when favorite statuses change.')
@@ -1144,7 +1205,7 @@ export const PlacesBrowser = ({
           ) : (
             <div className="grid gap-4 md:grid-cols-2">
               {favoritePlaces.map((place, index) => (
-                <div className="fade-up" style={{ animationDelay: `${index * 70}ms` }} key={`favorite-${place.id}`}>
+                <div className="fade-up" style={{ animationDelay: `${index * CARD_STAGGER_MS}ms` }} key={`favorite-${place.id}`}>
                   <PlaceCard
                     place={place}
                     locale={locale}
@@ -1186,7 +1247,7 @@ export const PlacesBrowser = ({
         ) : (
           <div className="grid gap-4 md:grid-cols-2">
             {visiblePlaces.map((place, index) => (
-              <div className="fade-up" style={{ animationDelay: `${index * 70}ms` }} key={place.id}>
+              <div className="fade-up" style={{ animationDelay: `${index * CARD_STAGGER_MS}ms` }} key={place.id}>
                 <PlaceCard
                   place={place}
                   locale={locale}
