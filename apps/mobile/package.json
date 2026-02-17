@@ -19,7 +19,7 @@
     "@veevalve/core": "workspace:*",
     "@veevalve/ui": "workspace:*",
     "expo": "~53.0.27",
-    "expo-status-bar": "~2.2.3",
+    "expo-status-bar": "~3.0.9",
     "react": "19.0.0",
     "react-native": "0.79.6"
   },
