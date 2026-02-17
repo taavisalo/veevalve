@@ -11,7 +11,7 @@ import {
   type QualityStatus,
 } from '@veevalve/core/client';
 import { PlaceCard } from '@veevalve/ui/web';
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 
 import { fetchPlaceMetrics, fetchPlaces, fetchPlacesByIds, type PlaceMetrics } from '../lib/fetch-places';
 import { readFavoritePlaceIds, writeFavoritePlaceIds } from '../lib/favorites-storage';
@@ -35,6 +35,7 @@ const SEARCH_RESULTS_LIMIT = 20;
 const SUGGESTION_LIMIT = 8;
 const SEARCH_DEBOUNCE_MS = 180;
 const CARD_STAGGER_MS = 30;
+const FAVORITE_ACTION_MIN_PENDING_MS = 350;
 const WEB_PUSH_VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY ?? '';
 const TERVISEAMET_DATA_URL = 'https://vtiav.sm.ee/index.php/?active_tab_id=A';
 
@@ -177,6 +178,7 @@ export const PlacesBrowser = ({
   const [aboutVisible, setAboutVisible] = useState(false);
   const [metricsPreferencesHydrated, setMetricsPreferencesHydrated] = useState(false);
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
+  const [favoriteActionPendingIds, setFavoriteActionPendingIds] = useState<Set<string>>(new Set());
   const [favoritesHydrated, setFavoritesHydrated] = useState(false);
   const [favoritesLoading, setFavoritesLoading] = useState(false);
   const [favoritePlaces, setFavoritePlaces] = useState<PlaceWithLatestReading[]>([]);
@@ -191,7 +193,36 @@ export const PlacesBrowser = ({
   const searchContainerRef = useRef<HTMLDivElement | null>(null);
   const languageContainerRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const favoriteActionTimeoutsRef = useRef<Map<string, number>>(new Map());
+  const favoriteActionStartedAtRef = useRef<Map<string, number>>(new Map());
   const suggestionsListId = useId();
+
+  const clearFavoriteActionPending = useCallback((placeId: string) => {
+    const existingTimeout = favoriteActionTimeoutsRef.current.get(placeId);
+    if (typeof existingTimeout === 'number') {
+      window.clearTimeout(existingTimeout);
+    }
+
+    const startedAt = favoriteActionStartedAtRef.current.get(placeId) ?? Date.now();
+    const elapsedMs = Date.now() - startedAt;
+    const delayMs = Math.max(0, FAVORITE_ACTION_MIN_PENDING_MS - elapsedMs);
+
+    const timeoutId = window.setTimeout(() => {
+      favoriteActionTimeoutsRef.current.delete(placeId);
+      favoriteActionStartedAtRef.current.delete(placeId);
+      setFavoriteActionPendingIds((currentIds) => {
+        if (!currentIds.has(placeId)) {
+          return currentIds;
+        }
+
+        const nextIds = new Set(currentIds);
+        nextIds.delete(placeId);
+        return nextIds;
+      });
+    }, delayMs);
+
+    favoriteActionTimeoutsRef.current.set(placeId, timeoutId);
+  }, []);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -396,7 +427,6 @@ export const PlacesBrowser = ({
         if (controller.signal.aborted) {
           return;
         }
-        setFavoritePlaces([]);
         console.error(fetchError);
       })
       .finally(() => {
@@ -488,6 +518,17 @@ export const PlacesBrowser = ({
   }, []);
 
   useEffect(() => {
+    return () => {
+      for (const timeoutId of favoriteActionTimeoutsRef.current.values()) {
+        window.clearTimeout(timeoutId);
+      }
+
+      favoriteActionTimeoutsRef.current.clear();
+      favoriteActionStartedAtRef.current.clear();
+    };
+  }, []);
+
+  useEffect(() => {
     const onSlashShortcut = (event: KeyboardEvent) => {
       if (event.key !== '/' || event.metaKey || event.ctrlKey || event.altKey) {
         return;
@@ -569,14 +610,57 @@ export const PlacesBrowser = ({
   };
 
   const toggleFavorite = (placeId: string) => {
-    setFavoriteIds((currentIds) => {
-      if (currentIds.includes(placeId)) {
-        return currentIds.filter((id) => id !== placeId);
-      }
+    if (favoriteActionPendingIds.has(placeId)) {
+      return;
+    }
 
-      return [placeId, ...currentIds].slice(0, 50);
+    const isCurrentlyFavorite = favoriteIdSet.has(placeId);
+    const optimisticPlace =
+      places.find((place) => place.id === placeId) ??
+      favoritePlaces.find((place) => place.id === placeId);
+
+    favoriteActionStartedAtRef.current.set(placeId, Date.now());
+    setFavoriteActionPendingIds((currentIds) => {
+      const nextIds = new Set(currentIds);
+      nextIds.add(placeId);
+      return nextIds;
     });
+
+    if (isCurrentlyFavorite) {
+      setFavoriteIds((currentIds) => currentIds.filter((id) => id !== placeId));
+      setFavoritePlaces((currentPlaces) => currentPlaces.filter((place) => place.id !== placeId));
+      return;
+    }
+
+    setFavoriteIds((currentIds) => [placeId, ...currentIds].slice(0, 50));
+    if (optimisticPlace) {
+      setFavoritePlaces((currentPlaces) => {
+        if (currentPlaces.some((place) => place.id === placeId)) {
+          return currentPlaces;
+        }
+
+        return [optimisticPlace, ...currentPlaces].slice(0, 50);
+      });
+    }
   };
+
+  useEffect(() => {
+    if (favoriteActionPendingIds.size === 0) {
+      return;
+    }
+
+    if (favoritesLoading) {
+      return;
+    }
+
+    for (const placeId of favoriteActionPendingIds) {
+      clearFavoriteActionPending(placeId);
+    }
+  }, [
+    clearFavoriteActionPending,
+    favoriteActionPendingIds,
+    favoritesLoading,
+  ]);
 
   const suggestions = useMemo<Suggestion[]>(() => {
     if (!searchQuery) {
@@ -1244,6 +1328,7 @@ export const PlacesBrowser = ({
                     locale={locale}
                     referenceTimeIso={referenceTimeIso}
                     isFavorite
+                    favoriteUpdating={favoriteActionPendingIds.has(place.id)}
                     onToggleFavorite={toggleFavorite}
                   />
                 </div>
@@ -1254,7 +1339,7 @@ export const PlacesBrowser = ({
       ) : null}
 
       <section className="mt-8">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+        <div className="relative mb-3 pr-10 text-xs text-slate-500">
           <p>
             {searchQuery
               ? locale === 'et'
@@ -1264,7 +1349,22 @@ export const PlacesBrowser = ({
                 ? `Kuvan ${shownResultsCount} viimati uuendatud kohta.`
                 : `Showing ${shownResultsCount} most recently updated places.`}
           </p>
-          {loading ? <p>{locale === 'et' ? 'Uuendan tulemusi...' : 'Updating results...'}</p> : null}
+          {loading ? (
+            <div
+              role="status"
+              aria-live="polite"
+              className="pointer-events-none absolute right-0 top-1/2 inline-flex -translate-y-1/2 items-center rounded-full border border-emerald-200 bg-white/85 px-2 py-1 shadow-sm"
+            >
+              <span className="relative inline-flex h-4 w-4" aria-hidden="true">
+                <span className="absolute inset-0 rounded-full border-2 border-emerald-100" />
+                <span className="absolute inset-0 animate-spin rounded-full border-2 border-accent border-r-transparent" />
+                <span className="absolute left-1/2 top-1/2 h-1 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent/70" />
+              </span>
+              <span className="sr-only">
+                {locale === 'et' ? 'Uuendan tulemusi...' : 'Updating results...'}
+              </span>
+            </div>
+          ) : null}
         </div>
 
         {error ? (
@@ -1286,6 +1386,7 @@ export const PlacesBrowser = ({
                   locale={locale}
                   referenceTimeIso={referenceTimeIso}
                   isFavorite={favoriteIdSet.has(place.id)}
+                  favoriteUpdating={favoriteActionPendingIds.has(place.id)}
                   onToggleFavorite={toggleFavorite}
                 />
               </div>

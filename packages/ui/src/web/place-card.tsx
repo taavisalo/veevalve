@@ -6,6 +6,7 @@ export interface PlaceCardProps {
   locale?: AppLocale;
   referenceTimeIso?: string;
   isFavorite?: boolean;
+  favoriteUpdating?: boolean;
   onToggleFavorite?: (placeId: string) => void;
 }
 
@@ -175,6 +176,7 @@ export const PlaceCard = ({
   locale = 'et',
   referenceTimeIso,
   isFavorite = false,
+  favoriteUpdating = false,
   onToggleFavorite,
 }: PlaceCardProps) => {
   const placeName = locale === 'en' ? place.nameEn : place.nameEt;
@@ -209,6 +211,9 @@ export const PlaceCard = ({
     locale === 'en'
       ? (isFavorite ? 'Remove from favorites' : 'Add to favorites')
       : (isFavorite ? 'Eemalda lemmikutest' : 'Lisa lemmikutesse');
+  const toggleFavoriteUpdatingLabel =
+    locale === 'en' ? 'Updating favorite...' : 'Uuendan lemmikut...';
+  const favoriteButtonLabel = favoriteUpdating ? toggleFavoriteUpdatingLabel : toggleFavoriteLabel;
   const status = place.latestReading?.status ?? 'UNKNOWN';
   const statusLabel = t(statusLabelKeyByStatus[status], locale);
   const isBadStatus = status === 'BAD';
@@ -258,17 +263,28 @@ export const PlaceCard = ({
           {onToggleFavorite ? (
             <button
               type="button"
-              aria-label={toggleFavoriteLabel}
+              aria-label={favoriteButtonLabel}
               aria-pressed={isFavorite}
-              title={toggleFavoriteLabel}
+              aria-busy={favoriteUpdating}
+              title={favoriteButtonLabel}
               onClick={() => onToggleFavorite(place.id)}
+              disabled={favoriteUpdating}
               className={`inline-flex h-8 w-8 items-center justify-center rounded-full border text-base leading-none transition ${
-                isFavorite
-                  ? 'border-amber-300 bg-amber-50 text-amber-600'
-                  : 'border-emerald-100 bg-white text-slate-500 hover:border-amber-300 hover:text-amber-600'
+                favoriteUpdating
+                  ? 'cursor-wait border-accent/40 bg-emerald-50 text-accent'
+                  : isFavorite
+                    ? 'border-amber-300 bg-amber-50 text-amber-600'
+                    : 'border-emerald-100 bg-white text-slate-500 hover:border-amber-300 hover:text-amber-600'
               }`}
             >
-              {isFavorite ? '★' : '☆'}
+              {favoriteUpdating ? (
+                <span
+                  aria-hidden="true"
+                  className="h-4 w-4 animate-spin rounded-full border-2 border-current border-r-transparent"
+                />
+              ) : (
+                isFavorite ? '★' : '☆'
+              )}
             </button>
           ) : null}
         </div>
