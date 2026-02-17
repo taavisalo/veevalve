@@ -22,6 +22,7 @@ Primary language is Estonian (`et`) with English (`en`) support.
 - Shows compact metrics and an About panel with source/update details
 - Uses status-first cards where BAD entries can expand inline details and open the full Terviseamet report
 - Generates backend status-change notifications when new data changes quality state
+- Supports browser push notifications for favorites (works even when the web page is closed)
 
 Data source:
 - [Terviseamet VTIAV](https://vtiav.sm.ee/index.php/?active_tab_id=A)
@@ -177,6 +178,14 @@ Important variables:
 - `SYNC_RATE_LIMIT_MAX`
 - `SYNC_RATE_LIMIT_WINDOW_MS`
 - `SYNC_RATE_LIMIT_MAX_TRACKED_IPS`
+- `WEB_PUSH_VAPID_PUBLIC_KEY`
+- `WEB_PUSH_VAPID_PRIVATE_KEY`
+- `WEB_PUSH_VAPID_SUBJECT`
+- `WEB_PUSH_ALLOWED_ENDPOINT_HOSTS`
+- `WEB_PUSH_RATE_LIMIT_MAX`
+- `WEB_PUSH_RATE_LIMIT_WINDOW_MS`
+- `WEB_PUSH_RATE_LIMIT_MAX_TRACKED_IPS`
+- `NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY`
 - Expo/EAS credentials for production builds
 
 Generate a secure sync token locally:
@@ -190,6 +199,15 @@ Print as `.env` line (for copy/paste):
 ```bash
 pnpm --filter @veevalve/api sync:token -- --env
 ```
+
+Generate Web Push VAPID keys:
+
+```bash
+pnpm --filter @veevalve/api push:vapid -- --env --subject mailto:you@example.com
+```
+
+Set the generated keys in API env and set `NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY` in web env.
+Browser push requires HTTPS in production (`localhost` works for local development).
 
 ## Data Schema
 

@@ -20,12 +20,21 @@ import {
   writeFavoriteStatusNotificationsEnabled,
 } from '../lib/favorite-status-notifications-storage';
 import { readMetricsUiPreferences, writeMetricsUiPreferences } from '../lib/ui-preferences-storage';
+import {
+  ensureWebPushSubscription,
+  getExistingSubscription,
+  isWebPushSupported,
+  readNotificationPermission,
+  removeWebPushSubscription,
+  requestNotificationPermission,
+  syncWebPushSubscription,
+} from '../lib/web-push-client';
 
 const LATEST_RESULTS_LIMIT = 10;
 const SEARCH_RESULTS_LIMIT = 20;
 const SUGGESTION_LIMIT = 8;
 const SEARCH_DEBOUNCE_MS = 180;
-const FAVORITES_REFRESH_INTERVAL_MS = 120_000;
+const WEB_PUSH_VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY ?? '';
 const TERVISEAMET_DATA_URL = 'https://vtiav.sm.ee/index.php/?active_tab_id=A';
 
 const getResultsLimit = (search?: string): number =>
@@ -134,12 +143,6 @@ const formatShare = (count: number, total: number): string => {
   return `${percentage.toFixed(1)}%`;
 };
 
-const statusLabelKeyByStatus: Record<QualityStatus, 'qualityGood' | 'qualityBad' | 'qualityUnknown'> = {
-  GOOD: 'qualityGood',
-  BAD: 'qualityBad',
-  UNKNOWN: 'qualityUnknown',
-};
-
 export const PlacesBrowser = ({
   initialLocale,
   initialType,
@@ -176,13 +179,13 @@ export const PlacesBrowser = ({
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
   const [statusNotificationsEnabled, setStatusNotificationsEnabled] = useState(false);
   const [notificationsPreferencesHydrated, setNotificationsPreferencesHydrated] = useState(false);
+  const [notificationsSyncing, setNotificationsSyncing] = useState(false);
+  const [notificationsError, setNotificationsError] = useState<string | null>(null);
 
   const isInitialRender = useRef(true);
   const searchContainerRef = useRef<HTMLDivElement | null>(null);
   const languageContainerRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const favoriteStatusSnapshotRef = useRef<Map<string, QualityStatus>>(new Map());
-  const favoriteStatusSnapshotHydratedRef = useRef(false);
   const suggestionsListId = useId();
 
   useEffect(() => {
@@ -265,16 +268,17 @@ export const PlacesBrowser = ({
   }, [metricsExpanded, metricsPreferencesHydrated, metricsVisible]);
 
   useEffect(() => {
-    if (typeof window === 'undefined' || !('Notification' in window)) {
-      setNotificationsSupported(false);
-      setNotificationPermission('default');
+    const supported = isWebPushSupported();
+    setNotificationsSupported(supported);
+
+    if (!supported) {
+      setNotificationPermission('denied');
       setStatusNotificationsEnabled(false);
       setNotificationsPreferencesHydrated(true);
       return;
     }
 
-    setNotificationsSupported(true);
-    setNotificationPermission(window.Notification.permission);
+    setNotificationPermission(readNotificationPermission());
     setStatusNotificationsEnabled(readFavoriteStatusNotificationsEnabled());
     setNotificationsPreferencesHydrated(true);
   }, []);
@@ -285,10 +289,7 @@ export const PlacesBrowser = ({
     }
 
     const syncPermission = () => {
-      if (typeof window === 'undefined' || !('Notification' in window)) {
-        return;
-      }
-      setNotificationPermission(window.Notification.permission);
+      setNotificationPermission(readNotificationPermission());
     };
 
     window.addEventListener('focus', syncPermission);
@@ -324,100 +325,20 @@ export const PlacesBrowser = ({
     if (favoriteIds.length === 0) {
       setFavoritePlaces([]);
       setFavoritesLoading(false);
-      favoriteStatusSnapshotRef.current = new Map();
-      favoriteStatusSnapshotHydratedRef.current = false;
       return;
     }
 
-    let disposed = false;
-    let activeController: AbortController | null = null;
-    let inFlight = false;
+    const controller = new AbortController();
+    setFavoritesLoading(true);
 
-    const sendStatusChangeNotification = (
-      place: PlaceWithLatestReading,
-      previousStatus: QualityStatus,
-      nextStatus: QualityStatus,
-    ) => {
-      if (
-        !statusNotificationsEnabled ||
-        notificationPermission !== 'granted' ||
-        typeof window === 'undefined' ||
-        !('Notification' in window)
-      ) {
-        return;
-      }
-
-      const placeName = locale === 'en' ? place.nameEn : place.nameEt;
-      const title = locale === 'et' ? `VeeValve: ${placeName}` : `VeeValve: ${placeName}`;
-      const body =
-        locale === 'et'
-          ? `Vee kvaliteet muutus: ${t(statusLabelKeyByStatus[previousStatus], locale)} -> ${t(statusLabelKeyByStatus[nextStatus], locale)}`
-          : `Water quality changed: ${t(statusLabelKeyByStatus[previousStatus], locale)} -> ${t(statusLabelKeyByStatus[nextStatus], locale)}`;
-
-      try {
-        const notification = new Notification(title, {
-          body,
-          tag: `favorite-status-${place.id}`,
-        });
-
-        window.setTimeout(() => {
-          notification.close();
-        }, 10_000);
-      } catch {
-        // Ignore notification failures caused by browser policy.
-      }
-    };
-
-    const applyStatusChangeNotifications = (orderedPlaces: PlaceWithLatestReading[]) => {
-      const nextSnapshot = new Map<string, QualityStatus>();
-      for (const place of orderedPlaces) {
-        nextSnapshot.set(place.id, place.latestReading?.status ?? 'UNKNOWN');
-      }
-
-      if (!favoriteStatusSnapshotHydratedRef.current) {
-        favoriteStatusSnapshotRef.current = nextSnapshot;
-        favoriteStatusSnapshotHydratedRef.current = true;
-        return;
-      }
-
-      const previousSnapshot = favoriteStatusSnapshotRef.current;
-
-      for (const place of orderedPlaces) {
-        const nextStatus = nextSnapshot.get(place.id) ?? 'UNKNOWN';
-        const previousStatus = previousSnapshot.get(place.id);
-
-        if (!previousStatus || previousStatus === nextStatus) {
-          continue;
-        }
-
-        sendStatusChangeNotification(place, previousStatus, nextStatus);
-      }
-
-      favoriteStatusSnapshotRef.current = nextSnapshot;
-    };
-
-    const refreshFavorites = async (initialLoad: boolean): Promise<void> => {
-      if (inFlight || disposed) {
-        return;
-      }
-
-      inFlight = true;
-      const controller = new AbortController();
-      activeController = controller;
-
-      if (initialLoad) {
-        setFavoritesLoading(true);
-      }
-
-      try {
-        const fetchedPlaces = await fetchPlacesByIds({
-          locale,
-          ids: favoriteIds,
-          signal: controller.signal,
-          cacheMode: 'no-store',
-        });
-
-        if (controller.signal.aborted || disposed) {
+    fetchPlacesByIds({
+      locale,
+      ids: favoriteIds,
+      signal: controller.signal,
+      cacheMode: 'no-store',
+    })
+      .then((fetchedPlaces) => {
+        if (controller.signal.aborted) {
           return;
         }
 
@@ -426,45 +347,85 @@ export const PlacesBrowser = ({
           .map((id) => byId.get(id))
           .filter((place): place is PlaceWithLatestReading => Boolean(place));
         setFavoritePlaces(ordered);
-        applyStatusChangeNotifications(ordered);
-      } catch (fetchError) {
-        if (controller.signal.aborted || disposed) {
+      })
+      .catch((fetchError: unknown) => {
+        if (controller.signal.aborted) {
+          return;
+        }
+        setFavoritePlaces([]);
+        console.error(fetchError);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setFavoritesLoading(false);
+        }
+      });
+
+    return () => controller.abort();
+  }, [favoriteIds, locale]);
+
+  useEffect(() => {
+    if (!notificationsSupported || !notificationsPreferencesHydrated) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const syncSubscription = async () => {
+      setNotificationsSyncing(true);
+      setNotificationsError(null);
+
+      try {
+        const latestPermission = readNotificationPermission();
+        if (!cancelled) {
+          setNotificationPermission(latestPermission);
+        }
+
+        if (!statusNotificationsEnabled || latestPermission !== 'granted') {
+          const existingSubscription = await getExistingSubscription();
+          if (existingSubscription) {
+            await removeWebPushSubscription(existingSubscription);
+            await existingSubscription.unsubscribe();
+          }
+
+          if (latestPermission === 'denied' && !cancelled) {
+            setStatusNotificationsEnabled(false);
+          }
           return;
         }
 
-        if (initialLoad) {
-          setFavoritePlaces([]);
+        if (!WEB_PUSH_VAPID_PUBLIC_KEY.trim()) {
+          throw new Error('Missing NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY');
         }
-        console.error(fetchError);
+
+        const subscription = await ensureWebPushSubscription(WEB_PUSH_VAPID_PUBLIC_KEY);
+        await syncWebPushSubscription({
+          subscription,
+          favoritePlaceIds: favoriteIds,
+          locale,
+        });
+      } catch (error) {
+        if (!cancelled) {
+          setNotificationsError(
+            locale === 'et'
+              ? 'Teavituste seadistamine ebaõnnestus. Proovi uuesti.'
+              : 'Failed to configure push alerts. Please try again.',
+          );
+        }
+        console.error(error);
       } finally {
-        if (!controller.signal.aborted && !disposed && initialLoad) {
-          setFavoritesLoading(false);
+        if (!cancelled) {
+          setNotificationsSyncing(false);
         }
-        inFlight = false;
       }
     };
 
-    void refreshFavorites(true);
-
-    const intervalId = window.setInterval(() => {
-      void refreshFavorites(false);
-    }, FAVORITES_REFRESH_INTERVAL_MS);
-
-    const onVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        void refreshFavorites(false);
-      }
-    };
-
-    document.addEventListener('visibilitychange', onVisibilityChange);
+    void syncSubscription();
 
     return () => {
-      disposed = true;
-      window.clearInterval(intervalId);
-      document.removeEventListener('visibilitychange', onVisibilityChange);
-      activeController?.abort();
+      cancelled = true;
     };
-  }, [favoriteIds, locale, notificationPermission, statusNotificationsEnabled]);
+  }, [favoriteIds, locale, notificationsPreferencesHydrated, notificationsSupported, statusNotificationsEnabled]);
 
   useEffect(() => {
     const onPointerDown = (event: MouseEvent) => {
@@ -513,25 +474,34 @@ export const PlacesBrowser = ({
   const badShare = formatShare(metrics.badQualityEntries, metrics.totalEntries);
   const favoriteIdSet = useMemo(() => new Set(favoriteIds), [favoriteIds]);
   const hasFavorites = favoriteIds.length > 0;
-  const notificationsReady = notificationsSupported && notificationPermission === 'granted';
+  const webPushConfigured = WEB_PUSH_VAPID_PUBLIC_KEY.trim().length > 0;
+  const notificationsReady =
+    notificationsSupported &&
+    webPushConfigured &&
+    notificationPermission === 'granted';
   const notificationsActive = notificationsReady && statusNotificationsEnabled;
 
   const toggleStatusNotifications = async () => {
-    if (typeof window === 'undefined' || !('Notification' in window)) {
+    if (!notificationsSupported || !webPushConfigured) {
       return;
     }
 
-    const currentPermission = window.Notification.permission;
+    const currentPermission = readNotificationPermission();
     setNotificationPermission(currentPermission);
 
+    if (statusNotificationsEnabled) {
+      setStatusNotificationsEnabled(false);
+      return;
+    }
+
     if (currentPermission === 'granted') {
-      setStatusNotificationsEnabled((value) => !value);
+      setStatusNotificationsEnabled(true);
       return;
     }
 
     if (currentPermission === 'default') {
       try {
-        const nextPermission = await window.Notification.requestPermission();
+        const nextPermission = await requestNotificationPermission();
         setNotificationPermission(nextPermission);
         setStatusNotificationsEnabled(nextPermission === 'granted');
       } catch {
@@ -685,10 +655,16 @@ export const PlacesBrowser = ({
             onClick={() => {
               void toggleStatusNotifications();
             }}
-            disabled={!notificationsSupported || notificationPermission === 'denied'}
+            disabled={
+              !notificationsSupported || !webPushConfigured || notificationPermission === 'denied'
+            }
             title={
               !notificationsSupported
                 ? (locale === 'et' ? 'Brauser ei toeta teavitusi' : 'This browser does not support notifications')
+                : !webPushConfigured
+                  ? (locale === 'et'
+                      ? 'Teavituste võti puudub seadistusest'
+                      : 'Push key is missing from configuration')
                 : notificationPermission === 'denied'
                   ? (locale === 'et'
                       ? 'Teavitused on brauseris blokeeritud'
@@ -1121,18 +1097,30 @@ export const PlacesBrowser = ({
             </span>
           </div>
           <p className="mb-3 text-xs text-slate-500">
-            {notificationsSupported
+            {!webPushConfigured
+              ? locale === 'et'
+                ? 'Brauseri tõuketeavitused pole veel seadistatud.'
+                : 'Browser push notifications are not configured yet.'
+              : notificationsSupported
               ? notificationsActive
                 ? (locale === 'et'
-                    ? 'Brauseri teavitused on sees. Muutuseid kontrollitakse umbes iga 2 minuti järel, kui leht on avatud.'
-                    : 'Browser alerts are on. Favorites are checked about every 2 minutes while this page is open.')
+                    ? 'Brauseri tõuketeavitused on sees. Lemmikute staatuse muutused saadetakse ka siis, kui leht on suletud.'
+                    : 'Browser push alerts are on. Favorite status changes are delivered even when the site is closed.')
                 : (locale === 'et'
-                    ? 'Lülita teavitused sisse, et saada märguanne lemmikute staatuse muutustest.'
-                    : 'Enable alerts to get notified when favorite statuses change.')
+                    ? 'Lülita tõuketeavitused sisse, et saada märguanne lemmikute staatuse muutustest.'
+                    : 'Enable push alerts to get notified when favorite statuses change.')
               : (locale === 'et'
-                  ? 'Sinu brauser ei toeta kohalikke teavitusi.'
-                  : 'Your browser does not support local notifications.')}
+                  ? 'Sinu brauser ei toeta tõuketeavitusi.'
+                  : 'Your browser does not support push notifications.')}
           </p>
+          {notificationsSyncing ? (
+            <p className="mb-3 text-xs text-slate-500">
+              {locale === 'et' ? 'Teavituste seadistus uueneb...' : 'Updating push alert settings...'}
+            </p>
+          ) : null}
+          {notificationsError ? (
+            <p className="mb-3 text-xs text-rose-600">{notificationsError}</p>
+          ) : null}
 
           {favoritesLoading && favoritePlaces.length === 0 ? (
             <div className="rounded-xl border border-emerald-100 bg-card p-4 text-sm text-slate-600">

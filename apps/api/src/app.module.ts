@@ -8,6 +8,7 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { PlacesModule } from './places/places.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { WaterQualityModule } from './water-quality/water-quality.module';
+import { WebPushModule } from './web-push/web-push.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { WaterQualityModule } from './water-quality/water-quality.module';
     PlacesModule,
     WaterQualityModule,
     NotificationsModule,
+    WebPushModule,
     AuthModule,
   ],
 })
