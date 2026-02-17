@@ -291,6 +291,31 @@ export class PlacesService {
     return response;
   }
 
+  async getPlacesByIds(ids: string[], locale: 'et' | 'en' = 'et'): Promise<PlaceListResponse[]> {
+    const normalizedIds = [...new Set(ids.map((id) => id.trim()).filter((id) => id.length > 0))].slice(0, 50);
+    if (normalizedIds.length === 0) {
+      return [];
+    }
+
+    const places = await this.prisma.place.findMany({
+      where: {
+        id: {
+          in: normalizedIds,
+        },
+      },
+      include: {
+        latestStatus: true,
+      },
+    });
+
+    const placeMap = new Map(places.map((place) => [place.id, place] as const));
+    const orderedPlaces = normalizedIds
+      .map((id) => placeMap.get(id))
+      .filter((place): place is Place & { latestStatus: PlaceLatestStatus | null } => Boolean(place));
+
+    return this.toListResponsesWithBadDetails(orderedPlaces, locale);
+  }
+
   private async findRankedPlaceIds(input: {
     search: string;
     type?: PlaceType;

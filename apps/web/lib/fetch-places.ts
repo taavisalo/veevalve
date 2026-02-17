@@ -13,12 +13,16 @@ interface FetchPlacesOptions {
   search?: string;
   limit?: number;
   signal?: AbortSignal;
+  cacheMode?: RequestCache;
+  revalidateSeconds?: number;
 }
 
 interface FetchPlacesByIdsOptions {
   locale: 'et' | 'en';
   ids: string[];
   signal?: AbortSignal;
+  cacheMode?: RequestCache;
+  revalidateSeconds?: number;
 }
 
 export interface PlaceMetrics {
@@ -105,6 +109,38 @@ const resolveApiBaseUrl = (): string => {
   return rawBaseUrl.replace(/\/+$/, '');
 };
 
+type NextFetchRequestInit = RequestInit & {
+  next?: {
+    revalidate: number;
+  };
+};
+
+const buildRequestInit = ({
+  signal,
+  cacheMode,
+  revalidateSeconds,
+}: {
+  signal?: AbortSignal;
+  cacheMode?: RequestCache;
+  revalidateSeconds?: number;
+}): NextFetchRequestInit => {
+  const init: NextFetchRequestInit = {};
+
+  if (signal) {
+    init.signal = signal;
+  }
+
+  if (cacheMode) {
+    init.cache = cacheMode;
+  }
+
+  if (typeof revalidateSeconds === 'number') {
+    init.next = { revalidate: revalidateSeconds };
+  }
+
+  return init;
+};
+
 export const fetchPlaces = async ({
   locale,
   type,
@@ -112,6 +148,8 @@ export const fetchPlaces = async ({
   search,
   limit = search?.trim() ? 20 : DEFAULT_LIMIT,
   signal,
+  cacheMode = 'no-store',
+  revalidateSeconds,
 }: FetchPlacesOptions): Promise<PlaceWithLatestReading[]> => {
   const baseUrl = resolveApiBaseUrl();
   const params = new URLSearchParams();
@@ -131,10 +169,14 @@ export const fetchPlaces = async ({
     params.set('search', search);
   }
 
-  const response = await fetch(`${baseUrl}/places?${params.toString()}`, {
-    cache: 'no-store',
-    signal,
-  });
+  const response = await fetch(
+    `${baseUrl}/places?${params.toString()}`,
+    buildRequestInit({
+      signal,
+      cacheMode,
+      revalidateSeconds,
+    }),
+  );
 
   if (!response.ok) {
     throw new Error(`Failed to fetch places: ${response.status}`);
@@ -148,6 +190,8 @@ export const fetchPlacesByIds = async ({
   locale,
   ids,
   signal,
+  cacheMode = 'no-store',
+  revalidateSeconds,
 }: FetchPlacesByIdsOptions): Promise<PlaceWithLatestReading[]> => {
   const uniqueIds = [...new Set(ids.map((id) => id.trim()).filter((id) => id.length > 0))].slice(0, 50);
   if (uniqueIds.length === 0) {
@@ -155,35 +199,45 @@ export const fetchPlacesByIds = async ({
   }
 
   const baseUrl = resolveApiBaseUrl();
-  const responses = await Promise.all(
-    uniqueIds.map(async (id) => {
-      const response = await fetch(
-        `${baseUrl}/places/${encodeURIComponent(id)}?locale=${encodeURIComponent(locale)}`,
-        {
-          cache: 'no-store',
-          signal,
-        },
-      );
+  const params = new URLSearchParams();
+  params.set('locale', locale);
+  for (const id of uniqueIds) {
+    params.append('ids', id);
+  }
 
-      if (!response.ok) {
-        return null;
-      }
-
-      const row = (await response.json()) as PlaceApiRow;
-      const mapped = mapPlaceApiRows([row]);
-      return mapped[0] ?? null;
+  const response = await fetch(
+    `${baseUrl}/places/by-ids?${params.toString()}`,
+    buildRequestInit({
+      signal,
+      cacheMode,
+      revalidateSeconds,
     }),
   );
 
-  return responses.filter((place): place is PlaceWithLatestReading => Boolean(place));
+  if (!response.ok) {
+    return [];
+  }
+
+  const rows = (await response.json()) as PlaceApiRow[];
+  return mapPlaceApiRows(rows);
 };
 
-export const fetchPlaceMetrics = async (): Promise<PlaceMetrics> => {
+export const fetchPlaceMetrics = async ({
+  cacheMode = 'no-store',
+  revalidateSeconds,
+}: {
+  cacheMode?: RequestCache;
+  revalidateSeconds?: number;
+} = {}): Promise<PlaceMetrics> => {
   const baseUrl = resolveApiBaseUrl();
   try {
-    const response = await fetch(`${baseUrl}/places/metrics`, {
-      cache: 'no-store',
-    });
+    const response = await fetch(
+      `${baseUrl}/places/metrics`,
+      buildRequestInit({
+        cacheMode,
+        revalidateSeconds,
+      }),
+    );
 
     if (!response.ok) {
       return DEFAULT_PLACE_METRICS;

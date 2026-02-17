@@ -42,6 +42,7 @@ const HomePage = async ({ searchParams }: HomePageProps) => {
   const search = readParam(resolvedSearchParams, 'q')?.trim();
   const initialLimit = search ? 20 : 10;
   const initialNowIso = new Date().toISOString();
+  const shouldCacheInitialPlaces = !search;
 
   const [initialPlaces, initialMetrics] = await Promise.all([
     fetchPlaces({
@@ -50,8 +51,13 @@ const HomePage = async ({ searchParams }: HomePageProps) => {
       status: status === 'ALL' ? undefined : status,
       search,
       limit: initialLimit,
+      cacheMode: shouldCacheInitialPlaces ? 'force-cache' : 'no-store',
+      revalidateSeconds: shouldCacheInitialPlaces ? 60 : undefined,
     }),
-    fetchPlaceMetrics(),
+    fetchPlaceMetrics({
+      cacheMode: 'force-cache',
+      revalidateSeconds: 60,
+    }),
   ]);
 
   return (
