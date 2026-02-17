@@ -49,7 +49,8 @@ jobs:
             --write-out '%{http_code}' \
             --request POST "$SYNC_API_URL" \
             --header "X-Sync-Token: $SYNC_API_TOKEN" \
-            --header 'Content-Type: application/json')"
+            --header 'Content-Type: application/json' \
+            --data '{}')"
 
           echo "HTTP status: $status_code"
           echo "Response:"
