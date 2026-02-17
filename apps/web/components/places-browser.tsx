@@ -13,22 +13,17 @@ import {
 import { PlaceCard } from '@veevalve/ui/web';
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 
-import { fetchPlaceMetrics, fetchPlaces, fetchPlacesByIds, type PlaceMetrics } from '../lib/fetch-places';
+import { fetchPlaces } from '../lib/fetch-places';
+import type { PlaceMetrics } from '../lib/fetch-place-metrics';
+import type * as FetchPlaceMetricsModule from '../lib/fetch-place-metrics';
+import type * as FetchPlacesByIdsModule from '../lib/fetch-places-by-ids';
 import { readFavoritePlaceIds, writeFavoritePlaceIds } from '../lib/favorites-storage';
 import {
   readFavoriteStatusNotificationsEnabled,
   writeFavoriteStatusNotificationsEnabled,
 } from '../lib/favorite-status-notifications-storage';
 import { readMetricsUiPreferences, writeMetricsUiPreferences } from '../lib/ui-preferences-storage';
-import {
-  ensureWebPushSubscription,
-  getExistingSubscription,
-  isWebPushSupported,
-  readNotificationPermission,
-  removeWebPushSubscription,
-  requestNotificationPermission,
-  syncWebPushSubscription,
-} from '../lib/web-push-client';
+import type * as WebPushClientModule from '../lib/web-push-client';
 
 const LATEST_RESULTS_LIMIT = 10;
 const SEARCH_RESULTS_LIMIT = 20;
@@ -58,6 +53,52 @@ const getResultsLimit = (search?: string): number =>
 const getCardFadeDelayClass = (index: number): string => {
   const cappedIndex = Math.max(0, Math.min(index, CARD_STAGGER_CLASSES.length - 1));
   return CARD_STAGGER_CLASSES[cappedIndex] ?? CARD_STAGGER_CLASSES[0];
+};
+
+const runWhenIdle = (callback: () => void, timeout = 1_500): (() => void) => {
+  if (typeof window === 'undefined') {
+    return () => {};
+  }
+
+  const browserWindow = window as Window;
+  if (
+    typeof browserWindow.requestIdleCallback === 'function' &&
+    typeof browserWindow.cancelIdleCallback === 'function'
+  ) {
+    const idleHandle = browserWindow.requestIdleCallback(callback, { timeout });
+    return () => browserWindow.cancelIdleCallback(idleHandle);
+  }
+
+  const timeoutHandle = globalThis.setTimeout(callback, Math.min(timeout, 250));
+  return () => globalThis.clearTimeout(timeoutHandle);
+};
+
+let fetchPlacesByIdsModulePromise: Promise<typeof FetchPlacesByIdsModule> | undefined;
+let fetchPlaceMetricsModulePromise: Promise<typeof FetchPlaceMetricsModule> | undefined;
+let webPushClientModulePromise: Promise<typeof WebPushClientModule> | undefined;
+
+const loadFetchPlacesByIdsModule = (): Promise<typeof FetchPlacesByIdsModule> => {
+  if (!fetchPlacesByIdsModulePromise) {
+    fetchPlacesByIdsModulePromise = import('../lib/fetch-places-by-ids');
+  }
+
+  return fetchPlacesByIdsModulePromise;
+};
+
+const loadFetchPlaceMetricsModule = (): Promise<typeof FetchPlaceMetricsModule> => {
+  if (!fetchPlaceMetricsModulePromise) {
+    fetchPlaceMetricsModulePromise = import('../lib/fetch-place-metrics');
+  }
+
+  return fetchPlaceMetricsModulePromise;
+};
+
+const loadWebPushClientModule = (): Promise<typeof WebPushClientModule> => {
+  if (!webPushClientModulePromise) {
+    webPushClientModulePromise = import('../lib/web-push-client');
+  }
+
+  return webPushClientModulePromise;
 };
 
 interface PlacesBrowserProps {
@@ -313,11 +354,13 @@ export const PlacesBrowser = ({
 
     let cancelled = false;
     setMetricsLoading(true);
-
-    fetchPlaceMetrics({
-      cacheMode: 'force-cache',
-      revalidateSeconds: 60,
-    })
+    void loadFetchPlaceMetricsModule()
+      .then(({ fetchPlaceMetrics }) =>
+        fetchPlaceMetrics({
+          cacheMode: 'force-cache',
+          revalidateSeconds: 60,
+        }),
+      )
       .then((nextMetrics) => {
         if (cancelled) {
           return;
@@ -361,19 +404,40 @@ export const PlacesBrowser = ({
   }, [metricsExpanded, metricsPreferencesHydrated, metricsVisible]);
 
   useEffect(() => {
-    const supported = isWebPushSupported();
-    setNotificationsSupported(supported);
+    let cancelled = false;
+    void loadWebPushClientModule()
+      .then((webPushClient) => {
+        if (cancelled) {
+          return;
+        }
 
-    if (!supported) {
-      setNotificationPermission('denied');
-      setStatusNotificationsEnabled(false);
-      setNotificationsPreferencesHydrated(true);
-      return;
-    }
+        const supported = webPushClient.isWebPushSupported();
+        setNotificationsSupported(supported);
 
-    setNotificationPermission(readNotificationPermission());
-    setStatusNotificationsEnabled(readFavoriteStatusNotificationsEnabled());
-    setNotificationsPreferencesHydrated(true);
+        if (!supported) {
+          setNotificationPermission('denied');
+          setStatusNotificationsEnabled(false);
+          setNotificationsPreferencesHydrated(true);
+          return;
+        }
+
+        setNotificationPermission(webPushClient.readNotificationPermission());
+        setStatusNotificationsEnabled(readFavoriteStatusNotificationsEnabled());
+        setNotificationsPreferencesHydrated(true);
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          console.error(error);
+          setNotificationsSupported(false);
+          setNotificationPermission('denied');
+          setStatusNotificationsEnabled(false);
+          setNotificationsPreferencesHydrated(true);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -382,7 +446,18 @@ export const PlacesBrowser = ({
     }
 
     const syncPermission = () => {
-      setNotificationPermission(readNotificationPermission());
+      void loadWebPushClientModule()
+        .then((webPushClient) => {
+          if (!webPushClient.isWebPushSupported()) {
+            setNotificationPermission('denied');
+            return;
+          }
+
+          setNotificationPermission(webPushClient.readNotificationPermission());
+        })
+        .catch((error) => {
+          console.error(error);
+        });
     };
 
     window.addEventListener('focus', syncPermission);
@@ -422,39 +497,53 @@ export const PlacesBrowser = ({
     }
 
     const controller = new AbortController();
-    setFavoritesLoading(true);
+    let cancelled = false;
 
-    fetchPlacesByIds({
-      locale,
-      ids: favoriteIds,
-      signal: controller.signal,
-      cacheMode: 'no-store',
-      includeBadDetails: false,
-    })
-      .then((fetchedPlaces) => {
-        if (controller.signal.aborted) {
-          return;
-        }
+    const cancelIdle = runWhenIdle(() => {
+      if (cancelled || controller.signal.aborted) {
+        return;
+      }
 
-        const byId = new Map(fetchedPlaces.map((place) => [place.id, place] as const));
-        const ordered = favoriteIds
-          .map((id) => byId.get(id))
-          .filter((place): place is PlaceWithLatestReading => Boolean(place));
-        setFavoritePlaces(ordered);
-      })
-      .catch((fetchError: unknown) => {
-        if (controller.signal.aborted) {
-          return;
-        }
-        console.error(fetchError);
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) {
-          setFavoritesLoading(false);
-        }
-      });
+      setFavoritesLoading(true);
+      void loadFetchPlacesByIdsModule()
+        .then(({ fetchPlacesByIds }) =>
+          fetchPlacesByIds({
+            locale,
+            ids: favoriteIds,
+            signal: controller.signal,
+            cacheMode: 'no-store',
+            includeBadDetails: false,
+          }),
+        )
+        .then((fetchedPlaces) => {
+          if (controller.signal.aborted) {
+            return;
+          }
 
-    return () => controller.abort();
+          const byId = new Map(fetchedPlaces.map((place) => [place.id, place] as const));
+          const ordered = favoriteIds
+            .map((id) => byId.get(id))
+            .filter((place): place is PlaceWithLatestReading => Boolean(place));
+          setFavoritePlaces(ordered);
+        })
+        .catch((fetchError: unknown) => {
+          if (controller.signal.aborted) {
+            return;
+          }
+          console.error(fetchError);
+        })
+        .finally(() => {
+          if (!controller.signal.aborted) {
+            setFavoritesLoading(false);
+          }
+        });
+    }, 2_000);
+
+    return () => {
+      cancelled = true;
+      cancelIdle();
+      controller.abort();
+    };
   }, [favoriteIds, locale]);
 
   useEffect(() => {
@@ -469,15 +558,16 @@ export const PlacesBrowser = ({
       setNotificationsError(null);
 
       try {
-        const latestPermission = readNotificationPermission();
+        const webPushClient = await loadWebPushClientModule();
+        const latestPermission = webPushClient.readNotificationPermission();
         if (!cancelled) {
           setNotificationPermission(latestPermission);
         }
 
         if (!statusNotificationsEnabled || latestPermission !== 'granted') {
-          const existingSubscription = await getExistingSubscription();
+          const existingSubscription = await webPushClient.getExistingSubscription();
           if (existingSubscription) {
-            await removeWebPushSubscription(existingSubscription);
+            await webPushClient.removeWebPushSubscription(existingSubscription);
             await existingSubscription.unsubscribe();
           }
 
@@ -491,8 +581,8 @@ export const PlacesBrowser = ({
           throw new Error('Missing NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY');
         }
 
-        const subscription = await ensureWebPushSubscription(WEB_PUSH_VAPID_PUBLIC_KEY);
-        await syncWebPushSubscription({
+        const subscription = await webPushClient.ensureWebPushSubscription(WEB_PUSH_VAPID_PUBLIC_KEY);
+        await webPushClient.syncWebPushSubscription({
           subscription,
           favoritePlaceIds: favoriteIds,
           locale,
@@ -513,10 +603,13 @@ export const PlacesBrowser = ({
       }
     };
 
-    void syncSubscription();
+    const cancelIdle = runWhenIdle(() => {
+      void syncSubscription();
+    }, 2_500);
 
     return () => {
       cancelled = true;
+      cancelIdle();
     };
   }, [favoriteIds, locale, notificationsPreferencesHydrated, notificationsSupported, statusNotificationsEnabled]);
 
@@ -597,11 +690,27 @@ export const PlacesBrowser = ({
       : (locale === 'et' ? 'Teavitused väljas' : 'Alerts off');
 
   const toggleStatusNotifications = async () => {
-    if (!notificationsSupported || !webPushConfigured) {
+    if (!webPushConfigured) {
       return;
     }
 
-    const currentPermission = readNotificationPermission();
+    let webPushClient: typeof WebPushClientModule;
+    try {
+      webPushClient = await loadWebPushClientModule();
+    } catch (error) {
+      console.error(error);
+      setStatusNotificationsEnabled(false);
+      return;
+    }
+
+    if (!webPushClient.isWebPushSupported()) {
+      setNotificationsSupported(false);
+      setNotificationPermission('denied');
+      setStatusNotificationsEnabled(false);
+      return;
+    }
+
+    const currentPermission = webPushClient.readNotificationPermission();
     setNotificationPermission(currentPermission);
 
     if (statusNotificationsEnabled) {
@@ -616,7 +725,7 @@ export const PlacesBrowser = ({
 
     if (currentPermission === 'default') {
       try {
-        const nextPermission = await requestNotificationPermission();
+        const nextPermission = await webPushClient.requestNotificationPermission();
         setNotificationPermission(nextPermission);
         setStatusNotificationsEnabled(nextPermission === 'granted');
       } catch {

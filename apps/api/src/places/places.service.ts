@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import type { Place, PlaceLatestStatus, PlaceType, QualityStatus } from '@prisma/client';
+import type { PlaceType, QualityStatus } from '@prisma/client';
 import { Prisma, SourceFileKind } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
@@ -40,8 +40,91 @@ interface RankedPlaceId {
   id: string;
 }
 
+interface MetricsAggregateRow {
+  totalEntries: number;
+  poolEntries: number;
+  beachEntries: number;
+  badQualityEntries: number;
+  goodQualityEntries: number;
+  unknownQualityEntries: number;
+  badPoolEntries: number;
+  badBeachEntries: number;
+  updatedWithin24hEntries: number;
+  staleOver7dEntries: number;
+}
+
+interface SourceUpdateAggregateRow {
+  latestChangedAt: Date | null;
+  latestCheckedAt: Date | null;
+}
+
+interface LatestStatusRow {
+  sampleId: string;
+  sampledAt: Date;
+  status: QualityStatus;
+  statusReasonEt: string | null;
+  statusReasonEn: string | null;
+}
+
+interface PlaceRow {
+  id: string;
+  externalId: string;
+  type: PlaceType;
+  nameEt: string;
+  nameEn: string;
+  municipality: string;
+  addressEt: string | null;
+  addressEn: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  latestStatus: LatestStatusRow | null;
+  samplingPoints?: Array<{
+    name: string;
+    address: string | null;
+  }>;
+}
+
 const DEFAULT_LIST_LIMIT = 10;
 const SEARCH_LIST_LIMIT = 20;
+
+const PLACE_LATEST_STATUS_SELECT = {
+  sampleId: true,
+  sampledAt: true,
+  status: true,
+  statusReasonEt: true,
+  statusReasonEn: true,
+} satisfies Prisma.PlaceLatestStatusSelect;
+
+const PLACE_CORE_SELECT = {
+  id: true,
+  externalId: true,
+  type: true,
+  nameEt: true,
+  nameEn: true,
+  municipality: true,
+  addressEt: true,
+  addressEn: true,
+  latitude: true,
+  longitude: true,
+} satisfies Prisma.PlaceSelect;
+
+const PLACE_BASE_SELECT = {
+  ...PLACE_CORE_SELECT,
+  latestStatus: {
+    select: PLACE_LATEST_STATUS_SELECT,
+  },
+} satisfies Prisma.PlaceSelect;
+
+const PLACE_WITH_SAMPLING_POINTS_SELECT = {
+  ...PLACE_BASE_SELECT,
+  samplingPoints: {
+    select: {
+      name: true,
+      address: true,
+    },
+  },
+} satisfies Prisma.PlaceSelect;
+
 @Injectable()
 export class PlacesService {
   constructor(private readonly prisma: PrismaService) {}
@@ -52,113 +135,46 @@ export class PlacesService {
     const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-    const [
-      totalEntries,
-      poolEntries,
-      beachEntries,
-      badQualityEntries,
-      goodQualityEntries,
-      unknownQualityEntries,
-      badPoolEntries,
-      badBeachEntries,
-      updatedWithin24hEntries,
-      staleOver7dEntries,
-      latestChangedSampleFile,
-      latestCheckedSampleFile,
-    ] =
-      await this.prisma.$transaction([
-        this.prisma.placeLatestStatus.count(),
-        this.prisma.placeLatestStatus.count({
-          where: {
-            place: {
-              type: 'POOL',
-            },
-          },
-        }),
-        this.prisma.placeLatestStatus.count({
-          where: {
-            place: {
-              type: 'BEACH',
-            },
-          },
-        }),
-        this.prisma.placeLatestStatus.count({
-          where: {
-            status: 'BAD',
-          },
-        }),
-        this.prisma.placeLatestStatus.count({
-          where: {
-            status: 'GOOD',
-          },
-        }),
-        this.prisma.placeLatestStatus.count({
-          where: {
-            status: 'UNKNOWN',
-          },
-        }),
-        this.prisma.placeLatestStatus.count({
-          where: {
-            status: 'BAD',
-            place: {
-              type: 'POOL',
-            },
-          },
-        }),
-        this.prisma.placeLatestStatus.count({
-          where: {
-            status: 'BAD',
-            place: {
-              type: 'BEACH',
-            },
-          },
-        }),
-        this.prisma.placeLatestStatus.count({
-          where: {
-            sampledAt: {
-              gte: oneDayAgo,
-            },
-          },
-        }),
-        this.prisma.placeLatestStatus.count({
-          where: {
-            sampledAt: {
-              lt: sevenDaysAgo,
-            },
-          },
-        }),
-        this.prisma.sourceSyncState.findFirst({
-          where: {
-            fileKind: { in: sampleKinds },
-            lastChangedAt: { not: null },
-          },
-          orderBy: { lastChangedAt: 'desc' },
-          select: { lastChangedAt: true },
-        }),
-        this.prisma.sourceSyncState.findFirst({
-          where: {
-            fileKind: { in: sampleKinds },
-            lastCheckedAt: { not: null },
-          },
-          orderBy: { lastCheckedAt: 'desc' },
-          select: { lastCheckedAt: true },
-        }),
-      ]);
+    const [metricsRows, sourceRows] = await this.prisma.$transaction([
+      this.prisma.$queryRaw<MetricsAggregateRow[]>(Prisma.sql`
+        SELECT
+          COUNT(*)::int AS "totalEntries",
+          COUNT(*) FILTER (WHERE p.type = 'POOL')::int AS "poolEntries",
+          COUNT(*) FILTER (WHERE p.type = 'BEACH')::int AS "beachEntries",
+          COUNT(*) FILTER (WHERE ls.status = 'BAD')::int AS "badQualityEntries",
+          COUNT(*) FILTER (WHERE ls.status = 'GOOD')::int AS "goodQualityEntries",
+          COUNT(*) FILTER (WHERE ls.status = 'UNKNOWN')::int AS "unknownQualityEntries",
+          COUNT(*) FILTER (WHERE ls.status = 'BAD' AND p.type = 'POOL')::int AS "badPoolEntries",
+          COUNT(*) FILTER (WHERE ls.status = 'BAD' AND p.type = 'BEACH')::int AS "badBeachEntries",
+          COUNT(*) FILTER (WHERE ls."sampledAt" >= ${oneDayAgo})::int AS "updatedWithin24hEntries",
+          COUNT(*) FILTER (WHERE ls."sampledAt" < ${sevenDaysAgo})::int AS "staleOver7dEntries"
+        FROM "PlaceLatestStatus" ls
+        INNER JOIN "Place" p ON p.id = ls."placeId"
+      `),
+      this.prisma.$queryRaw<SourceUpdateAggregateRow[]>(Prisma.sql`
+        SELECT
+          MAX("lastChangedAt") AS "latestChangedAt",
+          MAX("lastCheckedAt") AS "latestCheckedAt"
+        FROM "SourceSyncState"
+        WHERE "fileKind" IN (${Prisma.join(sampleKinds)})
+      `),
+    ]);
 
-    const latestSourceUpdatedAt =
-      latestChangedSampleFile?.lastChangedAt ?? latestCheckedSampleFile?.lastCheckedAt;
+    const metrics = metricsRows[0];
+    const sourceUpdates = sourceRows[0];
+    const latestSourceUpdatedAt = sourceUpdates?.latestChangedAt ?? sourceUpdates?.latestCheckedAt;
 
     return {
-      totalEntries,
-      poolEntries,
-      beachEntries,
-      badQualityEntries,
-      goodQualityEntries,
-      unknownQualityEntries,
-      badPoolEntries,
-      badBeachEntries,
-      updatedWithin24hEntries,
-      staleOver7dEntries,
+      totalEntries: metrics?.totalEntries ?? 0,
+      poolEntries: metrics?.poolEntries ?? 0,
+      beachEntries: metrics?.beachEntries ?? 0,
+      badQualityEntries: metrics?.badQualityEntries ?? 0,
+      goodQualityEntries: metrics?.goodQualityEntries ?? 0,
+      unknownQualityEntries: metrics?.unknownQualityEntries ?? 0,
+      badPoolEntries: metrics?.badPoolEntries ?? 0,
+      badBeachEntries: metrics?.badBeachEntries ?? 0,
+      updatedWithin24hEntries: metrics?.updatedWithin24hEntries ?? 0,
+      staleOver7dEntries: metrics?.staleOver7dEntries ?? 0,
       latestSourceUpdatedAt: latestSourceUpdatedAt ? latestSourceUpdatedAt.toISOString() : null,
     };
   }
@@ -183,36 +199,20 @@ export class PlacesService {
           return [];
         }
 
-        type RankedPlace = Place & {
-          latestStatus: PlaceLatestStatus | null;
-          samplingPoints: Array<{
-            name: string;
-            address: string | null;
-          }>;
-        };
-
         const placeMap = new Map(
           (
             await this.prisma.place.findMany({
               where: {
                 id: { in: rankedPlaceIds },
               },
-              include: {
-                latestStatus: true,
-                samplingPoints: {
-                  select: {
-                    name: true,
-                    address: true,
-                  },
-                },
-              },
+              select: PLACE_WITH_SAMPLING_POINTS_SELECT,
             })
-          ).map((place) => [place.id, place as RankedPlace] as const),
+          ).map((place) => [place.id, place as PlaceRow] as const),
         );
 
         const orderedPlaces = rankedPlaceIds
           .map((placeId) => placeMap.get(placeId))
-          .filter((place): place is RankedPlace => Boolean(place));
+          .filter((place): place is PlaceRow => Boolean(place));
 
         const strictlyFilteredPlaces = this.filterStrictSearchMatches(orderedPlaces, search);
         const responsePlaces = strictlyFilteredPlaces.length > 0
@@ -233,26 +233,10 @@ export class PlacesService {
               }
             : undefined,
         },
-        include: {
+        select: {
+          ...PLACE_LATEST_STATUS_SELECT,
           place: {
-            select: {
-              id: true,
-              externalId: true,
-              externalKey: true,
-              nameEt: true,
-              nameEn: true,
-              type: true,
-              municipality: true,
-              addressEt: true,
-              addressEn: true,
-              coordinateX: true,
-              coordinateY: true,
-              latitude: true,
-              longitude: true,
-              sourceUrl: true,
-              createdAt: true,
-              updatedAt: true,
-            },
+            select: PLACE_CORE_SELECT,
           },
         },
         skip: offset,
@@ -263,7 +247,7 @@ export class PlacesService {
       const places = latestStatuses.map(({ place, ...latestStatus }) => ({
         ...place,
         latestStatus,
-      }));
+      })) as PlaceRow[];
 
       return this.toListResponsesWithBadDetails(places, locale, query.includeBadDetails);
     }
@@ -305,23 +289,19 @@ export class PlacesService {
               isNot: null,
             },
       },
-      include: {
-        latestStatus: true,
-      },
+      select: PLACE_BASE_SELECT,
       skip: offset,
       take: limit,
       orderBy,
     });
 
-    return this.toListResponsesWithBadDetails(places, locale, query.includeBadDetails);
+    return this.toListResponsesWithBadDetails(places as PlaceRow[], locale, query.includeBadDetails);
   }
 
   async getPlaceById(id: string, locale: 'et' | 'en' = 'et'): Promise<PlaceListResponse> {
     const place = await this.prisma.place.findUnique({
       where: { id },
-      include: {
-        latestStatus: true,
-      },
+      select: PLACE_BASE_SELECT,
     });
 
     if (!place) {
@@ -352,15 +332,13 @@ export class PlacesService {
           in: normalizedIds,
         },
       },
-      include: {
-        latestStatus: true,
-      },
+      select: PLACE_BASE_SELECT,
     });
 
     const placeMap = new Map(places.map((place) => [place.id, place] as const));
     const orderedPlaces = normalizedIds
       .map((id) => placeMap.get(id))
-      .filter((place): place is Place & { latestStatus: PlaceLatestStatus | null } => Boolean(place));
+      .filter((place): place is PlaceRow => Boolean(place));
 
     return this.toListResponsesWithBadDetails(orderedPlaces, locale, includeBadDetails);
   }
@@ -605,7 +583,7 @@ export class PlacesService {
   }
 
   private toListResponse(
-    place: Place & { latestStatus: PlaceLatestStatus | null },
+    place: PlaceRow,
     locale: 'et' | 'en',
     badDetailsBySampleId?: ReadonlyMap<string, string[]>,
   ): PlaceListResponse {
@@ -639,7 +617,7 @@ export class PlacesService {
   }
 
   private async toListResponsesWithBadDetails<
-    T extends Place & { latestStatus: PlaceLatestStatus | null },
+    T extends PlaceRow,
   >(
     places: T[],
     locale: 'et' | 'en',

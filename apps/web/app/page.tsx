@@ -1,7 +1,8 @@
 import type { AppLocale, PlaceType, QualityStatus } from '@veevalve/core/client';
 
 import { PlacesBrowser } from '../components/places-browser';
-import { EMPTY_PLACE_METRICS, fetchPlaces } from '../lib/fetch-places';
+import { EMPTY_PLACE_METRICS } from '../lib/fetch-place-metrics';
+import { fetchPlaces } from '../lib/fetch-places';
 
 interface HomePageProps {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;

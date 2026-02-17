@@ -1,6 +1,6 @@
 @import 'tailwindcss';
 @config '../tailwind.config.mjs';
-@source '../../../packages/ui/src/web';
+@source '../../../packages/ui/src/web/place-card.tsx';
 
 body {
   font-family: var(--font-body), 'Avenir Next', 'Segoe UI', sans-serif;
