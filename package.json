@@ -5,7 +5,7 @@
   "description": "Water quality alerts for Estonian pools and beaches.",
   "packageManager": "pnpm@10.29.3",
   "engines": {
-    "node": ">=20.11.1"
+    "node": ">=24.13.1 <25"
   },
   "scripts": {
     "dev": "turbo run dev --parallel",

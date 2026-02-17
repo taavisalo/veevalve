@@ -102,7 +102,7 @@ docker compose run --rm \
 ## Quick Start (Local, Native Toolchain)
 
 Prerequisites:
-- Node.js 20+
+- Node.js 24.13.1
 - pnpm 10+
 - Docker (for local PostgreSQL) or a local PostgreSQL instance
 

@@ -1,4 +1,4 @@
-FROM node:20-bookworm-slim AS base
+FROM node:24.13.1-bookworm-slim AS base
 
 ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
@@ -17,7 +17,7 @@ RUN pnpm --filter @veevalve/core build
 RUN pnpm --filter @veevalve/ui build
 RUN pnpm --filter @veevalve/web build
 
-FROM node:20-bookworm-slim AS runtime
+FROM node:24.13.1-bookworm-slim AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
