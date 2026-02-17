@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "pnpm prisma:ensure && nest start --watch",
-    "build": "pnpm prisma:ensure && nest build",
+    "build": "pnpm --filter @veevalve/core build && pnpm prisma:ensure && nest build",
     "start": "node dist/src/main.js",
     "start:docker": "node dist/src/main.js",
     "lint": "eslint \"src/**/*.{ts,tsx}\"",
