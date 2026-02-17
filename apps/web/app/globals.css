@@ -1,6 +1,6 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
+@config '../tailwind.config.ts';
+@source '../../../packages/ui/src/web';
 
 :root {
   --font-body: 'Manrope', 'Avenir Next', 'Segoe UI', sans-serif;
@@ -9,6 +9,17 @@
 
 body {
   font-family: var(--font-body);
+}
+
+a[href],
+button:not(:disabled),
+[role='button']:not([aria-disabled='true']) {
+  cursor: pointer;
+}
+
+button:disabled,
+[aria-disabled='true'] {
+  cursor: not-allowed;
 }
 
 h1,
