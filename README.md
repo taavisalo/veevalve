@@ -74,6 +74,8 @@ Services:
 - Postgres: `localhost:5432`
 - Expo Metro: `localhost:8081`
 
+The `api` service reads `DATABASE_URL` from your `.env`. If not set, Docker falls back to local Postgres (`postgres:5432`).
+
 To run only database + workspace container:
 
 ```bash
@@ -86,6 +88,15 @@ To start only selected app services after bootstrap:
 docker compose up api
 docker compose up web
 docker compose up mobile
+```
+
+Run migrations inside Docker against local Postgres:
+
+```bash
+docker compose up -d postgres workspace
+docker compose run --rm \
+  -e 'DATABASE_URL=postgresql://veevalve:veevalve@postgres:5432/veevalve?schema=public' \
+  api pnpm --filter @veevalve/api prisma:migrate:deploy
 ```
 
 ## Quick Start (Local, Native Toolchain)
@@ -279,6 +290,17 @@ Backend identity model supports multiple providers per user.
 - `CI`: lint + typecheck + tests + build
 - `Deploy Web (Vercel)`: production deployment with Vercel secrets
 - `Build Mobile (EAS)`: workflow-dispatch build/submit pipeline
+
+## Vercel API Setup
+
+For a dedicated API project on Vercel:
+- Framework preset: `NestJS` (or `Other`, but not `Next.js`)
+- Root directory: `apps/api`
+- Output directory: leave empty
+- Install command: `cd ../.. && pnpm install --frozen-lockfile`
+- Build command: `cd ../.. && pnpm --filter @veevalve/core build && pnpm --filter @veevalve/api build`
+
+If your API project has many environment variables set in Vercel, `turbo.json` already allowlists them for the `build` task so they are available during build execution.
 
 ## Size and Performance Defaults
 

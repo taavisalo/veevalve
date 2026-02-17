@@ -48,7 +48,7 @@ services:
       pnpm --filter @veevalve/api... build &&
       pnpm --filter @veevalve/api start:docker"
     environment:
-      DATABASE_URL: postgresql://veevalve:veevalve@postgres:5432/veevalve?schema=public
+      DATABASE_URL: ${DATABASE_URL:-postgresql://veevalve:veevalve@postgres:5432/veevalve?schema=public}
       TERVISEAMET_POOL_FACILITIES_URL: https://vtiav.sm.ee/index.php/opendata/ujulad.xml
       TERVISEAMET_POOL_LOCATIONS_URL: https://vtiav.sm.ee/index.php/opendata/basseinid.xml
       TERVISEAMET_BEACH_LOCATIONS_URL: https://vtiav.sm.ee/index.php/opendata/supluskohad.xml

@@ -28,18 +28,20 @@
     "@nestjs/core": "^11.1.13",
     "@nestjs/platform-fastify": "^11.1.13",
     "@nestjs/schedule": "^5.0.1",
-    "@prisma/client": "^6.19.2",
+    "@prisma/adapter-pg": "^7.4.0",
+    "@prisma/client": "^7.4.0",
     "@veevalve/core": "workspace:*",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.3",
     "fastify": "^5.7.4",
+    "pg": "^8.18.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2"
   },
   "devDependencies": {
     "@nestjs/cli": "^11.0.16",
     "@types/node": "^22.19.11",
-    "prisma": "^6.19.2",
+    "prisma": "^7.4.0",
     "ts-node": "^10.9.2",
     "tsx": "^4.21.0",
     "vitest": "^3.2.4"

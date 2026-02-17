@@ -59,6 +59,16 @@ interface SampleImportSummary {
   affectedPlaceIds: Set<string>;
 }
 
+interface FetchLikeResponse {
+  status: number;
+  ok: boolean;
+  headers: {
+    get(name: string): string | null;
+  };
+  body: ReadableStream<Uint8Array> | null;
+  text(): Promise<string>;
+}
+
 export interface SyncSummary {
   feedsChecked: number;
   feedsChanged: number;
@@ -405,7 +415,7 @@ export class WaterQualityService {
       requestHeaders['If-Modified-Since'] = state.lastModified;
     }
 
-    let response: Response;
+    let response: FetchLikeResponse;
     try {
       const timeoutMs = Math.max(
         1,
@@ -533,7 +543,7 @@ export class WaterQualityService {
   }
 
   private async readResponseTextWithLimit(
-    response: Response,
+    response: FetchLikeResponse,
     maxBytes: number,
   ): Promise<string> {
     const reader = response.body?.getReader();

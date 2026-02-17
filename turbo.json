@@ -3,7 +3,27 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**", ".next/**", "expo-env.d.ts"]
+      "outputs": ["dist/**", ".next/**", "expo-env.d.ts"],
+      "env": [
+        "DATABASE_URL",
+        "TERVISEAMET_POOL_FACILITIES_URL",
+        "TERVISEAMET_POOL_LOCATIONS_URL",
+        "TERVISEAMET_BEACH_LOCATIONS_URL",
+        "TERVISEAMET_POOL_SAMPLES_URL_TEMPLATE",
+        "TERVISEAMET_BEACH_SAMPLES_URL_TEMPLATE",
+        "TERVISEAMET_SAMPLE_YEARS_BACK",
+        "TERVISEAMET_FETCH_TIMEOUT_MS",
+        "TERVISEAMET_MAX_FEED_BYTES",
+        "TERVISEAMET_ALLOWED_HOSTS",
+        "CORS_ORIGIN",
+        "BODY_LIMIT_BYTES",
+        "SYNC_API_TOKEN",
+        "ALLOW_UNAUTHENTICATED_SYNC",
+        "ENABLE_INTERNAL_SYNC_CRON",
+        "SYNC_RATE_LIMIT_MAX",
+        "SYNC_RATE_LIMIT_WINDOW_MS",
+        "SYNC_RATE_LIMIT_MAX_TRACKED_IPS"
+      ]
     },
     "dev": {
       "cache": false,
