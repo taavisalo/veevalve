@@ -429,6 +429,7 @@ export class WaterQualityService {
         redirect: 'error',
         signal: AbortSignal.timeout(timeoutMs),
       });
+      response = this.assertFetchLikeResponse(response);
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Unknown network error';
@@ -586,6 +587,30 @@ export class WaterQualityService {
     }
 
     return new TextDecoder('utf-8').decode(merged);
+  }
+
+  private assertFetchLikeResponse(response: unknown): FetchLikeResponse {
+    if (!response || typeof response !== 'object') {
+      throw new Error('Feed response is not an object.');
+    }
+
+    const candidate = response as Partial<FetchLikeResponse>;
+    const hasStatus = typeof candidate.status === 'number';
+    const hasOk = typeof candidate.ok === 'boolean';
+    const hasText = typeof candidate.text === 'function';
+    const hasHeadersObject =
+      !!candidate.headers && typeof candidate.headers === 'object';
+    const hasHeadersGetter =
+      hasHeadersObject &&
+      typeof (candidate.headers as { get?: unknown }).get === 'function';
+    const body = candidate.body as { getReader?: unknown } | null | undefined;
+    const hasValidBody = body == null || typeof body.getReader === 'function';
+
+    if (hasStatus && hasOk && hasText && hasHeadersGetter && hasValidBody) {
+      return candidate as FetchLikeResponse;
+    }
+
+    throw new Error('Feed response is missing required fetch fields.');
   }
 
   private async recordFeedState(args: {
