@@ -85,6 +85,11 @@ interface UpsertPlaceInput {
 export class WaterQualityService {
   private readonly logger = new Logger(WaterQualityService.name);
   private readonly placeCache = new Map<string, Place>();
+  private readonly internalSyncCronEnabled = this.readBoolean(
+    process.env.ENABLE_INTERNAL_SYNC_CRON,
+    process.env.NODE_ENV !== 'production',
+  );
+  private hasLoggedDisabledInternalCron = false;
   private syncInFlight: Promise<SyncSummary> | null = null;
 
   constructor(
@@ -94,6 +99,14 @@ export class WaterQualityService {
 
   @Cron('15 * * * *')
   async scheduledSync(): Promise<void> {
+    if (!this.internalSyncCronEnabled) {
+      if (!this.hasLoggedDisabledInternalCron) {
+        this.logger.log('Internal sync cron is disabled. Use an external scheduler to call POST /api/water-quality/sync.');
+        this.hasLoggedDisabledInternalCron = true;
+      }
+      return;
+    }
+
     await this.syncFromTerviseamet({ force: false });
   }
 
@@ -317,6 +330,22 @@ export class WaterQualityService {
     }
 
     return parsed;
+  }
+
+  private readBoolean(value: string | undefined, fallback: boolean): boolean {
+    if (!value) {
+      return fallback;
+    }
+
+    const normalized = value.trim().toLowerCase();
+    if (normalized === 'true' || normalized === '1' || normalized === 'yes') {
+      return true;
+    }
+    if (normalized === 'false' || normalized === '0' || normalized === 'no') {
+      return false;
+    }
+
+    return fallback;
   }
 
   private feedIntervalMs(fileKind: SourceFileKind): number {

@@ -37,6 +37,7 @@ Data source:
   - `@veevalve/ui` (web and native UI primitives)
 - CI/CD:
   - GitHub Actions for CI
+  - GitHub Actions scheduled sync trigger for API
   - EAS Build/Submit for mobile
   - Vercel deployment workflow for web
 
@@ -161,6 +162,7 @@ Important variables:
 - `CORS_ORIGIN`
 - `SYNC_API_TOKEN`
 - `ALLOW_UNAUTHENTICATED_SYNC` (dev-only fallback; ignored in production)
+- `ENABLE_INTERNAL_SYNC_CRON` (set `false` in production when using external scheduler)
 - `SYNC_RATE_LIMIT_MAX`
 - `SYNC_RATE_LIMIT_WINDOW_MS`
 - `SYNC_RATE_LIMIT_MAX_TRACKED_IPS`
@@ -218,6 +220,18 @@ Default polling optimization implemented:
 - pool sample feeds: every 2h
 - beach sample feeds: every 2h in May-October, otherwise every 24h
 
+## Production Scheduling (Vercel-Friendly)
+
+When deploying the API on serverless platforms, use an external scheduler.
+
+Recommended setup:
+- Set `ENABLE_INTERNAL_SYNC_CRON=false` in API production env
+- Use GitHub Actions workflow `.github/workflows/api-sync.yml`
+- Add repository secrets:
+  - `SYNC_API_URL` (for example `https://api.example.com/api/water-quality/sync`)
+  - `SYNC_API_TOKEN` (must match API `SYNC_API_TOKEN`)
+- Schedule currently runs every 2 hours (`17 */2 * * *`) and can also be run manually with `workflow_dispatch`
+
 ## Auth Strategy
 
 Guest mode is supported by default.
@@ -266,7 +280,8 @@ This repository is an actively implemented MVP, not just a scaffold.
 
 Implemented now:
 - Live API-backed web and mobile list/search flows
-- Hourly scheduled XML sync (`:15` each hour) with per-feed interval optimization and change detection
+- XML sync with per-feed interval optimization and change detection
+- Production-ready external scheduler flow via GitHub Actions (`POST /api/water-quality/sync`)
 - Normalized PostgreSQL schema with Prisma migrations and seed data
 - Metrics endpoint and compact metrics UI (with persisted visibility preferences)
 - About panel with source and status explanation
