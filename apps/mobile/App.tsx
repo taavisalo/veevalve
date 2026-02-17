@@ -563,12 +563,12 @@ const App = () => {
           {aboutVisible ? (
             <View style={styles.aboutPanel}>
               <Text style={styles.aboutTitle}>
-                {locale === 'et' ? 'Kust andmed tulevad?' : 'Where does this data come from?'}
+                {locale === 'et' ? 'Abi: andmeallikas ja uuendused' : 'Help: data source and updates'}
               </Text>
               <Text style={styles.aboutText}>
                 {locale === 'et'
-                  ? 'Andmed pärinevad Terviseameti avalikest XML-andmetest.'
-                  : 'Data comes from public XML feeds by the Estonian Health Board.'}
+                  ? 'VeeValve kasutab Terviseameti avalikke XML-andmeid. Kuvatakse viimased teadaolevad tulemused.'
+                  : 'VeeValve uses public XML feeds by the Estonian Health Board. The app shows the latest known sample status.'}
               </Text>
               <Pressable
                 onPress={openAboutSourceLink}
@@ -586,7 +586,7 @@ const App = () => {
                   <Text style={styles.aboutListItem}>
                     • Supluskohtade allikad: supluskohad.xml, supluskoha_veeproovid_{'{year}'}.xml
                   </Text>
-                  <Text style={styles.aboutListItem}>• Andmete uuendaminde käivitub iga tunni 15. minutil.</Text>
+                  <Text style={styles.aboutListItem}>• Automaatne sünkroon käivitub iga tunni 15. minutil.</Text>
                   <Text style={styles.aboutListItem}>
                     • Muutuseid kontrollitakse ETag/Last-Modified päiste ja sisuräsi abil.
                   </Text>
@@ -598,6 +598,22 @@ const App = () => {
                   <Text style={styles.aboutListItem}>• Halb: viimane proov ei vasta nõuetele.</Text>
                   <Text style={styles.aboutListItem}>
                     • Teadmata: värske hinnang puudub või staatust ei saanud määrata.
+                  </Text>
+                  <Text style={styles.aboutTitleSecondary}>Kuidas brauseri tõuketeavitused töötavad?</Text>
+                  <Text style={styles.aboutListItem}>
+                    • Teavitused on valikulised: esmalt lisa koht lemmikutesse, siis lülita teavitused sisse.
+                  </Text>
+                  <Text style={styles.aboutListItem}>
+                    • Teavitusi saadetakse ainult lemmikutes olevatele kohtadele.
+                  </Text>
+                  <Text style={styles.aboutListItem}>
+                    • Märguanne tuleb staatuse muutuse korral (Hea ↔ Halb), mitte iga uuenduse peale.
+                  </Text>
+                  <Text style={styles.aboutListItem}>
+                    • Teavitused töötavad ka siis, kui leht on suletud (service workeri kaudu).
+                  </Text>
+                  <Text style={styles.aboutListItem}>
+                    • Kui teavitused on blokeeritud, ava need brauseri saidi seadetes uuesti.
                   </Text>
                 </>
               ) : (
@@ -620,6 +636,22 @@ const App = () => {
                   <Text style={styles.aboutListItem}>• Bad: the latest sample does not meet requirements.</Text>
                   <Text style={styles.aboutListItem}>
                     • Unknown: no recent rating is available, or a status could not be determined.
+                  </Text>
+                  <Text style={styles.aboutTitleSecondary}>How do browser push notifications work?</Text>
+                  <Text style={styles.aboutListItem}>
+                    • Push alerts are opt-in: add a place to favorites first, then enable alerts.
+                  </Text>
+                  <Text style={styles.aboutListItem}>
+                    • Notifications are sent only for favorited places.
+                  </Text>
+                  <Text style={styles.aboutListItem}>
+                    • An alert is sent on status transition (Good ↔ Bad), not on every sync run.
+                  </Text>
+                  <Text style={styles.aboutListItem}>
+                    • Alerts can be delivered even when the page is closed (via service worker).
+                  </Text>
+                  <Text style={styles.aboutListItem}>
+                    • If notifications are blocked, re-enable them in browser site settings.
                   </Text>
                 </>
               )}
