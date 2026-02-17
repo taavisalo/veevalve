@@ -2,16 +2,6 @@ name: Deploy Web (Vercel)
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - 'apps/web/**'
-      - 'packages/core/**'
-      - 'packages/ui/**'
-      - 'pnpm-workspace.yaml'
-      - 'package.json'
-      - 'turbo.json'
 
 jobs:
   deploy:

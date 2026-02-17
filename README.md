@@ -288,8 +288,8 @@ Backend identity model supports multiple providers per user.
 ## CI/CD
 
 - `CI`: lint + typecheck + tests + build
-- `Deploy Web (Vercel)`: production deployment with Vercel secrets
-- `Build Mobile (EAS)`: workflow-dispatch build/submit pipeline
+- `Deploy Web (Vercel)`: manual (`workflow_dispatch`) production deployment with Vercel secrets
+- `Build Mobile (EAS)`: manual (`workflow_dispatch`) build/submit pipeline
 
 ## Vercel API Setup
 
