@@ -42,7 +42,6 @@ interface RankedPlaceId {
 
 const DEFAULT_LIST_LIMIT = 10;
 const SEARCH_LIST_LIMIT = 20;
-
 @Injectable()
 export class PlacesService {
   constructor(private readonly prisma: PrismaService) {}

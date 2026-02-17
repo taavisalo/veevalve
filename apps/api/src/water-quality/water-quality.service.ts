@@ -111,7 +111,7 @@ export class WaterQualityService {
   async scheduledSync(): Promise<void> {
     if (!this.internalSyncCronEnabled) {
       if (!this.hasLoggedDisabledInternalCron) {
-        this.logger.log('Internal sync cron is disabled. Use an external scheduler to call POST /api/water-quality/sync.');
+        this.logger.log('Internal sync cron is disabled. Use an external scheduler to call POST /water-quality/sync.');
         this.hasLoggedDisabledInternalCron = true;
       }
       return;
@@ -1152,15 +1152,19 @@ export class WaterQualityService {
     return points.find((point) => point.coordinate || point.address) ?? points[0];
   }
 
-  private resolveMunicipality(address: string | undefined): string {
+  private resolveMunicipality(address: string | undefined): string | undefined {
     if (!address) {
-      return UNKNOWN_MUNICIPALITY;
+      return undefined;
     }
 
     const parts = address
       .split(',')
       .map((part) => part.trim())
       .filter((part) => part.length > 0);
+
+    if (parts.length === 0) {
+      return undefined;
+    }
 
     for (let index = parts.length - 1; index >= 0; index -= 1) {
       const candidate = parts[index];
@@ -1180,7 +1184,7 @@ export class WaterQualityService {
       }
     }
 
-    return parts[parts.length - 1] ?? UNKNOWN_MUNICIPALITY;
+    return parts[parts.length - 1];
   }
 
   private externalKey(type: PlaceType, externalId: string): string {
@@ -1212,8 +1216,7 @@ export class WaterQualityService {
 
     const municipality =
       input.municipality ??
-      this.resolveMunicipality(input.addressEt) ??
-      UNKNOWN_MUNICIPALITY;
+      this.resolveMunicipality(input.addressEt);
 
     const place = await this.prisma.place.upsert({
       where: { externalKey: key },
@@ -1234,7 +1237,7 @@ export class WaterQualityService {
         type: input.type,
         nameEt: input.nameEt,
         nameEn: input.nameEt,
-        municipality,
+        municipality: municipality ?? UNKNOWN_MUNICIPALITY,
         addressEt: input.addressEt,
         addressEn: input.addressEt,
         coordinateX: input.coordinate?.x,
@@ -1282,4 +1285,5 @@ export class WaterQualityService {
       },
     });
   }
+
 }
