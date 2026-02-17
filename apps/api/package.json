@@ -28,7 +28,7 @@
     "@nestjs/core": "^11.1.13",
     "@nestjs/platform-fastify": "^11.1.13",
     "@nestjs/schedule": "^5.0.1",
-    "@prisma/client": "^6.19.2",
+    "@prisma/client": "^7.4.0",
     "@veevalve/core": "workspace:*",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.3",
