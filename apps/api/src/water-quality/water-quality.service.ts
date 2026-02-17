@@ -424,12 +424,12 @@ export class WaterQualityService {
           DEFAULT_FEED_FETCH_TIMEOUT_MS,
         ),
       );
-      response = await fetch(descriptor.url, {
+      const fetchedResponse: unknown = await fetch(descriptor.url, {
         headers: requestHeaders,
         redirect: 'error',
         signal: AbortSignal.timeout(timeoutMs),
       });
-      response = this.assertFetchLikeResponse(response);
+      response = this.assertFetchLikeResponse(fetchedResponse);
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Unknown network error';
