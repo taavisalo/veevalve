@@ -54,6 +54,10 @@ const getHomeDescription = (locale: AppLocale): string => {
     : 'Jälgi Eesti avalike randade ja basseinide värskeid vee kvaliteedi tulemusi, staatusemuutusi ja lemmikuid.';
 };
 
+const getOpenGraphLocale = (locale: AppLocale): string => {
+  return locale === 'en' ? 'en_GB' : 'et_EE';
+};
+
 const shouldNoIndexVariant = (params: {
   type: PlaceType | 'ALL';
   status: QualityStatus | 'ALL';
@@ -72,6 +76,8 @@ export const generateMetadata = async ({ searchParams }: HomePageProps): Promise
   const title = getHomeTitle(locale);
   const description = getHomeDescription(locale);
   const noIndexVariant = shouldNoIndexVariant({ type, status, search });
+  const openGraphLocale = getOpenGraphLocale(locale);
+  const alternateLocale = openGraphLocale === 'en_GB' ? 'et_EE' : 'en_GB';
 
   return {
     title,
@@ -89,13 +95,22 @@ export const generateMetadata = async ({ searchParams }: HomePageProps): Promise
       title,
       description,
       url: landingPath,
-      locale: locale === 'en' ? 'en_GB' : 'et_EE',
-      alternateLocale: locale === 'en' ? 'et_EE' : 'en_GB',
+      locale: openGraphLocale,
+      alternateLocale,
+      images: [
+        {
+          url: '/opengraph-image',
+          width: 1200,
+          height: 630,
+          alt: title,
+        },
+      ],
     },
     twitter: {
-      card: 'summary',
+      card: 'summary_large_image',
       title,
       description,
+      images: ['/twitter-image'],
     },
     robots: noIndexVariant
       ? {
@@ -155,6 +170,20 @@ const HomePage = async ({ searchParams }: HomePageProps) => {
     url: siteUrl,
     logo: `${siteUrl}/apple-touch-icon.png`,
   };
+  const webApplicationSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'WebApplication',
+    name: 'VeeValve',
+    url: siteUrl,
+    applicationCategory: 'HealthApplication',
+    operatingSystem: 'Web',
+    inLanguage: ['et', 'en'],
+    browserRequirements: 'Requires JavaScript',
+  };
+  const jsonLdGraph = {
+    '@context': 'https://schema.org',
+    '@graph': [websiteSchema, organizationSchema, webApplicationSchema],
+  };
 
   const initialPlaces = await fetchPlaces({
     locale,
@@ -172,12 +201,7 @@ const HomePage = async ({ searchParams }: HomePageProps) => {
       <script
         type="application/ld+json"
         nonce={nonce ?? undefined}
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteSchema) }}
-      />
-      <script
-        type="application/ld+json"
-        nonce={nonce ?? undefined}
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationSchema) }}
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdGraph) }}
       />
       <PlacesBrowser
         initialLocale={locale}

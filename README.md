@@ -172,6 +172,7 @@ Important variables:
 - `TERVISEAMET_ALLOWED_HOSTS`
 - `NEXT_PUBLIC_API_BASE_URL`
 - `NEXT_PUBLIC_SITE_URL`
+- `GOOGLE_SITE_VERIFICATION`
 - `CORS_ORIGIN`
 - `SYNC_API_TOKEN`
 - `ALLOW_UNAUTHENTICATED_SYNC` (dev-only fallback; ignored in production)
@@ -211,6 +212,7 @@ Set the generated keys in API env and set `NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY
 Browser push requires HTTPS in production (`localhost` works for local development).
 
 Set `NEXT_PUBLIC_SITE_URL` to your public web origin (for example `https://veevalve.ee`) so canonical URLs, sitemap entries, robots host, and structured data all use the correct production domain.
+Set `GOOGLE_SITE_VERIFICATION` to your Search Console verification token to emit the recommended verification meta tag.
 
 Easier setup (recommended):
 

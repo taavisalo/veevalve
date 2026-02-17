@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Manrope, Newsreader } from 'next/font/google';
 
 import { resolveSiteUrl } from '../lib/site-url';
@@ -20,16 +20,33 @@ const titleFont = Newsreader({
   variable: '--font-title',
 });
 
+const siteName = 'VeeValve';
+const siteDescription = 'Avalike randade ja basseinide vee kvaliteedi teavitused Eestis.';
+const googleSiteVerification = process.env.GOOGLE_SITE_VERIFICATION?.trim();
+
 export const metadata: Metadata = {
   metadataBase: new URL(resolveSiteUrl()),
   title: {
-    default: 'VeeValve',
-    template: '%s | VeeValve',
+    default: siteName,
+    template: `%s | ${siteName}`,
   },
-  description: 'Avalike randade ja basseinide vee kvaliteedi teavitused Eestis.',
-  applicationName: 'VeeValve',
+  description: siteDescription,
+  applicationName: siteName,
   generator: 'Next.js',
   referrer: 'strict-origin-when-cross-origin',
+  creator: siteName,
+  publisher: siteName,
+  authors: [{ name: siteName }],
+  formatDetection: {
+    email: false,
+    address: false,
+    telephone: false,
+  },
+  appleWebApp: {
+    capable: true,
+    title: siteName,
+    statusBarStyle: 'default',
+  },
   keywords: [
     'vee kvaliteet',
     'rannad',
@@ -52,15 +69,24 @@ export const metadata: Metadata = {
     type: 'website',
     locale: 'et_EE',
     alternateLocale: 'en_GB',
-    siteName: 'VeeValve',
-    title: 'VeeValve',
-    description: 'Avalike randade ja basseinide vee kvaliteedi teavitused Eestis.',
+    siteName,
+    title: siteName,
+    description: siteDescription,
     url: '/',
+    images: [
+      {
+        url: '/opengraph-image',
+        width: 1200,
+        height: 630,
+        alt: `${siteName} — vee kvaliteet randades ja basseinides`,
+      },
+    ],
   },
   twitter: {
-    card: 'summary',
-    title: 'VeeValve',
-    description: 'Avalike randade ja basseinide vee kvaliteedi teavitused Eestis.',
+    card: 'summary_large_image',
+    title: siteName,
+    description: siteDescription,
+    images: ['/twitter-image'],
   },
   robots: {
     index: true,
@@ -82,7 +108,18 @@ export const metadata: Metadata = {
     apple: [{ url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }],
   },
   manifest: '/manifest.webmanifest',
+  verification: {
+    google: googleSiteVerification || undefined,
+  },
   category: 'health',
+};
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
+  colorScheme: 'light',
+  themeColor: '#0a8f78',
 };
 
 interface RootLayoutProps {
