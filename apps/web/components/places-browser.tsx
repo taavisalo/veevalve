@@ -15,17 +15,12 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 
 import { fetchPlaces, fetchPlacesByIds, type PlaceMetrics } from '../lib/fetch-places';
 import { readFavoritePlaceIds, writeFavoritePlaceIds } from '../lib/favorites-storage';
-import {
-  readFavoriteStatusNotificationsEnabled,
-  writeFavoriteStatusNotificationsEnabled,
-} from '../lib/favorite-status-notifications-storage';
 import { readMetricsUiPreferences, writeMetricsUiPreferences } from '../lib/ui-preferences-storage';
 
 const LATEST_RESULTS_LIMIT = 10;
 const SEARCH_RESULTS_LIMIT = 20;
 const SUGGESTION_LIMIT = 8;
 const SEARCH_DEBOUNCE_MS = 180;
-const FAVORITES_REFRESH_INTERVAL_MS = 120_000;
 const TERVISEAMET_DATA_URL = 'https://vtiav.sm.ee/index.php/?active_tab_id=A';
 
 const getResultsLimit = (search?: string): number =>
@@ -134,12 +129,6 @@ const formatShare = (count: number, total: number): string => {
   return `${percentage.toFixed(1)}%`;
 };
 
-const statusLabelKeyByStatus: Record<QualityStatus, 'qualityGood' | 'qualityBad' | 'qualityUnknown'> = {
-  GOOD: 'qualityGood',
-  BAD: 'qualityBad',
-  UNKNOWN: 'qualityUnknown',
-};
-
 export const PlacesBrowser = ({
   initialLocale,
   initialType,
@@ -172,17 +161,11 @@ export const PlacesBrowser = ({
   const [favoritesHydrated, setFavoritesHydrated] = useState(false);
   const [favoritesLoading, setFavoritesLoading] = useState(false);
   const [favoritePlaces, setFavoritePlaces] = useState<PlaceWithLatestReading[]>([]);
-  const [notificationsSupported, setNotificationsSupported] = useState(false);
-  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
-  const [statusNotificationsEnabled, setStatusNotificationsEnabled] = useState(false);
-  const [notificationsPreferencesHydrated, setNotificationsPreferencesHydrated] = useState(false);
 
   const isInitialRender = useRef(true);
   const searchContainerRef = useRef<HTMLDivElement | null>(null);
   const languageContainerRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const favoriteStatusSnapshotRef = useRef<Map<string, QualityStatus>>(new Map());
-  const favoriteStatusSnapshotHydratedRef = useRef(false);
   const suggestionsListId = useId();
 
   useEffect(() => {
@@ -265,49 +248,6 @@ export const PlacesBrowser = ({
   }, [metricsExpanded, metricsPreferencesHydrated, metricsVisible]);
 
   useEffect(() => {
-    if (typeof window === 'undefined' || !('Notification' in window)) {
-      setNotificationsSupported(false);
-      setNotificationPermission('default');
-      setStatusNotificationsEnabled(false);
-      setNotificationsPreferencesHydrated(true);
-      return;
-    }
-
-    setNotificationsSupported(true);
-    setNotificationPermission(window.Notification.permission);
-    setStatusNotificationsEnabled(readFavoriteStatusNotificationsEnabled());
-    setNotificationsPreferencesHydrated(true);
-  }, []);
-
-  useEffect(() => {
-    if (!notificationsSupported) {
-      return;
-    }
-
-    const syncPermission = () => {
-      if (typeof window === 'undefined' || !('Notification' in window)) {
-        return;
-      }
-      setNotificationPermission(window.Notification.permission);
-    };
-
-    window.addEventListener('focus', syncPermission);
-    document.addEventListener('visibilitychange', syncPermission);
-    return () => {
-      window.removeEventListener('focus', syncPermission);
-      document.removeEventListener('visibilitychange', syncPermission);
-    };
-  }, [notificationsSupported]);
-
-  useEffect(() => {
-    if (!notificationsPreferencesHydrated) {
-      return;
-    }
-
-    writeFavoriteStatusNotificationsEnabled(statusNotificationsEnabled);
-  }, [notificationsPreferencesHydrated, statusNotificationsEnabled]);
-
-  useEffect(() => {
     setFavoriteIds(readFavoritePlaceIds());
     setFavoritesHydrated(true);
   }, []);
@@ -324,100 +264,19 @@ export const PlacesBrowser = ({
     if (favoriteIds.length === 0) {
       setFavoritePlaces([]);
       setFavoritesLoading(false);
-      favoriteStatusSnapshotRef.current = new Map();
-      favoriteStatusSnapshotHydratedRef.current = false;
       return;
     }
 
-    let disposed = false;
-    let activeController: AbortController | null = null;
-    let inFlight = false;
+    const controller = new AbortController();
+    setFavoritesLoading(true);
 
-    const sendStatusChangeNotification = (
-      place: PlaceWithLatestReading,
-      previousStatus: QualityStatus,
-      nextStatus: QualityStatus,
-    ) => {
-      if (
-        !statusNotificationsEnabled ||
-        notificationPermission !== 'granted' ||
-        typeof window === 'undefined' ||
-        !('Notification' in window)
-      ) {
-        return;
-      }
-
-      const placeName = locale === 'en' ? place.nameEn : place.nameEt;
-      const title = locale === 'et' ? `VeeValve: ${placeName}` : `VeeValve: ${placeName}`;
-      const body =
-        locale === 'et'
-          ? `Vee kvaliteet muutus: ${t(statusLabelKeyByStatus[previousStatus], locale)} -> ${t(statusLabelKeyByStatus[nextStatus], locale)}`
-          : `Water quality changed: ${t(statusLabelKeyByStatus[previousStatus], locale)} -> ${t(statusLabelKeyByStatus[nextStatus], locale)}`;
-
-      try {
-        const notification = new Notification(title, {
-          body,
-          tag: `favorite-status-${place.id}`,
-        });
-
-        window.setTimeout(() => {
-          notification.close();
-        }, 10_000);
-      } catch {
-        // Ignore notification failures caused by browser policy.
-      }
-    };
-
-    const applyStatusChangeNotifications = (orderedPlaces: PlaceWithLatestReading[]) => {
-      const nextSnapshot = new Map<string, QualityStatus>();
-      for (const place of orderedPlaces) {
-        nextSnapshot.set(place.id, place.latestReading?.status ?? 'UNKNOWN');
-      }
-
-      if (!favoriteStatusSnapshotHydratedRef.current) {
-        favoriteStatusSnapshotRef.current = nextSnapshot;
-        favoriteStatusSnapshotHydratedRef.current = true;
-        return;
-      }
-
-      const previousSnapshot = favoriteStatusSnapshotRef.current;
-
-      for (const place of orderedPlaces) {
-        const nextStatus = nextSnapshot.get(place.id) ?? 'UNKNOWN';
-        const previousStatus = previousSnapshot.get(place.id);
-
-        if (!previousStatus || previousStatus === nextStatus) {
-          continue;
-        }
-
-        sendStatusChangeNotification(place, previousStatus, nextStatus);
-      }
-
-      favoriteStatusSnapshotRef.current = nextSnapshot;
-    };
-
-    const refreshFavorites = async (initialLoad: boolean): Promise<void> => {
-      if (inFlight || disposed) {
-        return;
-      }
-
-      inFlight = true;
-      const controller = new AbortController();
-      activeController = controller;
-
-      if (initialLoad) {
-        setFavoritesLoading(true);
-      }
-
-      try {
-        const fetchedPlaces = await fetchPlacesByIds({
-          locale,
-          ids: favoriteIds,
-          signal: controller.signal,
-          cacheMode: 'no-store',
-        });
-
-        if (controller.signal.aborted || disposed) {
+    fetchPlacesByIds({
+      locale,
+      ids: favoriteIds,
+      signal: controller.signal,
+    })
+      .then((fetchedPlaces) => {
+        if (controller.signal.aborted) {
           return;
         }
 
@@ -426,45 +285,22 @@ export const PlacesBrowser = ({
           .map((id) => byId.get(id))
           .filter((place): place is PlaceWithLatestReading => Boolean(place));
         setFavoritePlaces(ordered);
-        applyStatusChangeNotifications(ordered);
-      } catch (fetchError) {
-        if (controller.signal.aborted || disposed) {
+      })
+      .catch((fetchError: unknown) => {
+        if (controller.signal.aborted) {
           return;
         }
-
-        if (initialLoad) {
-          setFavoritePlaces([]);
-        }
+        setFavoritePlaces([]);
         console.error(fetchError);
-      } finally {
-        if (!controller.signal.aborted && !disposed && initialLoad) {
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
           setFavoritesLoading(false);
         }
-        inFlight = false;
-      }
-    };
+      });
 
-    void refreshFavorites(true);
-
-    const intervalId = window.setInterval(() => {
-      void refreshFavorites(false);
-    }, FAVORITES_REFRESH_INTERVAL_MS);
-
-    const onVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        void refreshFavorites(false);
-      }
-    };
-
-    document.addEventListener('visibilitychange', onVisibilityChange);
-
-    return () => {
-      disposed = true;
-      window.clearInterval(intervalId);
-      document.removeEventListener('visibilitychange', onVisibilityChange);
-      activeController?.abort();
-    };
-  }, [favoriteIds, locale, notificationPermission, statusNotificationsEnabled]);
+    return () => controller.abort();
+  }, [favoriteIds, locale]);
 
   useEffect(() => {
     const onPointerDown = (event: MouseEvent) => {
@@ -513,35 +349,6 @@ export const PlacesBrowser = ({
   const badShare = formatShare(metrics.badQualityEntries, metrics.totalEntries);
   const favoriteIdSet = useMemo(() => new Set(favoriteIds), [favoriteIds]);
   const hasFavorites = favoriteIds.length > 0;
-  const notificationsReady = notificationsSupported && notificationPermission === 'granted';
-  const notificationsActive = notificationsReady && statusNotificationsEnabled;
-
-  const toggleStatusNotifications = async () => {
-    if (typeof window === 'undefined' || !('Notification' in window)) {
-      return;
-    }
-
-    const currentPermission = window.Notification.permission;
-    setNotificationPermission(currentPermission);
-
-    if (currentPermission === 'granted') {
-      setStatusNotificationsEnabled((value) => !value);
-      return;
-    }
-
-    if (currentPermission === 'default') {
-      try {
-        const nextPermission = await window.Notification.requestPermission();
-        setNotificationPermission(nextPermission);
-        setStatusNotificationsEnabled(nextPermission === 'granted');
-      } catch {
-        setStatusNotificationsEnabled(false);
-      }
-      return;
-    }
-
-    setStatusNotificationsEnabled(false);
-  };
 
   const toggleFavorite = (placeId: string) => {
     setFavoriteIds((currentIds) => {
@@ -678,34 +485,6 @@ export const PlacesBrowser = ({
             }`}
           >
             {locale === 'et' ? 'Mõõdikud' : 'Metrics'}
-          </button>
-          <button
-            type="button"
-            aria-pressed={notificationsActive}
-            onClick={() => {
-              void toggleStatusNotifications();
-            }}
-            disabled={!notificationsSupported || notificationPermission === 'denied'}
-            title={
-              !notificationsSupported
-                ? (locale === 'et' ? 'Brauser ei toeta teavitusi' : 'This browser does not support notifications')
-                : notificationPermission === 'denied'
-                  ? (locale === 'et'
-                      ? 'Teavitused on brauseris blokeeritud'
-                      : 'Notifications are blocked in browser settings')
-                  : (locale === 'et'
-                      ? 'Teavita lemmikute staatuse muutusest'
-                      : 'Notify when favorite statuses change')
-            }
-            className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
-              notificationsActive
-                ? 'border-accent bg-accent text-white'
-                : 'border-emerald-100 bg-white text-accent hover:border-accent'
-            } disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400`}
-          >
-            {notificationsActive
-              ? (locale === 'et' ? 'Teavitused sees' : 'Alerts on')
-              : (locale === 'et' ? 'Teavitused väljas' : 'Alerts off')}
           </button>
           <div className="relative">
             <button
@@ -1120,19 +899,6 @@ export const PlacesBrowser = ({
               {favoritePlaces.length}
             </span>
           </div>
-          <p className="mb-3 text-xs text-slate-500">
-            {notificationsSupported
-              ? notificationsActive
-                ? (locale === 'et'
-                    ? 'Brauseri teavitused on sees. Muutuseid kontrollitakse umbes iga 2 minuti järel, kui leht on avatud.'
-                    : 'Browser alerts are on. Favorites are checked about every 2 minutes while this page is open.')
-                : (locale === 'et'
-                    ? 'Lülita teavitused sisse, et saada märguanne lemmikute staatuse muutustest.'
-                    : 'Enable alerts to get notified when favorite statuses change.')
-              : (locale === 'et'
-                  ? 'Sinu brauser ei toeta kohalikke teavitusi.'
-                  : 'Your browser does not support local notifications.')}
-          </p>
 
           {favoritesLoading && favoritePlaces.length === 0 ? (
             <div className="rounded-xl border border-emerald-100 bg-card p-4 text-sm text-slate-600">
