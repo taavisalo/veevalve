@@ -209,6 +209,32 @@ pnpm --filter @veevalve/api push:vapid -- --env --subject mailto:you@example.com
 Set the generated keys in API env and set `NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY` in web env.
 Browser push requires HTTPS in production (`localhost` works for local development).
 
+Easier setup (recommended):
+
+```bash
+# Print ready-to-copy values
+pnpm --filter @veevalve/api push:setup -- --subject mailto:you@example.com
+```
+
+The script sets these values:
+- API: `WEB_PUSH_VAPID_PUBLIC_KEY`, `WEB_PUSH_VAPID_PRIVATE_KEY`, `WEB_PUSH_VAPID_SUBJECT`
+- Web: `NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY`
+
+## Enable Push Notifications (Web)
+
+1. Open the web app in a supported browser (Chrome, Edge, Firefox).
+2. Add one or more places to Favorites.
+3. Click the notifications toggle in the top-right controls.
+4. Allow browser notification permission when prompted.
+
+Notes:
+- Alerts are sent only for favorited places when status changes (`GOOD` <-> `BAD`).
+- Notifications continue to work even when the tab is closed.
+- If notifications were blocked before, re-enable site notifications in browser settings.
+- For production, add the same variables in Vercel project settings:
+  - API project env: `WEB_PUSH_VAPID_PUBLIC_KEY`, `WEB_PUSH_VAPID_PRIVATE_KEY`, `WEB_PUSH_VAPID_SUBJECT`
+  - Web project env: `NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY`
+
 ## Data Schema
 
 The API uses a normalized Prisma/PostgreSQL schema for Terviseamet open-data ingestion:

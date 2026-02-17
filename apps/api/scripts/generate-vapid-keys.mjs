@@ -6,7 +6,7 @@ const printUsage = () => {
 
 const parseArgs = (argv) => {
   let asEnv = false;
-  let subject = 'mailto:taavi@salo.ee';
+  let subject = 'mailto:you@example.com';
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];

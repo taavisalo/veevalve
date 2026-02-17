@@ -14,7 +14,14 @@ import { WebPushModule } from './web-push/web-push.module';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: ['.env.local', '.env'],
+      envFilePath: [
+        '.env.local',
+        '.env',
+        'apps/api/.env.local',
+        'apps/api/.env',
+        '../../.env.local',
+        '../../.env',
+      ],
     }),
     ScheduleModule.forRoot(),
     PrismaModule,

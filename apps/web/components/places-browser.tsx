@@ -480,6 +480,16 @@ export const PlacesBrowser = ({
     webPushConfigured &&
     notificationPermission === 'granted';
   const notificationsActive = notificationsReady && statusNotificationsEnabled;
+  const notificationsButtonDisabled =
+    !notificationsSupported ||
+    !webPushConfigured ||
+    notificationPermission === 'denied' ||
+    notificationsSyncing;
+  const notificationsButtonLabel = notificationsSyncing
+    ? (locale === 'et' ? 'Uuendan…' : 'Updating…')
+    : notificationsActive
+      ? (locale === 'et' ? 'Teavitused sees' : 'Alerts on')
+      : (locale === 'et' ? 'Teavitused väljas' : 'Alerts off');
 
   const toggleStatusNotifications = async () => {
     if (!notificationsSupported || !webPushConfigured) {
@@ -652,12 +662,11 @@ export const PlacesBrowser = ({
           <button
             type="button"
             aria-pressed={notificationsActive}
+            aria-busy={notificationsSyncing}
             onClick={() => {
               void toggleStatusNotifications();
             }}
-            disabled={
-              !notificationsSupported || !webPushConfigured || notificationPermission === 'denied'
-            }
+            disabled={notificationsButtonDisabled}
             title={
               !notificationsSupported
                 ? (locale === 'et' ? 'Brauser ei toeta teavitusi' : 'This browser does not support notifications')
@@ -673,15 +682,19 @@ export const PlacesBrowser = ({
                       ? 'Teavita lemmikute staatuse muutusest'
                       : 'Notify when favorite statuses change')
             }
-            className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+            className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition ${
               notificationsActive
                 ? 'border-accent bg-accent text-white'
                 : 'border-emerald-100 bg-white text-accent hover:border-accent'
             } disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400`}
           >
-            {notificationsActive
-              ? (locale === 'et' ? 'Teavitused sees' : 'Alerts on')
-              : (locale === 'et' ? 'Teavitused väljas' : 'Alerts off')}
+            {notificationsSyncing ? (
+              <span
+                aria-hidden="true"
+                className="h-3 w-3 animate-spin rounded-full border-2 border-current border-r-transparent"
+              />
+            ) : null}
+            <span>{notificationsButtonLabel}</span>
           </button>
           <div className="relative">
             <button
@@ -725,6 +738,11 @@ export const PlacesBrowser = ({
             ) : null}
           </div>
         </div>
+        {notificationsError ? (
+          <p className="absolute right-6 top-14 z-10 max-w-64 text-right text-[11px] text-rose-600">
+            {notificationsError}
+          </p>
+        ) : null}
         <p className="text-sm uppercase tracking-[0.14em] text-accent">{t('appName', locale)}</p>
         <h1 className="mt-3 max-w-3xl text-4xl leading-tight text-ink md:text-5xl">
           {locale === 'et'
@@ -1113,15 +1131,6 @@ export const PlacesBrowser = ({
                   ? 'Sinu brauser ei toeta tõuketeavitusi.'
                   : 'Your browser does not support push notifications.')}
           </p>
-          {notificationsSyncing ? (
-            <p className="mb-3 text-xs text-slate-500">
-              {locale === 'et' ? 'Teavituste seadistus uueneb...' : 'Updating push alert settings...'}
-            </p>
-          ) : null}
-          {notificationsError ? (
-            <p className="mb-3 text-xs text-rose-600">{notificationsError}</p>
-          ) : null}
-
           {favoritesLoading && favoritePlaces.length === 0 ? (
             <div className="rounded-xl border border-emerald-100 bg-card p-4 text-sm text-slate-600">
               {locale === 'et' ? 'Laadin lemmikuid...' : 'Loading favorites...'}

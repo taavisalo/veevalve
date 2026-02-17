@@ -6,6 +6,8 @@ const resolveApiBaseUrl = (): string => {
   return rawBaseUrl.replace(/\/+$/, '');
 };
 
+const ACTIVE_SERVICE_WORKER_TIMEOUT_MS = 10_000;
+
 const urlBase64ToArrayBuffer = (base64String: string): ArrayBuffer => {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
   const normalized = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
@@ -40,6 +42,37 @@ const assertSupported = (): void => {
   if (!isWebPushSupported()) {
     throw new Error('Web push is not supported in this browser.');
   }
+};
+
+const isNoActiveServiceWorkerError = (error: unknown): boolean => {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  if (error.name !== 'AbortError') {
+    return false;
+  }
+
+  return error.message.toLowerCase().includes('no active service worker');
+};
+
+const waitForActiveServiceWorkerRegistration = async (
+  fallbackRegistration: ServiceWorkerRegistration,
+): Promise<ServiceWorkerRegistration> => {
+  if (fallbackRegistration.active) {
+    return fallbackRegistration;
+  }
+
+  const readyRegistration = await Promise.race([
+    navigator.serviceWorker.ready,
+    new Promise<never>((_, reject) => {
+      window.setTimeout(() => {
+        reject(new Error('Service worker activation timed out.'));
+      }, ACTIVE_SERVICE_WORKER_TIMEOUT_MS);
+    }),
+  ]);
+
+  return readyRegistration;
 };
 
 const toSerializableSubscription = (subscription: PushSubscription) => {
@@ -108,16 +141,29 @@ export const ensureWebPushSubscription = async (
   if (!registration) {
     registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
   }
+  registration = await waitForActiveServiceWorkerRegistration(registration);
 
   const existing = await registration.pushManager.getSubscription();
   if (existing) {
     return existing;
   }
 
-  return registration.pushManager.subscribe({
-    userVisibleOnly: true,
-    applicationServerKey: urlBase64ToArrayBuffer(trimmedKey),
-  });
+  try {
+    return await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToArrayBuffer(trimmedKey),
+    });
+  } catch (error) {
+    if (!isNoActiveServiceWorkerError(error)) {
+      throw error;
+    }
+
+    registration = await waitForActiveServiceWorkerRegistration(registration);
+    return registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToArrayBuffer(trimmedKey),
+    });
+  }
 };
 
 export const syncWebPushSubscription = async (input: {
