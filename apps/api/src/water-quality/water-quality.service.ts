@@ -95,6 +95,21 @@ interface UpsertPlaceInput {
 export class WaterQualityService {
   private readonly logger = new Logger(WaterQualityService.name);
   private readonly placeCache = new Map<string, Place>();
+  private readonly allowedFeedHosts = this.resolveAllowedFeedHosts();
+  private readonly feedFetchTimeoutMs = Math.max(
+    1,
+    this.readPositiveInteger(
+      process.env.TERVISEAMET_FETCH_TIMEOUT_MS,
+      DEFAULT_FEED_FETCH_TIMEOUT_MS,
+    ),
+  );
+  private readonly maxFeedBytes = Math.max(
+    1,
+    this.readPositiveInteger(
+      process.env.TERVISEAMET_MAX_FEED_BYTES,
+      DEFAULT_MAX_FEED_BYTES,
+    ),
+  );
   private readonly internalSyncCronEnabled = this.readBoolean(
     process.env.ENABLE_INTERNAL_SYNC_CRON,
     process.env.NODE_ENV !== 'production',
@@ -258,8 +273,7 @@ export class WaterQualityService {
     }
 
     const host = parsedUrl.hostname.toLowerCase().replace(/\.$/, '');
-    const allowedHosts = this.resolveAllowedFeedHosts();
-    if (!allowedHosts.has(host)) {
+    if (!this.allowedFeedHosts.has(host)) {
       return `Feed host is not allowlisted: ${host}`;
     }
 
@@ -417,17 +431,10 @@ export class WaterQualityService {
 
     let response: FetchLikeResponse;
     try {
-      const timeoutMs = Math.max(
-        1,
-        this.readPositiveInteger(
-          process.env.TERVISEAMET_FETCH_TIMEOUT_MS,
-          DEFAULT_FEED_FETCH_TIMEOUT_MS,
-        ),
-      );
       const fetchedResponse: unknown = await fetch(descriptor.url, {
         headers: requestHeaders,
         redirect: 'error',
-        signal: AbortSignal.timeout(timeoutMs),
+        signal: AbortSignal.timeout(this.feedFetchTimeoutMs),
       });
       response = this.assertFetchLikeResponse(fetchedResponse);
     } catch (error) {
@@ -485,19 +492,12 @@ export class WaterQualityService {
       return { status: 'error', descriptor, error: message };
     }
 
-    const maxFeedBytes = Math.max(
-      1,
-      this.readPositiveInteger(
-        process.env.TERVISEAMET_MAX_FEED_BYTES,
-        DEFAULT_MAX_FEED_BYTES,
-      ),
-    );
     const contentLengthHeader = response.headers.get('content-length');
     const parsedLength = contentLengthHeader
       ? Number.parseInt(contentLengthHeader, 10)
       : Number.NaN;
-    if (Number.isFinite(parsedLength) && parsedLength > maxFeedBytes) {
-      const message = `Feed exceeds max allowed size (${String(maxFeedBytes)} bytes)`;
+    if (Number.isFinite(parsedLength) && parsedLength > this.maxFeedBytes) {
+      const message = `Feed exceeds max allowed size (${String(this.maxFeedBytes)} bytes)`;
       await this.recordFeedState({
         descriptor,
         statusCode: response.status,
@@ -508,7 +508,7 @@ export class WaterQualityService {
 
     let xml: string;
     try {
-      xml = await this.readResponseTextWithLimit(response, maxFeedBytes);
+      xml = await this.readResponseTextWithLimit(response, this.maxFeedBytes);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to read feed response';
       await this.recordFeedState({
@@ -624,14 +624,6 @@ export class WaterQualityService {
     markChanged?: boolean;
   }): Promise<void> {
     const now = new Date();
-    const existing = await this.prisma.sourceSyncState.findUnique({
-      where: {
-        fileKind_year: {
-          fileKind: args.descriptor.fileKind,
-          year: args.descriptor.year,
-        },
-      },
-    });
 
     await this.prisma.sourceSyncState.upsert({
       where: {
@@ -665,8 +657,8 @@ export class WaterQualityService {
         lastCheckedAt: now,
         lastChangedAt: args.markChanged ? now : null,
         lastError: args.error,
-        etag: args.etag ?? existing?.etag ?? undefined,
-        lastModified: args.lastModified ?? existing?.lastModified ?? undefined,
+        etag: args.etag ?? undefined,
+        lastModified: args.lastModified ?? undefined,
         contentHash: args.contentHash ?? undefined,
         contentLength: args.contentLength ?? undefined,
       },

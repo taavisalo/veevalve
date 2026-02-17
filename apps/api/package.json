@@ -28,7 +28,7 @@
     "@nestjs/config": "^4.0.3",
     "@nestjs/core": "^11.1.13",
     "@nestjs/platform-fastify": "^11.1.13",
-    "@nestjs/schedule": "^5.0.1",
+    "@nestjs/schedule": "^6.1.1",
     "@prisma/adapter-pg": "^7.4.0",
     "@prisma/client": "^7.4.0",
     "@veevalve/core": "workspace:*",
@@ -41,10 +41,9 @@
   },
   "devDependencies": {
     "@nestjs/cli": "^11.0.16",
-    "@types/node": "^22.19.11",
+    "@types/node": "^25.2.3",
     "prisma": "^7.4.0",
-    "ts-node": "^10.9.2",
     "tsx": "^4.21.0",
-    "vitest": "^3.2.4"
+    "vitest": "^4.0.18"
   }
 }
