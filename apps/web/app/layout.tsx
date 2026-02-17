@@ -20,6 +20,13 @@ const titleFont = Newsreader({
 export const metadata: Metadata = {
   title: 'VeeValve',
   description: 'Avalike randade ja basseinide vee kvaliteedi teavitused Eestis.',
+  icons: {
+    icon: [
+      { url: '/favicon.ico', sizes: 'any' },
+      { url: '/favicon.svg', type: 'image/svg+xml' },
+    ],
+    apple: [{ url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }],
+  },
 };
 
 interface RootLayoutProps {
