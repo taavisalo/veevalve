@@ -3,8 +3,17 @@ type SecurityHeader = {
   value: string;
 };
 
-const buildWebContentSecurityPolicy = (isProduction: boolean): string => {
-  const scriptSources = ["'self'", "'unsafe-inline'"];
+type WebCspOptions = {
+  isProduction: boolean;
+  nonce: string;
+};
+
+const buildWebContentSecurityPolicy = ({ isProduction, nonce }: WebCspOptions): string => {
+  const normalizedNonce = nonce.trim() || 'missing-nonce';
+  const scriptSources = ["'self'", `'nonce-${normalizedNonce}'`, "'strict-dynamic'"];
+  const styleSources = isProduction
+    ? ["'self'", `'nonce-${normalizedNonce}'`]
+    : ["'self'", "'unsafe-inline'"];
   const connectSources = ["'self'", 'https:', 'wss:'];
 
   if (!isProduction) {
@@ -20,7 +29,7 @@ const buildWebContentSecurityPolicy = (isProduction: boolean): string => {
   }
 
   const directives = [
-    "default-src 'self'",
+    "default-src 'none'",
     "base-uri 'self'",
     "child-src 'self'",
     `connect-src ${connectSources.join(' ')}`,
@@ -31,7 +40,7 @@ const buildWebContentSecurityPolicy = (isProduction: boolean): string => {
     "manifest-src 'self'",
     "object-src 'none'",
     `script-src ${scriptSources.join(' ')}`,
-    "style-src 'self' 'unsafe-inline'",
+    `style-src ${styleSources.join(' ')}`,
     "worker-src 'self' blob:",
   ];
 
@@ -44,10 +53,6 @@ const buildWebContentSecurityPolicy = (isProduction: boolean): string => {
 
 export const getWebSecurityHeaders = (isProduction: boolean): SecurityHeader[] => {
   const headers: SecurityHeader[] = [
-    {
-      key: 'Content-Security-Policy',
-      value: buildWebContentSecurityPolicy(isProduction),
-    },
     { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
     {
       key: 'Permissions-Policy',

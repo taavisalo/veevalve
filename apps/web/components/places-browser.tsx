@@ -34,13 +34,31 @@ const LATEST_RESULTS_LIMIT = 10;
 const SEARCH_RESULTS_LIMIT = 20;
 const SUGGESTION_LIMIT = 8;
 const SEARCH_DEBOUNCE_MS = 180;
-const CARD_STAGGER_MS = 30;
 const FAVORITE_ACTION_MIN_PENDING_MS = 350;
 const WEB_PUSH_VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY ?? '';
 const TERVISEAMET_DATA_URL = 'https://vtiav.sm.ee/index.php/?active_tab_id=A';
+const CARD_STAGGER_CLASSES = [
+  'fade-delay-0',
+  'fade-delay-1',
+  'fade-delay-2',
+  'fade-delay-3',
+  'fade-delay-4',
+  'fade-delay-5',
+  'fade-delay-6',
+  'fade-delay-7',
+  'fade-delay-8',
+  'fade-delay-9',
+  'fade-delay-10',
+  'fade-delay-11',
+] as const;
 
 const getResultsLimit = (search?: string): number =>
   search?.trim() ? SEARCH_RESULTS_LIMIT : LATEST_RESULTS_LIMIT;
+
+const getCardFadeDelayClass = (index: number): string => {
+  const cappedIndex = Math.max(0, Math.min(index, CARD_STAGGER_CLASSES.length - 1));
+  return CARD_STAGGER_CLASSES[cappedIndex] ?? CARD_STAGGER_CLASSES[0];
+};
 
 interface PlacesBrowserProps {
   initialLocale: AppLocale;
@@ -1335,7 +1353,7 @@ export const PlacesBrowser = ({
           ) : (
             <div className="grid gap-4 md:grid-cols-2">
               {favoritePlaces.map((place, index) => (
-                <div className="fade-up" style={{ animationDelay: `${index * CARD_STAGGER_MS}ms` }} key={`favorite-${place.id}`}>
+                <div className={`fade-up ${getCardFadeDelayClass(index)}`} key={`favorite-${place.id}`}>
                   <PlaceCard
                     place={place}
                     locale={locale}
@@ -1394,7 +1412,7 @@ export const PlacesBrowser = ({
         ) : (
           <div className="grid gap-4 md:grid-cols-2">
             {visiblePlaces.map((place, index) => (
-              <div className="fade-up" style={{ animationDelay: `${index * CARD_STAGGER_MS}ms` }} key={place.id}>
+              <div className={`fade-up ${getCardFadeDelayClass(index)}`} key={place.id}>
                 <PlaceCard
                   place={place}
                   locale={locale}

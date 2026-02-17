@@ -7,11 +7,10 @@ const toHeaderMap = (headers: { key: string; value: string }[]): Map<string, str
 };
 
 describe('web security headers', () => {
-  it('sets hardened defaults in production', () => {
+  it('sets hardened defaults in production response headers', () => {
     const headers = toHeaderMap(getWebSecurityHeaders(true));
 
-    expect(headers.get('Content-Security-Policy')).toContain("default-src 'self'");
-    expect(headers.get('Content-Security-Policy')).toContain('upgrade-insecure-requests');
+    expect(headers.has('Content-Security-Policy')).toBe(false);
     expect(headers.get('Strict-Transport-Security')).toBe(
       'max-age=63072000; includeSubDomains; preload',
     );
@@ -21,25 +20,43 @@ describe('web security headers', () => {
     expect(headers.get('Cross-Origin-Resource-Policy')).toBe('same-origin');
   });
 
-  it('keeps development CSP compatible and avoids HSTS', () => {
+  it('omits HSTS in development response headers', () => {
     const headers = toHeaderMap(getWebSecurityHeaders(false));
-    const csp = headers.get('Content-Security-Policy') ?? '';
 
-    expect(csp).toContain("script-src 'self' 'unsafe-inline' 'unsafe-eval'");
-    expect(csp).toContain(
-      "connect-src 'self' https: wss: http://localhost:* http://127.0.0.1:* http://host.docker.internal:* ws://localhost:* ws://127.0.0.1:* ws://host.docker.internal:*",
-    );
-    expect(csp).not.toContain('upgrade-insecure-requests');
+    expect(headers.has('Content-Security-Policy')).toBe(false);
     expect(headers.has('Strict-Transport-Security')).toBe(false);
   });
 
-  it('builds CSP without unsafe-eval in production', () => {
-    const csp = buildWebContentSecurityPolicy(true);
+  it('builds strict production CSP with nonce', () => {
+    const csp = buildWebContentSecurityPolicy({
+      isProduction: true,
+      nonce: 'nonce-value',
+    });
 
+    expect(csp).toContain("default-src 'none'");
+    expect(csp).toContain("script-src 'self' 'nonce-nonce-value' 'strict-dynamic'");
+    expect(csp).toContain("style-src 'self' 'nonce-nonce-value'");
     expect(csp).not.toContain("'unsafe-eval'");
+    expect(csp).not.toContain("'unsafe-inline'");
     expect(csp).toContain("connect-src 'self' https: wss:");
     expect(csp).not.toContain('http://localhost:*');
     expect(csp).toContain("frame-ancestors 'none'");
     expect(csp).toContain("worker-src 'self' blob:");
+    expect(csp).toContain('upgrade-insecure-requests');
+  });
+
+  it('keeps development CSP compatible with local tooling', () => {
+    const csp = buildWebContentSecurityPolicy({
+      isProduction: false,
+      nonce: 'nonce-value',
+    });
+
+    expect(csp).toContain("default-src 'none'");
+    expect(csp).toContain("script-src 'self' 'nonce-nonce-value' 'strict-dynamic' 'unsafe-eval'");
+    expect(csp).toContain("style-src 'self' 'unsafe-inline'");
+    expect(csp).toContain(
+      "connect-src 'self' https: wss: http://localhost:* http://127.0.0.1:* http://host.docker.internal:* ws://localhost:* ws://127.0.0.1:* ws://host.docker.internal:*",
+    );
+    expect(csp).not.toContain('upgrade-insecure-requests');
   });
 });

@@ -3,6 +3,8 @@ import { Manrope, Newsreader } from 'next/font/google';
 
 import './globals.css';
 
+export const dynamic = 'force-dynamic';
+
 const bodyFont = Manrope({
   subsets: ['latin'],
   weight: ['400', '600', '700'],

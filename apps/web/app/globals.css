@@ -46,6 +46,54 @@ h4 {
   animation: fade-up 280ms ease-out both;
 }
 
+.fade-delay-0 {
+  animation-delay: 0ms;
+}
+
+.fade-delay-1 {
+  animation-delay: 30ms;
+}
+
+.fade-delay-2 {
+  animation-delay: 60ms;
+}
+
+.fade-delay-3 {
+  animation-delay: 90ms;
+}
+
+.fade-delay-4 {
+  animation-delay: 120ms;
+}
+
+.fade-delay-5 {
+  animation-delay: 150ms;
+}
+
+.fade-delay-6 {
+  animation-delay: 180ms;
+}
+
+.fade-delay-7 {
+  animation-delay: 210ms;
+}
+
+.fade-delay-8 {
+  animation-delay: 240ms;
+}
+
+.fade-delay-9 {
+  animation-delay: 270ms;
+}
+
+.fade-delay-10 {
+  animation-delay: 300ms;
+}
+
+.fade-delay-11 {
+  animation-delay: 330ms;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .fade-up {
     animation: none;
