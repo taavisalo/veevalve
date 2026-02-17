@@ -91,8 +91,8 @@ services:
     command: >-
       sh -lc "pnpm --filter @veevalve/web dev:docker"
     environment:
-      API_BASE_URL: http://api:3001/api
-      NEXT_PUBLIC_API_BASE_URL: http://localhost:3001/api
+      API_BASE_URL: http://api:3001
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:3001
     ports:
       - '3000:3000'
     volumes:

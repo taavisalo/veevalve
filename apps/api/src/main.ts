@@ -63,7 +63,6 @@ const bootstrap = async (): Promise<void> => {
     done(null, payload);
   });
 
-  app.setGlobalPrefix('api');
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
