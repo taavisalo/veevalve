@@ -38,3 +38,6 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+      - name: Vercel API parity check
+        run: pnpm vercel:check:api

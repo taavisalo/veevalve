@@ -9,6 +9,7 @@
     "start:docker": "node dist/src/main.js",
     "lint": "eslint \"src/**/*.{ts,tsx}\"",
     "typecheck": "pnpm prisma:ensure && tsc --noEmit",
+    "vercel:check": "pnpm build && tsc --noEmit --pretty false",
     "test": "vitest run",
     "format": "prettier --check \"src/**/*.{ts,tsx,json}\" prisma/schema.prisma",
     "clean": "rm -rf dist",
