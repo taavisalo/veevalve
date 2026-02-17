@@ -344,6 +344,20 @@ For a dedicated API project on Vercel:
 
 If your API project has many environment variables set in Vercel, `turbo.json` already allowlists them for the `build` task so they are available during build execution.
 
+### Security Headers (MDN Observatory Baseline)
+
+Both deploy targets include hardened security headers by default:
+- Web (`apps/web/next.config.ts`): CSP, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, COOP/CORP, `Origin-Agent-Cluster`, and related hardening headers.
+- API (`apps/api/src/main.ts` + `apps/api/src/security/security-headers.ts`): strict API CSP, the same baseline hardening headers, and per-response timing headers.
+- `Strict-Transport-Security` (HSTS) is added automatically when `NODE_ENV=production`.
+
+Quick verification after deploy:
+
+```bash
+curl -I https://your-web-domain.example
+curl -I https://your-api-domain.example/health
+```
+
 ## Size and Performance Defaults
 
 - Peer auto-install is disabled to avoid pulling unnecessary packages.

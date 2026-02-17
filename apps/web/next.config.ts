@@ -1,6 +1,8 @@
 import type { NextConfig } from 'next';
 import path from 'node:path';
 
+import { getWebSecurityHeaders } from './lib/security-headers';
+
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   compress: true,
@@ -21,13 +23,7 @@ const nextConfig: NextConfig = {
     return [
       {
         source: '/(.*)',
-        headers: [
-          { key: 'X-Content-Type-Options', value: 'nosniff' },
-          { key: 'X-Frame-Options', value: 'DENY' },
-          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-          { key: 'Permissions-Policy', value: 'camera=(), geolocation=(), microphone=()' },
-          { key: 'X-DNS-Prefetch-Control', value: 'off' },
-        ],
+        headers: getWebSecurityHeaders(process.env.NODE_ENV === 'production'),
       },
     ];
   },

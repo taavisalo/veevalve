@@ -4,6 +4,7 @@ import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fa
 import type { FastifyRequest } from 'fastify';
 
 import { AppModule } from './app.module';
+import { applyApiSecurityHeaders } from './security/security-headers';
 
 const DEFAULT_API_PORT = 3001;
 const DEFAULT_BODY_LIMIT_BYTES = 1_048_576; // 1 MiB
@@ -32,6 +33,7 @@ const resolveCorsOrigins = (): Set<string> => {
 };
 
 const bootstrap = async (): Promise<void> => {
+  const isProduction = process.env.NODE_ENV === 'production';
   const bodyLimit = parsePositiveInteger(
     process.env.BODY_LIMIT_BYTES,
     DEFAULT_BODY_LIMIT_BYTES,
@@ -70,11 +72,7 @@ const bootstrap = async (): Promise<void> => {
       reply.header('X-Response-Time', `${roundedDuration}ms`);
     }
 
-    reply.header('X-Content-Type-Options', 'nosniff');
-    reply.header('X-Frame-Options', 'DENY');
-    reply.header('Referrer-Policy', 'no-referrer');
-    reply.header('Permissions-Policy', 'camera=(), geolocation=(), microphone=()');
-    reply.header('X-Permitted-Cross-Domain-Policies', 'none');
+    applyApiSecurityHeaders(reply, isProduction);
     done(null, payload);
   });
 
