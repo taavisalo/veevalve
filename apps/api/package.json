@@ -27,7 +27,7 @@
     "@nestjs/config": "^4.0.3",
     "@nestjs/core": "^11.1.13",
     "@nestjs/platform-fastify": "^11.1.13",
-    "@nestjs/schedule": "^5.0.1",
+    "@nestjs/schedule": "^6.1.1",
     "@prisma/adapter-pg": "^7.4.0",
     "@prisma/client": "^7.4.0",
     "@veevalve/core": "workspace:*",
