@@ -22,7 +22,6 @@ const titleFont = Newsreader({
 
 const siteName = 'VeeValve';
 const siteDescription = 'Avalike randade ja basseinide vee kvaliteedi teavitused Eestis.';
-const googleSiteVerification = process.env.GOOGLE_SITE_VERIFICATION?.trim();
 
 export const metadata: Metadata = {
   metadataBase: new URL(resolveSiteUrl()),
@@ -108,9 +107,6 @@ export const metadata: Metadata = {
     apple: [{ url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }],
   },
   manifest: '/manifest.webmanifest',
-  verification: {
-    google: googleSiteVerification || undefined,
-  },
   category: 'health',
 };
 
