@@ -18,14 +18,14 @@
     "@react-native-async-storage/async-storage": "^2.2.0",
     "@veevalve/core": "workspace:*",
     "@veevalve/ui": "workspace:*",
-    "expo": "~53.0.27",
-    "expo-status-bar": "~2.2.3",
-    "react": "19.0.0",
-    "react-native": "0.79.6"
+    "expo": "~54.0.33",
+    "expo-status-bar": "~3.0.9",
+    "react": "19.1.0",
+    "react-native": "0.81.5"
   },
   "devDependencies": {
-    "@types/react": "~19.0.10",
-    "babel-preset-expo": "~13.0.0",
-    "vitest": "^3.2.4"
+    "@types/react": "~19.1.10",
+    "babel-preset-expo": "~54.0.10",
+    "vitest": "^4.0.18"
   }
 }
