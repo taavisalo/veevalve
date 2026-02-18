@@ -497,51 +497,42 @@ export const PlacesBrowser = ({
     }
 
     const controller = new AbortController();
-    let cancelled = false;
+    setFavoritesLoading(true);
+    void loadFetchPlacesByIdsModule()
+      .then(({ fetchPlacesByIds }) =>
+        fetchPlacesByIds({
+          locale,
+          ids: favoriteIds,
+          signal: controller.signal,
+          cacheMode: 'force-cache',
+          revalidateSeconds: 60,
+          includeBadDetails: false,
+        }),
+      )
+      .then((fetchedPlaces) => {
+        if (controller.signal.aborted) {
+          return;
+        }
 
-    const cancelIdle = runWhenIdle(() => {
-      if (cancelled || controller.signal.aborted) {
-        return;
-      }
-
-      setFavoritesLoading(true);
-      void loadFetchPlacesByIdsModule()
-        .then(({ fetchPlacesByIds }) =>
-          fetchPlacesByIds({
-            locale,
-            ids: favoriteIds,
-            signal: controller.signal,
-            cacheMode: 'no-store',
-            includeBadDetails: false,
-          }),
-        )
-        .then((fetchedPlaces) => {
-          if (controller.signal.aborted) {
-            return;
-          }
-
-          const byId = new Map(fetchedPlaces.map((place) => [place.id, place] as const));
-          const ordered = favoriteIds
-            .map((id) => byId.get(id))
-            .filter((place): place is PlaceWithLatestReading => Boolean(place));
-          setFavoritePlaces(ordered);
-        })
-        .catch((fetchError: unknown) => {
-          if (controller.signal.aborted) {
-            return;
-          }
-          console.error(fetchError);
-        })
-        .finally(() => {
-          if (!controller.signal.aborted) {
-            setFavoritesLoading(false);
-          }
-        });
-    }, 2_000);
+        const byId = new Map(fetchedPlaces.map((place) => [place.id, place] as const));
+        const ordered = favoriteIds
+          .map((id) => byId.get(id))
+          .filter((place): place is PlaceWithLatestReading => Boolean(place));
+        setFavoritePlaces(ordered);
+      })
+      .catch((fetchError: unknown) => {
+        if (controller.signal.aborted) {
+          return;
+        }
+        console.error(fetchError);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setFavoritesLoading(false);
+        }
+      });
 
     return () => {
-      cancelled = true;
-      cancelIdle();
       controller.abort();
     };
   }, [favoriteIds, locale]);
