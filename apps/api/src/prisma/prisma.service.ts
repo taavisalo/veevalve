@@ -2,14 +2,7 @@ import { Injectable, type OnModuleDestroy, type OnModuleInit } from '@nestjs/com
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
 
-const resolveDatabaseUrl = (): string => {
-  const databaseUrl = process.env.DATABASE_URL?.trim();
-  if (!databaseUrl) {
-    throw new Error('DATABASE_URL is required to initialize Prisma.');
-  }
-
-  return databaseUrl;
-};
+import { resolveDatabaseUrl } from './database-url';
 
 @Injectable()
 export class PrismaService
