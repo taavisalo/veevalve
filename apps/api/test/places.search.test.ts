@@ -24,7 +24,8 @@ describe('PlacesService search ranking', () => {
     const prisma = createPrismaMock();
     prisma.$queryRaw
       .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([{ id: 'place-1' }]);
+      .mockResolvedValueOnce([{ id: 'place-1' }])
+      .mockResolvedValueOnce([{ id: 'place-2' }, { id: 'place-1' }]);
     prisma.place.findMany.mockResolvedValue([
       {
         id: 'place-1',
@@ -51,6 +52,31 @@ describe('PlacesService search ranking', () => {
           },
         ],
       },
+      {
+        id: 'place-2',
+        externalId: 'ext-2',
+        type: 'POOL',
+        nameEt: 'SPA Georg Ots veekeskus mullivann',
+        nameEn: 'SPA Georg Ots veekeskus mullivann',
+        municipality: 'Saaremaa vald',
+        addressEt: 'Tori tn 2',
+        addressEn: 'Tori tn 2',
+        latitude: null,
+        longitude: null,
+        latestStatus: {
+          sampleId: 'sample-2',
+          sampledAt: new Date('2025-01-02T00:00:00.000Z'),
+          status: 'GOOD',
+          statusReasonEt: 'Hea',
+          statusReasonEn: 'Good',
+        },
+        samplingPoints: [
+          {
+            name: 'Mullivann',
+            address: 'Tori tn 2',
+          },
+        ],
+      },
     ]);
 
     const service = new PlacesService(prisma as never);
@@ -60,9 +86,10 @@ describe('PlacesService search ranking', () => {
       includeBadDetails: false,
     });
 
-    expect(prisma.$queryRaw).toHaveBeenCalledTimes(2);
-    expect(rows).toHaveLength(1);
+    expect(prisma.$queryRaw).toHaveBeenCalledTimes(3);
+    expect(rows).toHaveLength(2);
     expect(rows[0]?.id).toBe('place-1');
+    expect(rows[1]?.id).toBe('place-2');
     expect(rows[0]?.name).toBe('SPA Georg Ots veekeskus minibassein');
   });
 

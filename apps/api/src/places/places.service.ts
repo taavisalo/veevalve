@@ -40,6 +40,11 @@ interface RankedPlaceId {
   id: string;
 }
 
+interface CompactAliasRule {
+  textPart: string;
+  initialsPart: string;
+}
+
 interface MetricsAggregateRow {
   totalEntries: number;
   poolEntries: number;
@@ -361,6 +366,7 @@ export class PlacesService {
       : DEFAULT_FUZZY_THRESHOLD;
     const strictTokens = this.extractStrictSearchTokens(search);
     const shouldRunStrictSearch = search.includes(' ') || strictTokens.length >= 2;
+    const compactAliasRules = this.extractCompactAliasRules(search);
 
     const typeFilter = type ? Prisma.sql`AND p.type = ${type}` : Prisma.empty;
     const statusFilter = status ? Prisma.sql`AND ls.status = ${status}` : Prisma.empty;
@@ -389,12 +395,9 @@ export class PlacesService {
         typeFilter,
         statusFilter,
       });
+      let rankedIds = rankedRows.map((row) => row.id);
 
-      if (rankedRows.length > 0) {
-        return rankedRows.map((row) => row.id);
-      }
-
-      if (this.shouldRunRelaxedCompactFuzzySearch(search)) {
+      if (rankedIds.length === 0 && this.shouldRunRelaxedCompactFuzzySearch(search)) {
         const relaxedRows = await this.findFuzzyRankedPlaceRows({
           search,
           threshold: RELAXED_COMPACT_FUZZY_THRESHOLD,
@@ -403,10 +406,22 @@ export class PlacesService {
           typeFilter,
           statusFilter,
         });
+        rankedIds = relaxedRows.map((row) => row.id);
+      }
 
-        if (relaxedRows.length > 0) {
-          return relaxedRows.map((row) => row.id);
-        }
+      if (compactAliasRules.length > 0 && rankedIds.length < limit) {
+        const aliasIds = await this.findCompactAliasRankedPlaceIds({
+          rules: compactAliasRules,
+          limit,
+          offset,
+          typeFilter,
+          statusFilter,
+        });
+        rankedIds = this.mergeRankedPlaceIds(rankedIds, aliasIds, limit);
+      }
+
+      if (rankedIds.length > 0) {
+        return rankedIds;
       }
 
       return [];
@@ -427,8 +442,30 @@ export class PlacesService {
     const { search, threshold, limit, offset, typeFilter, statusFilter } = input;
 
     return this.prisma.$queryRaw<RankedPlaceId[]>(Prisma.sql`
+        WITH "candidatePlaceIds" AS (
+          SELECT p.id
+          FROM "Place" p
+          WHERE (
+            similarity(lower(p."nameEt"), lower(${search})) > ${threshold}
+            OR similarity(lower(p."nameEn"), lower(${search})) > ${threshold}
+            OR lower(p."nameEt") LIKE '%' || lower(${search}) || '%'
+            OR lower(p."nameEn") LIKE '%' || lower(${search}) || '%'
+            OR lower(p."municipality") LIKE '%' || lower(${search}) || '%'
+            OR lower(coalesce(p."addressEt", '')) LIKE '%' || lower(${search}) || '%'
+            OR lower(coalesce(p."addressEn", '')) LIKE '%' || lower(${search}) || '%'
+          )
+          UNION
+          SELECT sp."placeId" AS id
+          FROM "SamplingPoint" sp
+          WHERE (
+            similarity(lower(sp.name), lower(${search})) > ${threshold}
+            OR lower(sp.name) LIKE '%' || lower(${search}) || '%'
+            OR lower(coalesce(sp.address, '')) LIKE '%' || lower(${search}) || '%'
+          )
+        )
         SELECT p.id
-        FROM "Place" p
+        FROM "candidatePlaceIds" cp
+        INNER JOIN "Place" p ON p.id = cp.id
         INNER JOIN "PlaceLatestStatus" ls ON ls."placeId" = p.id
         LEFT JOIN LATERAL (
           SELECT
@@ -440,22 +477,7 @@ export class PlacesService {
           FROM "SamplingPoint" sp
           WHERE sp."placeId" = p.id
         ) spx ON TRUE
-        WHERE (
-          similarity(lower(p."nameEt"), lower(${search})) > ${threshold}
-          OR similarity(lower(p."nameEn"), lower(${search})) > ${threshold}
-          OR similarity(lower(p."municipality"), lower(${search})) > ${threshold}
-          OR similarity(lower(coalesce(p."addressEt", '')), lower(${search})) > ${threshold}
-          OR similarity(lower(coalesce(p."addressEn", '')), lower(${search})) > ${threshold}
-          OR coalesce(spx."nameSimilarity", 0) > ${threshold}
-          OR coalesce(spx."addressSimilarity", 0) > ${threshold}
-          OR lower(p."nameEt") LIKE '%' || lower(${search}) || '%'
-          OR lower(p."nameEn") LIKE '%' || lower(${search}) || '%'
-          OR lower(p."municipality") LIKE '%' || lower(${search}) || '%'
-          OR lower(coalesce(p."addressEt", '')) LIKE '%' || lower(${search}) || '%'
-          OR lower(coalesce(p."addressEn", '')) LIKE '%' || lower(${search}) || '%'
-          OR coalesce(spx."nameContainsMatch", 0) = 1
-          OR coalesce(spx."addressContainsMatch", 0) = 1
-        )
+        WHERE TRUE
         ${typeFilter}
         ${statusFilter}
         ORDER BY (
@@ -484,6 +506,74 @@ export class PlacesService {
       `);
   }
 
+  private async findCompactAliasRankedPlaceIds(input: {
+    rules: CompactAliasRule[];
+    limit: number;
+    offset: number;
+    typeFilter: Prisma.Sql;
+    statusFilter: Prisma.Sql;
+  }): Promise<string[]> {
+    const { rules, limit, offset, typeFilter, statusFilter } = input;
+    if (rules.length === 0) {
+      return [];
+    }
+
+    const aliasClauses = rules.map((rule) =>
+      Prisma.sql`(
+        (
+          lower(p."nameEt") LIKE '%' || ${rule.textPart} || '%'
+          OR lower(p."nameEn") LIKE '%' || ${rule.textPart} || '%'
+        )
+        AND coalesce(initials.value, '') LIKE '%' || ${rule.initialsPart} || '%'
+      )`,
+    );
+
+    const rows = await this.prisma.$queryRaw<RankedPlaceId[]>(Prisma.sql`
+      SELECT p.id
+      FROM "Place" p
+      INNER JOIN "PlaceLatestStatus" ls ON ls."placeId" = p.id
+      LEFT JOIN LATERAL (
+        SELECT string_agg(left(token, 1), '') AS value
+        FROM regexp_split_to_table(
+          regexp_replace(
+            lower(p."nameEt" || ' ' || p."nameEn"),
+            '[^[:alnum:]]+',
+            ' ',
+            'g'
+          ),
+          '\\s+'
+        ) AS token
+        WHERE token <> ''
+      ) initials ON TRUE
+      WHERE (${Prisma.join(aliasClauses, ' OR ')})
+      ${typeFilter}
+      ${statusFilter}
+      ORDER BY ls."sampledAt" DESC, p."nameEt" ASC
+      LIMIT ${limit}
+      OFFSET ${offset}
+    `);
+
+    return rows.map((row) => row.id);
+  }
+
+  private mergeRankedPlaceIds(primary: string[], secondary: string[], limit: number): string[] {
+    const merged: string[] = [];
+    const seen = new Set<string>();
+
+    for (const placeId of [...primary, ...secondary]) {
+      if (seen.has(placeId)) {
+        continue;
+      }
+      seen.add(placeId);
+      merged.push(placeId);
+      if (merged.length >= limit) {
+        break;
+      }
+    }
+
+    return merged;
+  }
+
   private shouldRunRelaxedCompactFuzzySearch(search: string): boolean {
     const normalizedSearch = search.trim().normalize('NFKC').toLowerCase();
 
@@ -499,6 +589,50 @@ export class PlacesService {
       normalizedSearch.length >= RELAXED_COMPACT_QUERY_MIN_LENGTH &&
       normalizedSearch.length <= RELAXED_COMPACT_QUERY_MAX_LENGTH
     );
+  }
+
+  private extractCompactAliasRules(search: string): CompactAliasRule[] {
+    const normalizedSearch = search.trim().normalize('NFKC').toLowerCase();
+    if (!normalizedSearch || normalizedSearch.includes(' ')) {
+      return [];
+    }
+
+    if (!/^[\p{L}\p{N}]+$/u.test(normalizedSearch)) {
+      return [];
+    }
+
+    if (
+      normalizedSearch.length < RELAXED_COMPACT_QUERY_MIN_LENGTH ||
+      normalizedSearch.length > 12
+    ) {
+      return [];
+    }
+
+    const rules = new Map<string, CompactAliasRule>();
+    for (
+      let splitIndex = 2;
+      splitIndex <= normalizedSearch.length - 2;
+      splitIndex += 1
+    ) {
+      const left = normalizedSearch.slice(0, splitIndex);
+      const right = normalizedSearch.slice(splitIndex);
+
+      if (left.length >= 3 && right.length >= 2 && right.length <= 3) {
+        rules.set(`${left}|${right}`, {
+          textPart: left,
+          initialsPart: right,
+        });
+      }
+
+      if (right.length >= 3 && left.length >= 2 && left.length <= 3) {
+        rules.set(`${right}|${left}`, {
+          textPart: right,
+          initialsPart: left,
+        });
+      }
+    }
+
+    return [...rules.values()];
   }
 
   private async findStrictRankedPlaceIds(input: {
