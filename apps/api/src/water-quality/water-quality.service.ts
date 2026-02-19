@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import {
+  Prisma,
   type Place,
   type PlaceType,
   type QualityStatus,
@@ -90,6 +91,26 @@ interface UpsertPlaceInput {
   municipality?: string;
   coordinate?: ParsedCoordinate;
   sourceUrl?: string;
+}
+
+interface LatestSampleRow {
+  id: string;
+  placeId: string;
+  sampledAt: Date;
+  overallStatus: QualityStatus;
+  overallAssessmentRaw: string | null;
+  sourceUrl: string;
+}
+
+interface ExistingLatestStatusRow {
+  placeId: string;
+  sampleId: string;
+  sampledAt: Date;
+  status: QualityStatus;
+  statusRaw: string | null;
+  statusReasonEt: string | null;
+  statusReasonEn: string | null;
+  sourceUrl: string;
 }
 
 @Injectable()
@@ -1016,36 +1037,71 @@ export class WaterQualityService {
   }
 
   private async refreshLatestStatuses(placeIds: Set<string>): Promise<number> {
-    let statusChanges = 0;
+    const normalizedPlaceIds = [...placeIds];
+    if (normalizedPlaceIds.length === 0) {
+      return 0;
+    }
 
-    for (const placeId of placeIds) {
-      const latestSample = await this.prisma.waterQualitySample.findFirst({
-        where: { placeId },
-        orderBy: { sampledAt: 'desc' },
+    const [latestSamples, places, previousLatestStatuses] = await this.prisma.$transaction([
+      this.prisma.$queryRaw<LatestSampleRow[]>(Prisma.sql`
+        SELECT DISTINCT ON (sample."placeId")
+          sample.id,
+          sample."placeId",
+          sample."sampledAt",
+          sample."overallStatus",
+          sample."overallAssessmentRaw",
+          sample."sourceUrl"
+        FROM "WaterQualitySample" sample
+        WHERE sample."placeId" IN (${Prisma.join(normalizedPlaceIds)})
+        ORDER BY sample."placeId" ASC, sample."sampledAt" DESC, sample.id DESC
+      `),
+      this.prisma.place.findMany({
+        where: { id: { in: normalizedPlaceIds } },
+        select: { id: true, nameEt: true },
+      }),
+      this.prisma.placeLatestStatus.findMany({
+        where: { placeId: { in: normalizedPlaceIds } },
         select: {
-          id: true,
+          placeId: true,
+          sampleId: true,
           sampledAt: true,
-          overallStatus: true,
-          overallAssessmentRaw: true,
+          status: true,
+          statusRaw: true,
+          statusReasonEt: true,
+          statusReasonEn: true,
           sourceUrl: true,
         },
-      });
+      }),
+    ]);
 
-      if (!latestSample) {
-        continue;
-      }
+    const placeById = new Map(places.map((place) => [place.id, place] as const));
+    const previousLatestByPlaceId = new Map(
+      previousLatestStatuses.map((status) => [status.placeId, status as ExistingLatestStatusRow] as const),
+    );
 
-      const place = await this.prisma.place.findUnique({
-        where: { id: placeId },
-        select: { id: true, nameEt: true },
-      });
+    let statusChanges = 0;
+
+    for (const latestSample of latestSamples) {
+      const placeId = latestSample.placeId;
+      const place = placeById.get(placeId);
       if (!place) {
         continue;
       }
 
-      const previousLatest = await this.prisma.placeLatestStatus.findUnique({
-        where: { placeId },
-      });
+      const previousLatest = previousLatestByPlaceId.get(placeId) ?? null;
+      const latestStatusRaw = latestSample.overallAssessmentRaw ?? null;
+
+      if (
+        previousLatest &&
+        previousLatest.sampleId === latestSample.id &&
+        previousLatest.sampledAt.getTime() === latestSample.sampledAt.getTime() &&
+        previousLatest.status === latestSample.overallStatus &&
+        (previousLatest.statusRaw ?? null) === latestStatusRaw &&
+        previousLatest.sourceUrl === latestSample.sourceUrl
+      ) {
+        continue;
+      }
+
       const now = new Date();
 
       const statusChange = detectStatusChange(
@@ -1098,6 +1154,17 @@ export class WaterQualityService {
         },
       });
 
+      previousLatestByPlaceId.set(placeId, {
+        placeId,
+        sampleId: latestSample.id,
+        sampledAt: latestSample.sampledAt,
+        status: latestSample.overallStatus,
+        statusRaw: latestStatusRaw,
+        statusReasonEt: latestSample.overallAssessmentRaw,
+        statusReasonEn: latestSample.overallAssessmentRaw,
+        sourceUrl: latestSample.sourceUrl,
+      });
+
       if (statusChange) {
         statusChanges += 1;
         await this.notifyStatusChange(
@@ -1129,15 +1196,17 @@ export class WaterQualityService {
       },
     });
 
-    for (const subscription of subscriptions) {
-      await this.notificationsService.queueStatusChangeAlert({
-        userId: subscription.userId,
-        placeId,
-        placeName,
-        previousStatus,
-        currentStatus,
-      });
-    }
+    await Promise.all(
+      subscriptions.map((subscription) =>
+        this.notificationsService.queueStatusChangeAlert({
+          userId: subscription.userId,
+          placeId,
+          placeName,
+          previousStatus,
+          currentStatus,
+        }),
+      ),
+    );
 
     await this.webPushService.sendStatusChangeNotifications({
       placeId,
