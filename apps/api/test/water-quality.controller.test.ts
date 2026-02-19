@@ -79,6 +79,19 @@ describe('WaterQualityController security', () => {
     ).toThrow(UnauthorizedException);
   });
 
+  it('rejects duplicated sync token header values', () => {
+    process.env.SYNC_API_TOKEN = 'super-secure-sync-token';
+
+    const service: Pick<WaterQualityService, 'syncFromTerviseamet'> = {
+      syncFromTerviseamet: vi.fn(),
+    };
+    const controller = new WaterQualityController(service as WaterQualityService);
+
+    expect(() =>
+      controller.sync(requestWithIp('127.0.0.1'), ['super-secure-sync-token', 'extra']),
+    ).toThrow(UnauthorizedException);
+  });
+
   it('applies sync rate limiting per ip', async () => {
     process.env.SYNC_API_TOKEN = 'super-secure-sync-token';
     process.env.SYNC_RATE_LIMIT_MAX = '1';
@@ -97,5 +110,24 @@ describe('WaterQualityController security', () => {
     expect(() =>
       controller.sync(requestWithIp('127.0.0.1'), 'super-secure-sync-token'),
     ).toThrow(HttpException);
+  });
+
+  it('applies sync rate limiting to invalid token attempts', () => {
+    process.env.SYNC_API_TOKEN = 'super-secure-sync-token';
+    process.env.SYNC_RATE_LIMIT_MAX = '1';
+    process.env.SYNC_RATE_LIMIT_WINDOW_MS = '60000';
+
+    const service: Pick<WaterQualityService, 'syncFromTerviseamet'> = {
+      syncFromTerviseamet: vi.fn(),
+    };
+    const controller = new WaterQualityController(service as WaterQualityService);
+
+    expect(() =>
+      controller.sync(requestWithIp('127.0.0.1'), 'wrong-token'),
+    ).toThrow(UnauthorizedException);
+    expect(() =>
+      controller.sync(requestWithIp('127.0.0.1'), 'wrong-token'),
+    ).toThrow(HttpException);
+    expect(service.syncFromTerviseamet).not.toHaveBeenCalled();
   });
 });

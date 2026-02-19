@@ -60,8 +60,8 @@ export class WaterQualityController {
     @Req() request: FastifyRequest,
     @Headers('x-sync-token') syncTokenHeader: string | string[] | undefined,
   ) {
-    this.ensureSyncAuthorized(syncTokenHeader);
     this.assertSyncRateLimit(request.ip ?? 'unknown');
+    this.ensureSyncAuthorized(syncTokenHeader);
     return this.waterQualityService.syncFromTerviseamet();
   }
 
@@ -79,12 +79,14 @@ export class WaterQualityController {
       return;
     }
 
+    if (Array.isArray(syncTokenHeader)) {
+      throw new UnauthorizedException('Invalid sync token');
+    }
+
     const providedSyncToken =
       typeof syncTokenHeader === 'string'
         ? syncTokenHeader.trim()
-        : Array.isArray(syncTokenHeader)
-          ? syncTokenHeader[0]?.trim()
-          : undefined;
+        : undefined;
     if (!expectedSyncToken || !providedSyncToken) {
       throw new UnauthorizedException('Missing sync token');
     }
