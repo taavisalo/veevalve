@@ -29,6 +29,7 @@
   },
   "pnpm": {
     "onlyBuiltDependencies": [
+      "@scarf/scarf",
       "@nestjs/core",
       "@prisma/engines",
       "esbuild",

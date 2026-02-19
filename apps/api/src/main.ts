@@ -77,6 +77,7 @@ const buildSwaggerUiHtml = (): string => {
         deepLinking: true,
         presets: [SwaggerUIBundle.presets.apis, SwaggerUIStandalonePreset],
         layout: 'BaseLayout',
+        defaultModelsExpandDepth: 0,
         persistAuthorization: true
       });
     });
