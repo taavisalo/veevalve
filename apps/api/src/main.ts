@@ -2,7 +2,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import type { FastifyRequest } from 'fastify';
+import type { FastifyReply, FastifyRequest } from 'fastify';
 
 import { AppModule } from './app.module';
 import { applyApiSecurityHeaders } from './security/security-headers';
@@ -11,6 +11,10 @@ const DEFAULT_API_PORT = 3001;
 const DEFAULT_BODY_LIMIT_BYTES = 1_048_576; // 1 MiB
 const SWAGGER_UI_PATH = '/docs';
 const OPENAPI_JSON_PATH = '/openapi.json';
+const SWAGGER_UI_DIST_VERSION = '5.31.0';
+const SWAGGER_UI_CSS_URL = `https://cdn.jsdelivr.net/npm/swagger-ui-dist@${SWAGGER_UI_DIST_VERSION}/swagger-ui.css`;
+const SWAGGER_UI_BUNDLE_JS_URL = `https://cdn.jsdelivr.net/npm/swagger-ui-dist@${SWAGGER_UI_DIST_VERSION}/swagger-ui-bundle.js`;
+const SWAGGER_UI_PRESET_JS_URL = `https://cdn.jsdelivr.net/npm/swagger-ui-dist@${SWAGGER_UI_DIST_VERSION}/swagger-ui-standalone-preset.js`;
 const DEFAULT_LOCALHOST_CORS_PORTS = [3000, 8081, 8082, 19006];
 const DEFAULT_CORS_ORIGINS = DEFAULT_LOCALHOST_CORS_PORTS.flatMap((port) => [
   `http://localhost:${port}`,
@@ -47,6 +51,38 @@ const isSwaggerRouteRequest = (request: FastifyRequest): boolean => {
     path === SWAGGER_UI_PATH ||
     path.startsWith(`${SWAGGER_UI_PATH}/`)
   );
+};
+
+const buildSwaggerUiHtml = (): string => {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>VeeValve API Docs</title>
+  <link rel="stylesheet" href="${SWAGGER_UI_CSS_URL}" />
+  <style>
+    html, body { margin: 0; background: #fafafa; }
+  </style>
+</head>
+<body>
+  <div id="swagger-ui"></div>
+  <script src="${SWAGGER_UI_BUNDLE_JS_URL}"></script>
+  <script src="${SWAGGER_UI_PRESET_JS_URL}"></script>
+  <script>
+    window.addEventListener('load', function () {
+      SwaggerUIBundle({
+        url: '${OPENAPI_JSON_PATH}',
+        dom_id: '#swagger-ui',
+        deepLinking: true,
+        presets: [SwaggerUIBundle.presets.apis, SwaggerUIStandalonePreset],
+        layout: 'BaseLayout',
+        persistAuthorization: true
+      });
+    });
+  </script>
+</body>
+</html>`;
 };
 
 const bootstrap = async (): Promise<void> => {
@@ -89,15 +125,19 @@ const bootstrap = async (): Promise<void> => {
   const openApiDocument = SwaggerModule.createDocument(app, openApiConfig);
   SwaggerModule.setup(SWAGGER_UI_PATH, app, openApiDocument, {
     jsonDocumentUrl: OPENAPI_JSON_PATH,
+    ui: false,
     raw: ['json'],
-    customSiteTitle: 'VeeValve API Docs',
-    swaggerOptions: {
-      layout: 'BaseLayout',
-      persistAuthorization: true,
-    },
   });
 
   const fastify = app.getHttpAdapter().getInstance();
+  const swaggerUiHtml = buildSwaggerUiHtml();
+  const serveSwaggerUiHtml = (_request: FastifyRequest, reply: FastifyReply): void => {
+    reply.type('text/html; charset=utf-8').send(swaggerUiHtml);
+  };
+  fastify.get(SWAGGER_UI_PATH, serveSwaggerUiHtml);
+  fastify.get(`${SWAGGER_UI_PATH}/`, serveSwaggerUiHtml);
+  fastify.get(`${SWAGGER_UI_PATH}/index.html`, serveSwaggerUiHtml);
+
   fastify.addHook('onRequest', (request, _reply, done) => {
     (request as FastifyRequest & { startTimeNs?: bigint }).startTimeNs = process.hrtime.bigint();
     done();
