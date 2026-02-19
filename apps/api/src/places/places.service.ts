@@ -86,6 +86,11 @@ interface PlaceRow {
 
 const DEFAULT_LIST_LIMIT = 10;
 const SEARCH_LIST_LIMIT = 20;
+const DEFAULT_FUZZY_THRESHOLD = 0.12;
+const SHORT_QUERY_FUZZY_THRESHOLD = 0.2;
+const RELAXED_COMPACT_FUZZY_THRESHOLD = 0.1;
+const RELAXED_COMPACT_QUERY_MIN_LENGTH = 4;
+const RELAXED_COMPACT_QUERY_MAX_LENGTH = 8;
 
 const PLACE_LATEST_STATUS_SELECT = {
   sampleId: true,
@@ -351,7 +356,9 @@ export class PlacesService {
     offset: number;
   }): Promise<string[] | null> {
     const { search, type, status, limit, offset } = input;
-    const threshold = search.length <= 3 ? 0.2 : 0.12;
+    const threshold = search.length <= 3
+      ? SHORT_QUERY_FUZZY_THRESHOLD
+      : DEFAULT_FUZZY_THRESHOLD;
     const strictTokens = this.extractStrictSearchTokens(search);
     const shouldRunStrictSearch = search.includes(' ') || strictTokens.length >= 2;
 
@@ -374,7 +381,52 @@ export class PlacesService {
     }
 
     try {
-      const rankedRows = await this.prisma.$queryRaw<RankedPlaceId[]>(Prisma.sql`
+      const rankedRows = await this.findFuzzyRankedPlaceRows({
+        search,
+        threshold,
+        limit,
+        offset,
+        typeFilter,
+        statusFilter,
+      });
+
+      if (rankedRows.length > 0) {
+        return rankedRows.map((row) => row.id);
+      }
+
+      if (this.shouldRunRelaxedCompactFuzzySearch(search)) {
+        const relaxedRows = await this.findFuzzyRankedPlaceRows({
+          search,
+          threshold: RELAXED_COMPACT_FUZZY_THRESHOLD,
+          limit,
+          offset,
+          typeFilter,
+          statusFilter,
+        });
+
+        if (relaxedRows.length > 0) {
+          return relaxedRows.map((row) => row.id);
+        }
+      }
+
+      return [];
+    } catch {
+      // Extension/index may not be applied yet; fall back to standard contains search.
+      return null;
+    }
+  }
+
+  private async findFuzzyRankedPlaceRows(input: {
+    search: string;
+    threshold: number;
+    limit: number;
+    offset: number;
+    typeFilter: Prisma.Sql;
+    statusFilter: Prisma.Sql;
+  }): Promise<RankedPlaceId[]> {
+    const { search, threshold, limit, offset, typeFilter, statusFilter } = input;
+
+    return this.prisma.$queryRaw<RankedPlaceId[]>(Prisma.sql`
         SELECT p.id
         FROM "Place" p
         INNER JOIN "PlaceLatestStatus" ls ON ls."placeId" = p.id
@@ -430,12 +482,23 @@ export class PlacesService {
         LIMIT ${limit}
         OFFSET ${offset}
       `);
+  }
 
-      return rankedRows.map((row) => row.id);
-    } catch {
-      // Extension/index may not be applied yet; fall back to standard contains search.
-      return null;
+  private shouldRunRelaxedCompactFuzzySearch(search: string): boolean {
+    const normalizedSearch = search.trim().normalize('NFKC').toLowerCase();
+
+    if (!normalizedSearch || normalizedSearch.includes(' ')) {
+      return false;
     }
+
+    if (!/^[\p{L}\p{N}]+$/u.test(normalizedSearch)) {
+      return false;
+    }
+
+    return (
+      normalizedSearch.length >= RELAXED_COMPACT_QUERY_MIN_LENGTH &&
+      normalizedSearch.length <= RELAXED_COMPACT_QUERY_MAX_LENGTH
+    );
   }
 
   private async findStrictRankedPlaceIds(input: {
