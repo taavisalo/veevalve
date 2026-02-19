@@ -58,7 +58,7 @@ services:
       TERVISEAMET_FETCH_TIMEOUT_MS: 20000
       TERVISEAMET_MAX_FEED_BYTES: 10485760
       TERVISEAMET_ALLOWED_HOSTS: vtiav.sm.ee
-      CORS_ORIGIN: http://localhost:3000
+      CORS_ORIGIN: http://localhost:3000,http://127.0.0.1:3000,http://localhost:8081,http://127.0.0.1:8081,http://localhost:8082,http://127.0.0.1:8082,http://localhost:19006,http://127.0.0.1:19006
       BODY_LIMIT_BYTES: 1048576
       SYNC_API_TOKEN: dev-sync-token
       ALLOW_UNAUTHENTICATED_SYNC: 'false'

@@ -8,7 +8,11 @@ import { applyApiSecurityHeaders } from './security/security-headers';
 
 const DEFAULT_API_PORT = 3001;
 const DEFAULT_BODY_LIMIT_BYTES = 1_048_576; // 1 MiB
-const DEFAULT_CORS_ORIGINS = ['http://localhost:3000', 'http://127.0.0.1:3000'];
+const DEFAULT_LOCALHOST_CORS_PORTS = [3000, 8081, 8082, 19006];
+const DEFAULT_CORS_ORIGINS = DEFAULT_LOCALHOST_CORS_PORTS.flatMap((port) => [
+  `http://localhost:${port}`,
+  `http://127.0.0.1:${port}`,
+]);
 
 const parsePositiveInteger = (value: string | undefined, fallback: number): number => {
   const parsed = Number.parseInt(value ?? '', 10);

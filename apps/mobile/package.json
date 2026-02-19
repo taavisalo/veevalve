@@ -5,9 +5,12 @@
   "main": "index.ts",
   "scripts": {
     "dev": "expo start --clear",
+    "dev:client": "expo start --clear --dev-client",
     "dev:docker": "expo start --clear --host lan --port 8081",
     "android": "expo run:android",
     "ios": "expo run:ios",
+    "eas:build:dev:android": "eas build --profile development --platform android",
+    "eas:build:dev:ios": "eas build --profile development --platform ios",
     "lint": "eslint \"**/*.{ts,tsx}\"",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests",
@@ -19,9 +22,14 @@
     "@veevalve/core": "workspace:*",
     "@veevalve/ui": "workspace:*",
     "expo": "~54.0.33",
+    "expo-constants": "~18.0.13",
+    "expo-dev-client": "~6.0.20",
     "expo-status-bar": "~3.0.9",
     "react": "19.1.0",
-    "react-native": "0.81.5"
+    "react-dom": "19.1.0",
+    "react-native": "0.81.5",
+    "react-native-safe-area-context": "~5.6.2",
+    "react-native-web": "^0.21.2"
   },
   "devDependencies": {
     "@types/react": "~19.1.10",

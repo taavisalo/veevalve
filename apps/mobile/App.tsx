@@ -10,29 +10,36 @@ import {
 } from '@veevalve/core/client';
 import { NativePlaceCard } from '@veevalve/ui/native';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Keyboard,
   Linking,
   Pressable,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
-
-import { ToggleRow } from './src/components/toggle-row';
-import { fetchPlaceMetrics, fetchPlaces, fetchPlacesByIds, type PlaceMetrics } from './src/lib/fetch-places';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import {
+  fetchPlaceMetrics,
+  fetchPlaces,
+  fetchPlacesByIds,
+  type PlaceMetrics,
+} from './src/lib/fetch-places';
 import { readFavoritePlaceIds, writeFavoritePlaceIds } from './src/lib/favorites-storage';
-import { readMetricsUiPreferences, writeMetricsUiPreferences } from './src/lib/ui-preferences-storage';
+import {
+  readMetricsUiPreferences,
+  writeMetricsUiPreferences,
+} from './src/lib/ui-preferences-storage';
 
 const LATEST_RESULTS_LIMIT = 10;
 const SEARCH_RESULTS_LIMIT = 20;
 const SUGGESTION_LIMIT = 8;
 const SEARCH_DEBOUNCE_MS = 180;
+const FAVORITE_ACTION_MIN_PENDING_MS = 300;
 const TERVISEAMET_DATA_URL = 'https://vtiav.sm.ee/index.php/?active_tab_id=A';
 
 const getResultsLimit = (search?: string): number =>
@@ -89,8 +96,7 @@ const App = () => {
   const [typeFilter, setTypeFilter] = useState<PlaceType | 'ALL'>('ALL');
   const [statusFilter, setStatusFilter] = useState<QualityStatus | 'ALL'>('ALL');
   const [languageMenuOpen, setLanguageMenuOpen] = useState(false);
-  const [qualityAlertsEnabled, setQualityAlertsEnabled] = useState(true);
-  const [locationAlertsEnabled, setLocationAlertsEnabled] = useState(false);
+  const [statusAlertsEnabled, setStatusAlertsEnabled] = useState(false);
   const [searchInput, setSearchInput] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [places, setPlaces] = useState<PlaceWithLatestReading[]>([]);
@@ -104,11 +110,41 @@ const App = () => {
   const [aboutVisible, setAboutVisible] = useState(false);
   const [metricsPreferencesHydrated, setMetricsPreferencesHydrated] = useState(false);
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
+  const [favoriteActionPendingIds, setFavoriteActionPendingIds] = useState<Set<string>>(new Set());
   const [favoritesHydrated, setFavoritesHydrated] = useState(false);
   const [favoritesLoading, setFavoritesLoading] = useState(false);
   const [favoritePlaces, setFavoritePlaces] = useState<PlaceWithLatestReading[]>([]);
 
   const inputRef = useRef<TextInput | null>(null);
+  const favoriteActionTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const favoriteActionStartedAtRef = useRef<Map<string, number>>(new Map());
+
+  const clearFavoriteActionPending = useCallback((placeId: string) => {
+    const existingTimeout = favoriteActionTimeoutsRef.current.get(placeId);
+    if (typeof existingTimeout === 'number') {
+      clearTimeout(existingTimeout);
+    }
+
+    const startedAt = favoriteActionStartedAtRef.current.get(placeId) ?? Date.now();
+    const elapsedMs = Date.now() - startedAt;
+    const delayMs = Math.max(0, FAVORITE_ACTION_MIN_PENDING_MS - elapsedMs);
+
+    const timeoutId = setTimeout(() => {
+      favoriteActionTimeoutsRef.current.delete(placeId);
+      favoriteActionStartedAtRef.current.delete(placeId);
+      setFavoriteActionPendingIds((currentIds) => {
+        if (!currentIds.has(placeId)) {
+          return currentIds;
+        }
+
+        const nextIds = new Set(currentIds);
+        nextIds.delete(placeId);
+        return nextIds;
+      });
+    }, delayMs);
+
+    favoriteActionTimeoutsRef.current.set(placeId, timeoutId);
+  }, []);
 
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -282,7 +318,6 @@ const App = () => {
           return;
         }
 
-        setFavoritePlaces([]);
         console.error(fetchError);
       })
       .finally(() => {
@@ -296,12 +331,45 @@ const App = () => {
     };
   }, [favoriteIds, locale]);
 
+  useEffect(() => {
+    if (favoriteActionPendingIds.size === 0 || favoritesLoading) {
+      return;
+    }
+
+    for (const placeId of favoriteActionPendingIds) {
+      clearFavoriteActionPending(placeId);
+    }
+  }, [clearFavoriteActionPending, favoriteActionPendingIds, favoritesLoading]);
+
+  useEffect(() => {
+    return () => {
+      for (const timeoutId of favoriteActionTimeoutsRef.current.values()) {
+        clearTimeout(timeoutId);
+      }
+
+      favoriteActionTimeoutsRef.current.clear();
+      favoriteActionStartedAtRef.current.clear();
+    };
+  }, []);
+
   const searchQuery = searchInput.trim();
   const visibleResultsLimit = getResultsLimit(searchQuery);
   const shownResultsCount = places.length;
   const badShare = formatShare(metrics?.badQualityEntries ?? 0, metrics?.totalEntries ?? 0);
   const favoriteIdSet = useMemo(() => new Set(favoriteIds), [favoriteIds]);
   const hasFavorites = favoriteIds.length > 0;
+  const favoriteCount = favoritePlaces.length > 0 ? favoritePlaces.length : favoriteIds.length;
+  const favoritesNotice = hasFavorites
+    ? statusAlertsEnabled
+      ? locale === 'et'
+        ? 'Muutuste märguanded on sees.'
+        : 'Status-change alerts are enabled.'
+      : locale === 'et'
+        ? 'Lülita märguanded sisse, et saada teavitus lemmikute staatuse muutustest.'
+        : 'Enable alerts to get notified when favorite statuses change.'
+    : locale === 'et'
+      ? 'Lisa kohti lemmikutesse, et näha neid siin kohe avamisel.'
+      : 'Add places to favorites to see them here right away on open.';
 
   const toggleMetricsVisible = () => {
     setMetricsVisible((value) => !value);
@@ -320,13 +388,38 @@ const App = () => {
   };
 
   const toggleFavorite = (placeId: string) => {
-    setFavoriteIds((currentIds) => {
-      if (currentIds.includes(placeId)) {
-        return currentIds.filter((id) => id !== placeId);
-      }
+    if (favoriteActionPendingIds.has(placeId)) {
+      return;
+    }
 
-      return [placeId, ...currentIds].slice(0, 50);
+    const isCurrentlyFavorite = favoriteIdSet.has(placeId);
+    const optimisticPlace =
+      places.find((place) => place.id === placeId) ??
+      favoritePlaces.find((place) => place.id === placeId);
+
+    favoriteActionStartedAtRef.current.set(placeId, Date.now());
+    setFavoriteActionPendingIds((currentIds) => {
+      const nextIds = new Set(currentIds);
+      nextIds.add(placeId);
+      return nextIds;
     });
+
+    if (isCurrentlyFavorite) {
+      setFavoriteIds((currentIds) => currentIds.filter((id) => id !== placeId));
+      setFavoritePlaces((currentPlaces) => currentPlaces.filter((place) => place.id !== placeId));
+      return;
+    }
+
+    setFavoriteIds((currentIds) => [placeId, ...currentIds].slice(0, 50));
+    if (optimisticPlace) {
+      setFavoritePlaces((currentPlaces) => {
+        if (currentPlaces.some((place) => place.id === placeId)) {
+          return currentPlaces;
+        }
+
+        return [optimisticPlace, ...currentPlaces].slice(0, 50);
+      });
+    }
   };
 
   const suggestions = useMemo<Suggestion[]>(() => {
@@ -343,9 +436,10 @@ const App = () => {
     const rankedPlaces = places
       .map((place) => {
         const name = locale === 'en' ? place.nameEn : place.nameEt;
-        const address = locale === 'en'
-          ? (place.addressEn ?? place.addressEt)
-          : (place.addressEt ?? place.addressEn);
+        const address =
+          locale === 'en'
+            ? (place.addressEn ?? place.addressEt)
+            : (place.addressEt ?? place.addressEn);
         const nameScore = scoreFuzzyMatch({
           query: normalizedSearch,
           primary: name,
@@ -457,516 +551,583 @@ const App = () => {
   };
 
   return (
-    <SafeAreaView style={styles.screen}>
-      <StatusBar style="dark" />
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        keyboardShouldPersistTaps="handled"
-        onScrollBeginDrag={() => {
-          setLanguageMenuOpen(false);
-          setSuggestionsOpen(false);
-        }}
-      >
-        <View style={styles.heroCard}>
-          <View style={styles.languageMenu}>
-            <Pressable
-              style={[
-                styles.metricsHeaderToggle,
-                metricsVisible ? styles.metricsHeaderToggleActive : undefined,
-              ]}
-              onPress={toggleMetricsVisible}
-            >
-              <Text
-                style={[
-                  styles.metricsHeaderToggleText,
-                  metricsVisible ? styles.metricsHeaderToggleTextActive : undefined,
-                ]}
-              >
-                {locale === 'et' ? 'Mõõdikud' : 'Metrics'}
-              </Text>
-            </Pressable>
-            <Pressable
-              style={[
-                styles.aboutHeaderToggle,
-                aboutVisible ? styles.aboutHeaderToggleActive : undefined,
-              ]}
-              onPress={() => setAboutVisible((value) => !value)}
-              accessibilityRole="button"
-              accessibilityLabel={locale === 'et' ? 'Ava info andmete kohta' : 'Open data info'}
-            >
-              <Text
-                style={[
-                  styles.aboutHeaderToggleText,
-                  aboutVisible ? styles.aboutHeaderToggleTextActive : undefined,
-                ]}
-              >
-                ?
-              </Text>
-            </Pressable>
-            <View style={styles.languageControl}>
-              <Pressable
-                style={styles.languageTrigger}
-                onPress={() => setLanguageMenuOpen((value) => !value)}
-              >
-                <Text style={styles.languageTriggerText}>
-                  {locale === 'et' ? 'Keel: Eesti' : 'Language: English'}
-                </Text>
-              </Pressable>
-              {languageMenuOpen ? (
-                <View style={styles.languageDropdown}>
-                  <Pressable
-                    style={styles.languageOption}
-                    onPress={() => {
-                      setLocale('et');
-                      setLanguageMenuOpen(false);
-                    }}
-                  >
-                    <Text
-                      style={[
-                        styles.languageOptionText,
-                        locale === 'et' ? styles.languageOptionTextActive : undefined,
-                      ]}
-                    >
-                      Eesti
-                    </Text>
-                  </Pressable>
-                  <Pressable
-                    style={styles.languageOption}
-                    onPress={() => {
-                      setLocale('en');
-                      setLanguageMenuOpen(false);
-                    }}
-                  >
-                    <Text
-                      style={[
-                        styles.languageOptionText,
-                        locale === 'en' ? styles.languageOptionTextActive : undefined,
-                      ]}
-                    >
-                      English
-                    </Text>
-                  </Pressable>
-                </View>
-              ) : null}
-            </View>
-          </View>
-
-          <Text style={styles.heroLabel}>
-            {t('appName', locale)}
-          </Text>
-          <Text style={styles.heroTitle}>
-            {locale === 'et'
-              ? 'Ujumiskohtade vee kvaliteet Eestis'
-              : 'Water quality for swimming places in Estonia'}
-          </Text>
-
-          {aboutVisible ? (
-            <View style={styles.aboutPanel}>
-              <Text style={styles.aboutTitle}>
-                {locale === 'et' ? 'Abi: andmeallikas ja uuendused' : 'Help: data source and updates'}
-              </Text>
-              <Text style={styles.aboutText}>
-                {locale === 'et'
-                  ? 'VeeValve kasutab Terviseameti avalikke XML-andmeid. Kuvatakse viimased teadaolevad tulemused.'
-                  : 'VeeValve uses public XML feeds by the Estonian Health Board. The app shows the latest known sample status.'}
-              </Text>
-              <Pressable
-                onPress={openAboutSourceLink}
-                accessibilityRole="link"
-                accessibilityLabel={locale === 'et' ? 'Ava andmeallikas' : 'Open data source'}
-              >
-                <Text style={styles.aboutSourceLink}>{TERVISEAMET_DATA_URL}</Text>
-              </Pressable>
-
-              {locale === 'et' ? (
-                <>
-                  <Text style={styles.aboutListItem}>
-                    • Ujulate allikad: ujulad.xml, basseinid.xml, basseini_veeproovid_{'{year}'}.xml
-                  </Text>
-                  <Text style={styles.aboutListItem}>
-                    • Supluskohtade allikad: supluskohad.xml, supluskoha_veeproovid_{'{year}'}.xml
-                  </Text>
-                  <Text style={styles.aboutListItem}>• Automaatne sünkroon käivitub iga tunni 15. minutil.</Text>
-                  <Text style={styles.aboutListItem}>
-                    • Muutuseid kontrollitakse ETag/Last-Modified päiste ja sisuräsi abil.
-                  </Text>
-                  <Text style={styles.aboutListItem}>
-                    • Asukohafaile kontrollitakse umbes kord ööpäevas; proovifaile sagedamini (basseinid ~2 h, rannad hooajal ~2 h, väljaspool hooaega ~24 h).
-                  </Text>
-                  <Text style={styles.aboutTitleSecondary}>Mida tähendavad staatused?</Text>
-                  <Text style={styles.aboutListItem}>• Hea: viimane proov vastab nõuetele.</Text>
-                  <Text style={styles.aboutListItem}>• Halb: viimane proov ei vasta nõuetele.</Text>
-                  <Text style={styles.aboutListItem}>
-                    • Teadmata: värske hinnang puudub või staatust ei saanud määrata.
-                  </Text>
-                  <Text style={styles.aboutTitleSecondary}>Kuidas brauseri tõuketeavitused töötavad?</Text>
-                  <Text style={styles.aboutListItem}>
-                    • Teavitused on valikulised: esmalt lisa koht lemmikutesse, siis lülita teavitused sisse.
-                  </Text>
-                  <Text style={styles.aboutListItem}>
-                    • Teavitusi saadetakse ainult lemmikutes olevatele kohtadele.
-                  </Text>
-                  <Text style={styles.aboutListItem}>
-                    • Märguanne tuleb staatuse muutuse korral (Hea ↔ Halb), mitte iga uuenduse peale.
-                  </Text>
-                  <Text style={styles.aboutListItem}>
-                    • Teavitused töötavad ka siis, kui leht on suletud (service workeri kaudu).
-                  </Text>
-                  <Text style={styles.aboutListItem}>
-                    • Kui teavitused on blokeeritud, ava need brauseri saidi seadetes uuesti.
-                  </Text>
-                </>
-              ) : (
-                <>
-                  <Text style={styles.aboutListItem}>
-                    • Pool sources: ujulad.xml, basseinid.xml, basseini_veeproovid_{'{year}'}.xml
-                  </Text>
-                  <Text style={styles.aboutListItem}>
-                    • Beach sources: supluskohad.xml, supluskoha_veeproovid_{'{year}'}.xml
-                  </Text>
-                  <Text style={styles.aboutListItem}>• Automatic sync runs every hour at minute 15.</Text>
-                  <Text style={styles.aboutListItem}>
-                    • Changes are detected via ETag/Last-Modified headers and content hash checks.
-                  </Text>
-                  <Text style={styles.aboutListItem}>
-                    • Location feeds are checked about once per day; sample feeds more often (pools ~2h, beaches in season ~2h, off-season ~24h).
-                  </Text>
-                  <Text style={styles.aboutTitleSecondary}>What do statuses mean?</Text>
-                  <Text style={styles.aboutListItem}>• Good: the latest sample meets requirements.</Text>
-                  <Text style={styles.aboutListItem}>• Bad: the latest sample does not meet requirements.</Text>
-                  <Text style={styles.aboutListItem}>
-                    • Unknown: no recent rating is available, or a status could not be determined.
-                  </Text>
-                  <Text style={styles.aboutTitleSecondary}>How do browser push notifications work?</Text>
-                  <Text style={styles.aboutListItem}>
-                    • Push alerts are opt-in: add a place to favorites first, then enable alerts.
-                  </Text>
-                  <Text style={styles.aboutListItem}>
-                    • Notifications are sent only for favorited places.
-                  </Text>
-                  <Text style={styles.aboutListItem}>
-                    • An alert is sent on status transition (Good ↔ Bad), not on every sync run.
-                  </Text>
-                  <Text style={styles.aboutListItem}>
-                    • Alerts can be delivered even when the page is closed (via service worker).
-                  </Text>
-                  <Text style={styles.aboutListItem}>
-                    • If notifications are blocked, re-enable them in browser site settings.
-                  </Text>
-                </>
-              )}
-            </View>
-          ) : null}
-
-          {metricsVisible ? (
-            <View style={styles.metricsWrap}>
-              <View style={[styles.metricCard, styles.metricCardPrimary]}>
-                <Text style={[styles.metricLabel, styles.metricLabelDanger]}>
-                  {locale === 'et' ? 'Halva kvaliteediga' : 'Bad quality'}
-                </Text>
-                <View style={styles.metricPrimaryValueRow}>
-                  <Text style={[styles.metricValue, styles.metricValueBad, styles.metricValuePrimary]}>
-                    {metrics?.badQualityEntries ?? 0}
-                  </Text>
-                  <Text style={styles.metricShareText}>{badShare}</Text>
-                </View>
-                <Text style={styles.metricMetaText}>
-                  {locale === 'et'
-                    ? `Basseinid ${metrics?.badPoolEntries ?? 0} • rannad ${metrics?.badBeachEntries ?? 0}`
-                    : `Pools ${metrics?.badPoolEntries ?? 0} • beaches ${metrics?.badBeachEntries ?? 0}`}
-                </Text>
-              </View>
-
-              <View style={styles.metricsRow}>
-                <View style={[styles.metricCard, styles.metricCardCompact]}>
-                  <Text style={styles.metricLabel}>
-                    {locale === 'et' ? 'Viimane uuendus' : 'Last update'}
-                  </Text>
-                  <Text style={styles.metricValue}>
-                    {formatMetricsDate(metrics?.latestSourceUpdatedAt ?? null, locale)}
-                  </Text>
-                </View>
-                <View style={[styles.metricCard, styles.metricCardCompact]}>
-                  <Text style={styles.metricLabel}>
-                    {locale === 'et' ? 'Kohti kokku' : 'Total places'}
-                  </Text>
-                  <Text style={styles.metricValue}>
-                    {metrics?.totalEntries ?? 0}
-                  </Text>
-                </View>
-              </View>
-
+    <SafeAreaProvider>
+      <SafeAreaView style={styles.screen}>
+        <StatusBar style="dark" />
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          keyboardShouldPersistTaps="handled"
+          onScrollBeginDrag={() => {
+            setLanguageMenuOpen(false);
+            setSuggestionsOpen(false);
+          }}
+        >
+          <View style={styles.heroCard}>
+            <View style={styles.languageMenu}>
               <Pressable
                 style={[
-                  styles.metricsDetailsToggle,
-                  metricsExpanded ? styles.metricsDetailsToggleActive : styles.metricsDetailsToggleInactive,
+                  styles.metricsHeaderToggle,
+                  metricsVisible ? styles.metricsHeaderToggleActive : undefined,
                 ]}
-                onPress={toggleMetricsExpanded}
+                onPress={toggleMetricsVisible}
               >
                 <Text
                   style={[
-                    styles.metricsDetailsToggleText,
-                    metricsExpanded
-                      ? styles.metricsDetailsToggleTextActive
-                      : styles.metricsDetailsToggleTextInactive,
+                    styles.metricsHeaderToggleText,
+                    metricsVisible ? styles.metricsHeaderToggleTextActive : undefined,
                   ]}
                 >
-                  {locale === 'et' ? 'Detailid' : 'Details'}
+                  {locale === 'et' ? 'Mõõdikud' : 'Metrics'}
                 </Text>
               </Pressable>
-
-              {metricsExpanded ? (
-                <View style={styles.metricsExtraGrid}>
-                  <View style={styles.metricMiniCard}>
-                    <Text style={styles.metricLabel}>
-                      {locale === 'et' ? 'Hea kvaliteet' : 'Good quality'}
-                    </Text>
-                    <Text style={[styles.metricValue, styles.metricValueGood]}>
-                      {metrics?.goodQualityEntries ?? 0}
-                    </Text>
-                  </View>
-                  <View style={styles.metricMiniCard}>
-                    <Text style={styles.metricLabel}>
-                      {locale === 'et' ? 'Teadmata kvaliteet' : 'Unknown quality'}
-                    </Text>
-                    <Text style={styles.metricValue}>
-                      {metrics?.unknownQualityEntries ?? 0}
-                    </Text>
-                  </View>
-                  <View style={styles.metricMiniCard}>
-                    <Text style={styles.metricLabel}>
-                      {locale === 'et' ? 'Jälgitavad basseinid' : 'Pools monitored'}
-                    </Text>
-                    <Text style={styles.metricValue}>
-                      {metrics?.poolEntries ?? 0}
-                    </Text>
-                  </View>
-                  <View style={styles.metricMiniCard}>
-                    <Text style={styles.metricLabel}>
-                      {locale === 'et' ? 'Jälgitavad rannad' : 'Beaches monitored'}
-                    </Text>
-                    <Text style={styles.metricValue}>
-                      {metrics?.beachEntries ?? 0}
-                    </Text>
-                  </View>
-                  <View style={styles.metricMiniCard}>
-                    <Text style={styles.metricLabel}>
-                      {locale === 'et' ? 'Uuendatud viimase 24 h jooksul' : 'Updated in last 24h'}
-                    </Text>
-                    <Text style={styles.metricValue}>
-                      {metrics?.updatedWithin24hEntries ?? 0}
-                    </Text>
-                  </View>
-                  <View style={styles.metricMiniCard}>
-                    <Text style={styles.metricLabel}>
-                      {locale === 'et' ? 'Viimane proov üle 7 päeva tagasi' : 'Latest sample older than 7 days'}
-                    </Text>
-                    <Text style={styles.metricValue}>
-                      {metrics?.staleOver7dEntries ?? 0}
-                    </Text>
-                  </View>
-                </View>
-              ) : null}
-            </View>
-          ) : null}
-
-          <View style={styles.searchSection}>
-            <View style={styles.searchInputWrap}>
-              <TextInput
-                ref={inputRef}
-                autoFocus
-                value={searchInput}
-                onFocus={() => {
-                  setLanguageMenuOpen(false);
-                  setSuggestionsOpen(true);
-                }}
-                onChangeText={(value) => {
-                  setSearchInput(value);
-                  setSuggestionsOpen(true);
-                }}
-                onSubmitEditing={() => {
-                  setSuggestionsOpen(false);
-                  inputRef.current?.blur();
-                  Keyboard.dismiss();
-                }}
-                autoCorrect={false}
-                autoCapitalize="none"
-                returnKeyType="search"
-                placeholder={
+              <Pressable
+                style={[
+                  styles.notificationsHeaderToggle,
+                  statusAlertsEnabled ? styles.notificationsHeaderToggleActive : undefined,
+                ]}
+                onPress={() => setStatusAlertsEnabled((value) => !value)}
+                accessibilityRole="button"
+                accessibilityState={{ selected: statusAlertsEnabled }}
+                accessibilityLabel={
                   locale === 'et'
-                    ? 'Sisesta koha nimi või omavalitsus...'
-                    : 'Type place name or municipality...'
+                    ? statusAlertsEnabled
+                      ? 'Märguanded sees'
+                      : 'Märguanded väljas'
+                    : statusAlertsEnabled
+                      ? 'Alerts on'
+                      : 'Alerts off'
                 }
-                placeholderTextColor="#6B7280"
-                style={styles.searchInput}
-              />
-
-              {searchInput ? (
-                <Pressable
-                  style={styles.clearSearchButton}
-                  onPress={() => {
-                    setSearchInput('');
-                    setDebouncedSearch('');
-                    setSuggestionsOpen(false);
-                    inputRef.current?.focus();
-                  }}
+              >
+                <Text
+                  style={[
+                    styles.notificationsHeaderToggleText,
+                    statusAlertsEnabled ? styles.notificationsHeaderToggleTextActive : undefined,
+                  ]}
                 >
-                  <Text style={styles.clearSearchButtonText}>
-                    {locale === 'et' ? 'Puhasta' : 'Clear'}
+                  {statusAlertsEnabled
+                    ? locale === 'et'
+                      ? 'Sees'
+                      : 'On'
+                    : locale === 'et'
+                      ? 'Väljas'
+                      : 'Off'}
+                </Text>
+              </Pressable>
+              <Pressable
+                style={[
+                  styles.aboutHeaderToggle,
+                  aboutVisible ? styles.aboutHeaderToggleActive : undefined,
+                ]}
+                onPress={() => setAboutVisible((value) => !value)}
+                accessibilityRole="button"
+                accessibilityLabel={locale === 'et' ? 'Ava info andmete kohta' : 'Open data info'}
+              >
+                <Text
+                  style={[
+                    styles.aboutHeaderToggleText,
+                    aboutVisible ? styles.aboutHeaderToggleTextActive : undefined,
+                  ]}
+                >
+                  ?
+                </Text>
+              </Pressable>
+              <View style={styles.languageControl}>
+                <Pressable
+                  style={styles.languageTrigger}
+                  onPress={() => setLanguageMenuOpen((value) => !value)}
+                >
+                  <Text style={styles.languageTriggerText}>
+                    {locale === 'et' ? 'Keel: Eesti' : 'Language: English'}
                   </Text>
                 </Pressable>
-              ) : null}
+                {languageMenuOpen ? (
+                  <View style={styles.languageDropdown}>
+                    <Pressable
+                      style={styles.languageOption}
+                      onPress={() => {
+                        setLocale('et');
+                        setLanguageMenuOpen(false);
+                      }}
+                    >
+                      <Text
+                        style={[
+                          styles.languageOptionText,
+                          locale === 'et' ? styles.languageOptionTextActive : undefined,
+                        ]}
+                      >
+                        Eesti
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      style={styles.languageOption}
+                      onPress={() => {
+                        setLocale('en');
+                        setLanguageMenuOpen(false);
+                      }}
+                    >
+                      <Text
+                        style={[
+                          styles.languageOptionText,
+                          locale === 'en' ? styles.languageOptionTextActive : undefined,
+                        ]}
+                      >
+                        English
+                      </Text>
+                    </Pressable>
+                  </View>
+                ) : null}
+              </View>
             </View>
 
-            {showSuggestions ? (
-              <View style={styles.suggestionsList}>
-                {suggestions.map((suggestion) => (
-                  <Pressable
-                    key={`${suggestion.id}-${suggestion.name}`}
-                    style={styles.suggestionButton}
-                    onPress={() => applySuggestion(suggestion)}
-                  >
-                    {renderHighlightedSuggestion(suggestion.name, searchQuery)}
-                    {suggestion.matchedBy === 'address' && suggestion.address
-                      ? renderHighlightedSecondary(suggestion.address, searchQuery)
-                      : renderHighlightedSecondary(suggestion.municipality, searchQuery)}
-                    {suggestion.matchedBy !== 'name' ? (
-                      <Text style={styles.suggestionReason}>
-                        {suggestion.matchedBy === 'address'
-                          ? (locale === 'et' ? 'Aadressi vaste' : 'Address match')
-                          : (locale === 'et' ? 'Omavalitsuse vaste' : 'Municipality match')}
-                      </Text>
-                    ) : null}
-                  </Pressable>
-                ))}
+            <Text style={styles.heroLabel}>{t('appName', locale)}</Text>
+            <Text style={styles.heroTitle}>
+              {locale === 'et'
+                ? 'Ujumiskohtade vee kvaliteet Eestis'
+                : 'Water quality for swimming places in Estonia'}
+            </Text>
+
+            {aboutVisible ? (
+              <View style={styles.aboutPanel}>
+                <Text style={styles.aboutTitle}>
+                  {locale === 'et'
+                    ? 'Abi: andmeallikas ja uuendused'
+                    : 'Help: data source and updates'}
+                </Text>
+                <Text style={styles.aboutText}>
+                  {locale === 'et'
+                    ? 'VeeValve kasutab Terviseameti avalikke XML-andmeid. Kuvatakse viimased teadaolevad tulemused.'
+                    : 'VeeValve uses public XML feeds by the Estonian Health Board. The app shows the latest known sample status.'}
+                </Text>
+                <Pressable
+                  onPress={openAboutSourceLink}
+                  accessibilityRole="link"
+                  accessibilityLabel={locale === 'et' ? 'Ava andmeallikas' : 'Open data source'}
+                >
+                  <Text style={styles.aboutSourceLink}>{TERVISEAMET_DATA_URL}</Text>
+                </Pressable>
+
+                {locale === 'et' ? (
+                  <>
+                    <Text style={styles.aboutListItem}>
+                      • Ujulate allikad: ujulad.xml, basseinid.xml, basseini_veeproovid_{'{year}'}
+                      .xml
+                    </Text>
+                    <Text style={styles.aboutListItem}>
+                      • Supluskohtade allikad: supluskohad.xml, supluskoha_veeproovid_{'{year}'}.xml
+                    </Text>
+                    <Text style={styles.aboutListItem}>
+                      • Automaatne sünkroon käivitub iga tunni 15. minutil.
+                    </Text>
+                    <Text style={styles.aboutListItem}>
+                      • Muutuseid kontrollitakse ETag/Last-Modified päiste ja sisuräsi abil.
+                    </Text>
+                    <Text style={styles.aboutListItem}>
+                      • Asukohafaile kontrollitakse umbes kord ööpäevas; proovifaile sagedamini
+                      (basseinid ~2 h, rannad hooajal ~2 h, väljaspool hooaega ~24 h).
+                    </Text>
+                    <Text style={styles.aboutTitleSecondary}>Mida tähendavad staatused?</Text>
+                    <Text style={styles.aboutListItem}>• Hea: viimane proov vastab nõuetele.</Text>
+                    <Text style={styles.aboutListItem}>
+                      • Halb: viimane proov ei vasta nõuetele.
+                    </Text>
+                    <Text style={styles.aboutListItem}>
+                      • Teadmata: värske hinnang puudub või staatust ei saanud määrata.
+                    </Text>
+                    <Text style={styles.aboutTitleSecondary}>
+                      Kuidas brauseri tõuketeavitused töötavad?
+                    </Text>
+                    <Text style={styles.aboutListItem}>
+                      • Teavitused on valikulised: esmalt lisa koht lemmikutesse, siis lülita
+                      teavitused sisse.
+                    </Text>
+                    <Text style={styles.aboutListItem}>
+                      • Teavitusi saadetakse ainult lemmikutes olevatele kohtadele.
+                    </Text>
+                    <Text style={styles.aboutListItem}>
+                      • Märguanne tuleb staatuse muutuse korral (Hea ↔ Halb), mitte iga uuenduse
+                      peale.
+                    </Text>
+                    <Text style={styles.aboutListItem}>
+                      • Teavitused töötavad ka siis, kui leht on suletud (service workeri kaudu).
+                    </Text>
+                    <Text style={styles.aboutListItem}>
+                      • Kui teavitused on blokeeritud, ava need brauseri saidi seadetes uuesti.
+                    </Text>
+                  </>
+                ) : (
+                  <>
+                    <Text style={styles.aboutListItem}>
+                      • Pool sources: ujulad.xml, basseinid.xml, basseini_veeproovid_{'{year}'}.xml
+                    </Text>
+                    <Text style={styles.aboutListItem}>
+                      • Beach sources: supluskohad.xml, supluskoha_veeproovid_{'{year}'}.xml
+                    </Text>
+                    <Text style={styles.aboutListItem}>
+                      • Automatic sync runs every hour at minute 15.
+                    </Text>
+                    <Text style={styles.aboutListItem}>
+                      • Changes are detected via ETag/Last-Modified headers and content hash checks.
+                    </Text>
+                    <Text style={styles.aboutListItem}>
+                      • Location feeds are checked about once per day; sample feeds more often
+                      (pools ~2h, beaches in season ~2h, off-season ~24h).
+                    </Text>
+                    <Text style={styles.aboutTitleSecondary}>What do statuses mean?</Text>
+                    <Text style={styles.aboutListItem}>
+                      • Good: the latest sample meets requirements.
+                    </Text>
+                    <Text style={styles.aboutListItem}>
+                      • Bad: the latest sample does not meet requirements.
+                    </Text>
+                    <Text style={styles.aboutListItem}>
+                      • Unknown: no recent rating is available, or a status could not be determined.
+                    </Text>
+                    <Text style={styles.aboutTitleSecondary}>
+                      How do browser push notifications work?
+                    </Text>
+                    <Text style={styles.aboutListItem}>
+                      • Push alerts are opt-in: add a place to favorites first, then enable alerts.
+                    </Text>
+                    <Text style={styles.aboutListItem}>
+                      • Notifications are sent only for favorited places.
+                    </Text>
+                    <Text style={styles.aboutListItem}>
+                      • An alert is sent on status transition (Good ↔ Bad), not on every sync run.
+                    </Text>
+                    <Text style={styles.aboutListItem}>
+                      • Alerts can be delivered even when the page is closed (via service worker).
+                    </Text>
+                    <Text style={styles.aboutListItem}>
+                      • If notifications are blocked, re-enable them in browser site settings.
+                    </Text>
+                  </>
+                )}
               </View>
             ) : null}
 
-            <Text style={styles.searchHint}>
-              {locale === 'et'
-                ? 'Otsingusoovitused uuenevad kirjutamise ajal.'
-                : 'Autocomplete suggestions update as you type.'}
-            </Text>
-          </View>
-        </View>
+            {metricsVisible ? (
+              <View style={styles.metricsWrap}>
+                <View style={[styles.metricCard, styles.metricCardPrimary]}>
+                  <Text style={[styles.metricLabel, styles.metricLabelDanger]}>
+                    {locale === 'et' ? 'Halva kvaliteediga' : 'Bad quality'}
+                  </Text>
+                  <View style={styles.metricPrimaryValueRow}>
+                    <Text
+                      style={[styles.metricValue, styles.metricValueBad, styles.metricValuePrimary]}
+                    >
+                      {metrics?.badQualityEntries ?? 0}
+                    </Text>
+                    <Text style={styles.metricShareText}>{badShare}</Text>
+                  </View>
+                  <Text style={styles.metricMetaText}>
+                    {locale === 'et'
+                      ? `Basseinid ${metrics?.badPoolEntries ?? 0} • rannad ${metrics?.badBeachEntries ?? 0}`
+                      : `Pools ${metrics?.badPoolEntries ?? 0} • beaches ${metrics?.badBeachEntries ?? 0}`}
+                  </Text>
+                </View>
 
-        <View style={styles.filterSection}>
-          <Text style={styles.filterTitle}>
-            {locale === 'et' ? 'Filtreeri' : 'Filter'}
-          </Text>
-          <View style={styles.filterWrap}>
-            <Pressable
-              style={[
-                styles.filterButton,
-                typeFilter === 'ALL' && statusFilter === 'ALL'
-                  ? styles.filterButtonActive
-                  : styles.filterButtonInactive,
-              ]}
-              onPress={() => {
-                setTypeFilter('ALL');
-                setStatusFilter('ALL');
-              }}
+                <View style={styles.metricsRow}>
+                  <View style={[styles.metricCard, styles.metricCardCompact]}>
+                    <Text style={styles.metricLabel}>
+                      {locale === 'et' ? 'Viimane uuendus' : 'Last update'}
+                    </Text>
+                    <Text style={styles.metricValue}>
+                      {formatMetricsDate(metrics?.latestSourceUpdatedAt ?? null, locale)}
+                    </Text>
+                  </View>
+                  <View style={[styles.metricCard, styles.metricCardCompact]}>
+                    <Text style={styles.metricLabel}>
+                      {locale === 'et' ? 'Kohti kokku' : 'Total places'}
+                    </Text>
+                    <Text style={styles.metricValue}>{metrics?.totalEntries ?? 0}</Text>
+                  </View>
+                </View>
+
+                <Pressable
+                  style={[
+                    styles.metricsDetailsToggle,
+                    metricsExpanded
+                      ? styles.metricsDetailsToggleActive
+                      : styles.metricsDetailsToggleInactive,
+                  ]}
+                  onPress={toggleMetricsExpanded}
+                >
+                  <Text
+                    style={[
+                      styles.metricsDetailsToggleText,
+                      metricsExpanded
+                        ? styles.metricsDetailsToggleTextActive
+                        : styles.metricsDetailsToggleTextInactive,
+                    ]}
+                  >
+                    {locale === 'et' ? 'Detailid' : 'Details'}
+                  </Text>
+                </Pressable>
+
+                {metricsExpanded ? (
+                  <View style={styles.metricsExtraGrid}>
+                    <View style={styles.metricMiniCard}>
+                      <Text style={styles.metricLabel}>
+                        {locale === 'et' ? 'Hea kvaliteet' : 'Good quality'}
+                      </Text>
+                      <Text style={[styles.metricValue, styles.metricValueGood]}>
+                        {metrics?.goodQualityEntries ?? 0}
+                      </Text>
+                    </View>
+                    <View style={styles.metricMiniCard}>
+                      <Text style={styles.metricLabel}>
+                        {locale === 'et' ? 'Teadmata kvaliteet' : 'Unknown quality'}
+                      </Text>
+                      <Text style={styles.metricValue}>{metrics?.unknownQualityEntries ?? 0}</Text>
+                    </View>
+                    <View style={styles.metricMiniCard}>
+                      <Text style={styles.metricLabel}>
+                        {locale === 'et' ? 'Jälgitavad basseinid' : 'Pools monitored'}
+                      </Text>
+                      <Text style={styles.metricValue}>{metrics?.poolEntries ?? 0}</Text>
+                    </View>
+                    <View style={styles.metricMiniCard}>
+                      <Text style={styles.metricLabel}>
+                        {locale === 'et' ? 'Jälgitavad rannad' : 'Beaches monitored'}
+                      </Text>
+                      <Text style={styles.metricValue}>{metrics?.beachEntries ?? 0}</Text>
+                    </View>
+                    <View style={styles.metricMiniCard}>
+                      <Text style={styles.metricLabel}>
+                        {locale === 'et' ? 'Uuendatud viimase 24 h jooksul' : 'Updated in last 24h'}
+                      </Text>
+                      <Text style={styles.metricValue}>
+                        {metrics?.updatedWithin24hEntries ?? 0}
+                      </Text>
+                    </View>
+                    <View style={styles.metricMiniCard}>
+                      <Text style={styles.metricLabel}>
+                        {locale === 'et'
+                          ? 'Viimane proov üle 7 päeva tagasi'
+                          : 'Latest sample older than 7 days'}
+                      </Text>
+                      <Text style={styles.metricValue}>{metrics?.staleOver7dEntries ?? 0}</Text>
+                    </View>
+                  </View>
+                ) : null}
+              </View>
+            ) : null}
+
+            <View style={styles.searchSection}>
+              <View style={styles.searchInputWrap}>
+                <Text style={styles.searchInputIcon} aria-hidden>
+                  ⌕
+                </Text>
+                <TextInput
+                  ref={inputRef}
+                  autoFocus
+                  value={searchInput}
+                  onFocus={() => {
+                    setLanguageMenuOpen(false);
+                    setSuggestionsOpen(true);
+                  }}
+                  onChangeText={(value) => {
+                    setSearchInput(value);
+                    setSuggestionsOpen(true);
+                  }}
+                  onSubmitEditing={() => {
+                    setSuggestionsOpen(false);
+                    inputRef.current?.blur();
+                    Keyboard.dismiss();
+                  }}
+                  autoCorrect={false}
+                  autoCapitalize="none"
+                  returnKeyType="search"
+                  placeholder={
+                    locale === 'et'
+                      ? 'Sisesta koha nimi või omavalitsus...'
+                      : 'Type place name or municipality...'
+                  }
+                  placeholderTextColor="#6B7280"
+                  style={styles.searchInput}
+                />
+
+                {searchInput ? (
+                  <Pressable
+                    style={styles.clearSearchButton}
+                    onPress={() => {
+                      setSearchInput('');
+                      setDebouncedSearch('');
+                      setSuggestionsOpen(false);
+                      inputRef.current?.focus();
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel={locale === 'et' ? 'Puhasta otsing' : 'Clear search'}
+                  >
+                    <Text style={styles.clearSearchButtonText} aria-hidden>
+                      ×
+                    </Text>
+                  </Pressable>
+                ) : null}
+              </View>
+
+              {showSuggestions ? (
+                <View style={styles.suggestionsList}>
+                  {suggestions.map((suggestion) => (
+                    <Pressable
+                      key={`${suggestion.id}-${suggestion.name}`}
+                      style={styles.suggestionButton}
+                      onPress={() => applySuggestion(suggestion)}
+                    >
+                      {renderHighlightedSuggestion(suggestion.name, searchQuery)}
+                      {suggestion.matchedBy === 'address' && suggestion.address
+                        ? renderHighlightedSecondary(suggestion.address, searchQuery)
+                        : renderHighlightedSecondary(suggestion.municipality, searchQuery)}
+                      {suggestion.matchedBy !== 'name' ? (
+                        <Text style={styles.suggestionReason}>
+                          {suggestion.matchedBy === 'address'
+                            ? locale === 'et'
+                              ? 'Aadressi vaste'
+                              : 'Address match'
+                            : locale === 'et'
+                              ? 'Omavalitsuse vaste'
+                              : 'Municipality match'}
+                        </Text>
+                      ) : null}
+                    </Pressable>
+                  ))}
+                </View>
+              ) : null}
+
+              <Text style={styles.searchHint}>
+                {locale === 'et'
+                  ? 'Otsingusoovitused uuenevad kirjutamise ajal.'
+                  : 'Autocomplete suggestions update as you type.'}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.filterSection}>
+            <Text style={styles.filterTitle}>{locale === 'et' ? 'Filtreeri' : 'Filter'}</Text>
+            <ScrollView
+              horizontal
+              contentContainerStyle={styles.filterRow}
+              showsHorizontalScrollIndicator={false}
             >
-              <Text
+              <Pressable
                 style={[
-                  styles.filterButtonText,
+                  styles.filterButton,
                   typeFilter === 'ALL' && statusFilter === 'ALL'
-                    ? styles.filterButtonTextActive
-                    : styles.filterButtonTextInactive,
+                    ? styles.filterButtonActive
+                    : styles.filterButtonInactive,
                 ]}
+                onPress={() => {
+                  setTypeFilter('ALL');
+                  setStatusFilter('ALL');
+                }}
               >
-                {locale === 'et' ? 'Kõik kohad' : 'All places'}
-              </Text>
-            </Pressable>
-            <Pressable
-              style={[
-                styles.filterButton,
-                typeFilter === 'BEACH' ? styles.filterButtonActive : styles.filterButtonInactive,
-              ]}
-              onPress={() => setTypeFilter((value) => (value === 'BEACH' ? 'ALL' : 'BEACH'))}
-            >
-              <Text
+                <Text
+                  style={[
+                    styles.filterButtonText,
+                    typeFilter === 'ALL' && statusFilter === 'ALL'
+                      ? styles.filterButtonTextActive
+                      : styles.filterButtonTextInactive,
+                  ]}
+                >
+                  {locale === 'et' ? 'Kõik kohad' : 'All places'}
+                </Text>
+              </Pressable>
+              <Pressable
                 style={[
-                  styles.filterButtonText,
-                  typeFilter === 'BEACH'
-                    ? styles.filterButtonTextActive
-                    : styles.filterButtonTextInactive,
+                  styles.filterButton,
+                  typeFilter === 'BEACH' ? styles.filterButtonActive : styles.filterButtonInactive,
                 ]}
+                onPress={() => setTypeFilter((value) => (value === 'BEACH' ? 'ALL' : 'BEACH'))}
               >
-                {t('beaches', locale)}
-              </Text>
-            </Pressable>
-            <Pressable
-              style={[
-                styles.filterButton,
-                typeFilter === 'POOL' ? styles.filterButtonActive : styles.filterButtonInactive,
-              ]}
-              onPress={() => setTypeFilter((value) => (value === 'POOL' ? 'ALL' : 'POOL'))}
-            >
-              <Text
+                <Text
+                  style={[
+                    styles.filterButtonText,
+                    typeFilter === 'BEACH'
+                      ? styles.filterButtonTextActive
+                      : styles.filterButtonTextInactive,
+                  ]}
+                >
+                  {t('beaches', locale)}
+                </Text>
+              </Pressable>
+              <Pressable
                 style={[
-                  styles.filterButtonText,
-                  typeFilter === 'POOL'
-                    ? styles.filterButtonTextActive
-                    : styles.filterButtonTextInactive,
+                  styles.filterButton,
+                  typeFilter === 'POOL' ? styles.filterButtonActive : styles.filterButtonInactive,
                 ]}
+                onPress={() => setTypeFilter((value) => (value === 'POOL' ? 'ALL' : 'POOL'))}
               >
-                {t('pools', locale)}
-              </Text>
-            </Pressable>
-            <Pressable
-              style={[
-                styles.filterButton,
-                statusFilter === 'GOOD' ? styles.filterButtonActive : styles.filterButtonInactive,
-              ]}
-              onPress={() => setStatusFilter((value) => (value === 'GOOD' ? 'ALL' : 'GOOD'))}
-            >
-              <Text
+                <Text
+                  style={[
+                    styles.filterButtonText,
+                    typeFilter === 'POOL'
+                      ? styles.filterButtonTextActive
+                      : styles.filterButtonTextInactive,
+                  ]}
+                >
+                  {t('pools', locale)}
+                </Text>
+              </Pressable>
+              <Pressable
                 style={[
-                  styles.filterButtonText,
-                  statusFilter === 'GOOD'
-                    ? styles.filterButtonTextActive
-                    : styles.filterButtonTextInactive,
+                  styles.filterButton,
+                  statusFilter === 'GOOD' ? styles.filterButtonActive : styles.filterButtonInactive,
                 ]}
+                onPress={() => setStatusFilter((value) => (value === 'GOOD' ? 'ALL' : 'GOOD'))}
               >
-                {t('qualityGood', locale)}
-              </Text>
-            </Pressable>
-            <Pressable
-              style={[
-                styles.filterButton,
-                statusFilter === 'BAD' ? styles.filterButtonActive : styles.filterButtonInactive,
-              ]}
-              onPress={() => setStatusFilter((value) => (value === 'BAD' ? 'ALL' : 'BAD'))}
-            >
-              <Text
+                <Text
+                  style={[
+                    styles.filterButtonText,
+                    statusFilter === 'GOOD'
+                      ? styles.filterButtonTextActive
+                      : styles.filterButtonTextInactive,
+                  ]}
+                >
+                  {t('qualityGood', locale)}
+                </Text>
+              </Pressable>
+              <Pressable
                 style={[
-                  styles.filterButtonText,
-                  statusFilter === 'BAD'
-                    ? styles.filterButtonTextActive
-                    : styles.filterButtonTextInactive,
+                  styles.filterButton,
+                  statusFilter === 'BAD' ? styles.filterButtonActive : styles.filterButtonInactive,
                 ]}
+                onPress={() => setStatusFilter((value) => (value === 'BAD' ? 'ALL' : 'BAD'))}
               >
-                {t('qualityBad', locale)}
-              </Text>
-            </Pressable>
+                <Text
+                  style={[
+                    styles.filterButtonText,
+                    statusFilter === 'BAD'
+                      ? styles.filterButtonTextActive
+                      : styles.filterButtonTextInactive,
+                  ]}
+                >
+                  {t('qualityBad', locale)}
+                </Text>
+              </Pressable>
+            </ScrollView>
           </View>
-        </View>
 
-        {hasFavorites ? (
           <View style={styles.favoritesSection}>
             <View style={styles.favoritesHeaderRow}>
               <Text style={styles.favoritesTitle}>{t('favorites', locale)}</Text>
-              <Text style={styles.favoritesCountBadge}>{favoritePlaces.length}</Text>
+              <Text style={styles.favoritesCountBadge}>{favoriteCount}</Text>
             </View>
+            <Text style={styles.favoritesNoticeText}>{favoritesNotice}</Text>
 
-            {favoritesLoading && favoritePlaces.length === 0 ? (
-              <View style={styles.emptyCard}>
-                <Text style={styles.emptyText}>
-                  {locale === 'et' ? 'Laadin lemmikuid...' : 'Loading favorites...'}
-                </Text>
+            {!favoritesHydrated || (favoritesLoading && favoritePlaces.length === 0) ? (
+              <View
+                style={styles.favoritesSkeletonWrap}
+                accessibilityRole="progressbar"
+                accessibilityLabel={
+                  locale === 'et' ? 'Laadin lemmikuid...' : 'Loading favorites...'
+                }
+              >
+                <View style={styles.favoritesSkeletonCard} />
+                <View
+                  style={[styles.favoritesSkeletonCard, styles.favoritesSkeletonCardSecondary]}
+                />
               </View>
-            ) : favoritePlaces.length === 0 ? (
+            ) : hasFavorites && favoritePlaces.length === 0 ? (
               <View style={styles.emptyCard}>
                 <Text style={styles.emptyText}>
                   {locale === 'et'
@@ -974,7 +1135,7 @@ const App = () => {
                     : 'Could not load favorites right now.'}
                 </Text>
               </View>
-            ) : (
+            ) : hasFavorites ? (
               favoritePlaces.map((place) => (
                 <NativePlaceCard
                   key={`favorite-${place.id}`}
@@ -982,78 +1143,77 @@ const App = () => {
                   locale={locale}
                   referenceTimeIso={referenceTimeIso}
                   isFavorite
+                  favoriteUpdating={favoriteActionPendingIds.has(place.id)}
                   onToggleFavorite={toggleFavorite}
                 />
               ))
+            ) : (
+              <View style={styles.emptyCard}>
+                <Text style={styles.emptyText}>
+                  {locale === 'et'
+                    ? 'Lemmikute lisamiseks vajuta tulemustes tärniikooni.'
+                    : 'To add favorites, tap the star icon on result cards.'}
+                </Text>
+              </View>
             )}
           </View>
-        ) : null}
 
-        <View style={styles.notificationsCard}>
-          <Text style={styles.notificationsTitle}>
-            {locale === 'et' ? 'Teavitused' : 'Notifications'}
-          </Text>
-          <ToggleRow
-            label={
-              locale === 'et'
-                ? 'Saada teavitus kvaliteedi muutumisel'
-                : 'Notify when water quality changes'
-            }
-            value={qualityAlertsEnabled}
-            onToggle={() => setQualityAlertsEnabled((value) => !value)}
-          />
-          <ToggleRow
-            label={
-              locale === 'et'
-                ? 'Asukohapõhine teavitus läheduses'
-                : 'Location alerts when nearby'
-            }
-            value={locationAlertsEnabled}
-            onToggle={() => setLocationAlertsEnabled((value) => !value)}
-          />
-        </View>
-
-        <View style={styles.resultsMetaRow}>
-          <Text style={styles.resultsMetaText}>
-            {searchQuery
-              ? locale === 'et'
-                ? `Otsing: "${searchQuery}". Näitan ${shownResultsCount} tulemust (maksimaalselt ${visibleResultsLimit}).`
-                : `Search: "${searchQuery}". Showing ${shownResultsCount} of up to ${visibleResultsLimit} results.`
-              : locale === 'et'
-                ? `Kuvan ${shownResultsCount} viimati uuendatud kohta.`
-                : `Showing ${shownResultsCount} most recently updated places.`}
-          </Text>
-          {loading ? <ActivityIndicator size="small" color="#0A8F78" /> : null}
-        </View>
-
-        {error ? (
-          <View style={styles.errorCard}>
-            <Text style={styles.errorText}>{error}</Text>
+          <View style={styles.resultsSection}>
+            <Text style={styles.resultsTitle}>{locale === 'et' ? 'Tulemused' : 'Results'}</Text>
+            <View style={styles.resultsMetaWrap}>
+              <Text style={styles.resultsMetaText}>
+                {searchQuery
+                  ? locale === 'et'
+                    ? `Otsing: "${searchQuery}". Näitan ${shownResultsCount} tulemust (maksimaalselt ${visibleResultsLimit}).`
+                    : `Search: "${searchQuery}". Showing ${shownResultsCount} of up to ${visibleResultsLimit} results.`
+                  : locale === 'et'
+                    ? `Kuvan ${shownResultsCount} viimati uuendatud kohta.`
+                    : `Showing ${shownResultsCount} most recently updated places.`}
+              </Text>
+              {loading ? (
+                <View
+                  style={styles.resultsLoadingBadge}
+                  accessibilityRole="progressbar"
+                  accessibilityLabel={
+                    locale === 'et' ? 'Uuendan tulemusi...' : 'Updating results...'
+                  }
+                >
+                  <ActivityIndicator size="small" color="#0A8F78" />
+                </View>
+              ) : null}
+            </View>
           </View>
-        ) : null}
 
-        {places.length === 0 && !loading ? (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyText}>
-              {locale === 'et'
-                ? 'Sobivaid kohti ei leitud valitud filtritega.'
-                : 'No places found with the selected filters.'}
-            </Text>
-          </View>
-        ) : (
-          places.map((place) => (
-            <NativePlaceCard
-              key={place.id}
-              place={place}
-              locale={locale}
-              referenceTimeIso={referenceTimeIso}
-              isFavorite={favoriteIdSet.has(place.id)}
-              onToggleFavorite={toggleFavorite}
-            />
-          ))
-        )}
-      </ScrollView>
-    </SafeAreaView>
+          {error ? (
+            <View style={styles.errorCard}>
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          ) : null}
+
+          {places.length === 0 && !loading ? (
+            <View style={styles.emptyCard}>
+              <Text style={styles.emptyText}>
+                {locale === 'et'
+                  ? 'Sobivaid kohti ei leitud valitud filtritega.'
+                  : 'No places found with the selected filters.'}
+              </Text>
+            </View>
+          ) : (
+            places.map((place) => (
+              <NativePlaceCard
+                key={place.id}
+                place={place}
+                locale={locale}
+                referenceTimeIso={referenceTimeIso}
+                isFavorite={favoriteIdSet.has(place.id)}
+                favoriteUpdating={favoriteActionPendingIds.has(place.id)}
+                onToggleFavorite={toggleFavorite}
+              />
+            ))
+          )}
+        </ScrollView>
+      </SafeAreaView>
+    </SafeAreaProvider>
   );
 };
 
@@ -1184,6 +1344,26 @@ const styles = StyleSheet.create({
   metricsHeaderToggleTextActive: {
     color: '#FFFFFF',
   },
+  notificationsHeaderToggle: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#CDE6DF',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  notificationsHeaderToggleActive: {
+    borderColor: '#0A8F78',
+    backgroundColor: '#0A8F78',
+  },
+  notificationsHeaderToggleText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0A8F78',
+  },
+  notificationsHeaderToggleTextActive: {
+    color: '#FFFFFF',
+  },
   aboutHeaderToggle: {
     borderRadius: 999,
     borderWidth: 1,
@@ -1295,31 +1475,43 @@ const styles = StyleSheet.create({
   searchInputWrap: {
     position: 'relative',
   },
+  searchInputIcon: {
+    position: 'absolute',
+    left: 14,
+    top: 14,
+    zIndex: 1,
+    fontSize: 18,
+    lineHeight: 22,
+    color: '#94A3B8',
+  },
   searchInput: {
     minHeight: 52,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: '#CDE6DF',
     backgroundColor: '#FFFFFF',
-    paddingLeft: 14,
-    paddingRight: 78,
+    paddingLeft: 40,
+    paddingRight: 48,
     fontSize: 16,
     color: '#153233',
   },
   clearSearchButton: {
     position: 'absolute',
     right: 10,
-    top: 10,
+    top: 8,
     borderRadius: 999,
     borderWidth: 1,
     borderColor: '#CDE6DF',
     backgroundColor: '#FFFFFF',
-    paddingHorizontal: 9,
-    paddingVertical: 5,
+    width: 34,
+    height: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   clearSearchButtonText: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 22,
+    lineHeight: 22,
+    fontWeight: '500',
     color: '#475569',
   },
   suggestionsList: {
@@ -1417,16 +1609,17 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#0A8F78',
   },
-  filterWrap: {
+  filterRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
+    gap: 6,
+    paddingBottom: 2,
+    paddingRight: 2,
   },
   filterButton: {
     borderRadius: 999,
     borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
   },
   filterButtonActive: {
     borderColor: '#0A8F78',
@@ -1437,7 +1630,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   filterButtonText: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '600',
   },
   filterButtonTextActive: {
@@ -1473,31 +1666,57 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#475569',
   },
-  notificationsCard: {
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#D9E9E5',
-    backgroundColor: '#FFFFFF',
-    padding: 14,
-    marginBottom: 16,
-  },
-  notificationsTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#153233',
+  favoritesNoticeText: {
     marginBottom: 10,
-  },
-  resultsMetaRow: {
-    marginBottom: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
-  },
-  resultsMetaText: {
-    flex: 1,
     fontSize: 12,
     color: '#64748B',
+  },
+  favoritesSkeletonWrap: {
+    minHeight: 164,
+    gap: 10,
+  },
+  favoritesSkeletonCard: {
+    height: 76,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#D9E9E5',
+    backgroundColor: '#EDF7F3',
+  },
+  favoritesSkeletonCardSecondary: {
+    opacity: 0.72,
+  },
+  resultsSection: {
+    marginBottom: 8,
+  },
+  resultsTitle: {
+    marginBottom: 8,
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.7,
+    textTransform: 'uppercase',
+    color: '#0A8F78',
+  },
+  resultsMetaWrap: {
+    position: 'relative',
+    marginBottom: 8,
+    paddingRight: 44,
+  },
+  resultsMetaText: {
+    fontSize: 12,
+    color: '#64748B',
+  },
+  resultsLoadingBadge: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    width: 32,
+    height: 24,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#CDE6DF',
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   errorCard: {
     borderRadius: 12,

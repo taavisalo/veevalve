@@ -6,6 +6,8 @@ import {
   type PlaceWithLatestReading,
   type QualityStatus,
 } from '@veevalve/core/client';
+import Constants from 'expo-constants';
+import { Platform } from 'react-native';
 
 interface FetchPlacesOptions {
   locale: AppLocale;
@@ -37,6 +39,7 @@ export interface PlaceMetrics {
 }
 
 const DEFAULT_LIMIT = 10;
+const LOCALHOST_FALLBACK_API_BASE_URL = 'http://localhost:3001';
 const DEFAULT_PLACE_METRICS: PlaceMetrics = {
   totalEntries: 0,
   poolEntries: 0,
@@ -86,7 +89,8 @@ const normalizePlaceMetrics = (raw: Partial<PlaceMetrics>): PlaceMetrics => {
         ? raw.badBeachEntries
         : DEFAULT_PLACE_METRICS.badBeachEntries,
     updatedWithin24hEntries:
-      typeof raw.updatedWithin24hEntries === 'number' && Number.isFinite(raw.updatedWithin24hEntries)
+      typeof raw.updatedWithin24hEntries === 'number' &&
+      Number.isFinite(raw.updatedWithin24hEntries)
         ? raw.updatedWithin24hEntries
         : DEFAULT_PLACE_METRICS.updatedWithin24hEntries,
     staleOver7dEntries:
@@ -98,13 +102,72 @@ const normalizePlaceMetrics = (raw: Partial<PlaceMetrics>): PlaceMetrics => {
   };
 };
 
-const resolveApiBaseUrl = (): string => {
-  const rawBaseUrl =
-    process.env.EXPO_PUBLIC_API_BASE_URL ??
-    process.env.NEXT_PUBLIC_API_BASE_URL ??
-    'http://localhost:3001';
+const extractHostname = (rawHost: string | undefined): string | null => {
+  if (!rawHost) {
+    return null;
+  }
 
-  return rawBaseUrl.replace(/\/+$/, '');
+  const trimmedHost = rawHost.trim();
+  if (!trimmedHost) {
+    return null;
+  }
+
+  const normalizedHost = trimmedHost.includes('://') ? trimmedHost : `http://${trimmedHost}`;
+  try {
+    const parsed = new URL(normalizedHost);
+    const hostname = parsed.hostname.trim();
+    return hostname.length > 0 ? hostname : null;
+  } catch {
+    return null;
+  }
+};
+
+const resolveDevelopmentHost = (): string | null => {
+  const hostFromEnv = extractHostname(process.env.EXPO_PUBLIC_DEV_SERVER_HOST);
+  if (hostFromEnv) {
+    return hostFromEnv;
+  }
+
+  const hostFromExpoConfig = extractHostname(Constants.expoConfig?.hostUri ?? undefined);
+  if (hostFromExpoConfig) {
+    return hostFromExpoConfig;
+  }
+
+  const hostFromLinkingUri = extractHostname(Constants.linkingUri);
+  if (hostFromLinkingUri) {
+    return hostFromLinkingUri;
+  }
+
+  return null;
+};
+
+const resolveApiBaseUrl = (): string => {
+  const configuredBaseUrl =
+    process.env.EXPO_PUBLIC_API_BASE_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL;
+
+  if (configuredBaseUrl && configuredBaseUrl.trim().length > 0) {
+    return configuredBaseUrl.replace(/\/+$/, '');
+  }
+
+  if (__DEV__) {
+    const developmentHost = resolveDevelopmentHost();
+    if (developmentHost) {
+      if (
+        Platform.OS === 'android' &&
+        (developmentHost === 'localhost' || developmentHost === '127.0.0.1')
+      ) {
+        return 'http://10.0.2.2:3001';
+      }
+
+      return `http://${developmentHost}:3001`;
+    }
+
+    if (Platform.OS === 'android') {
+      return 'http://10.0.2.2:3001';
+    }
+  }
+
+  return LOCALHOST_FALLBACK_API_BASE_URL;
 };
 
 export const fetchPlaces = async ({
@@ -150,7 +213,10 @@ export const fetchPlacesByIds = async ({
   ids,
   signal,
 }: FetchPlacesByIdsOptions): Promise<PlaceWithLatestReading[]> => {
-  const uniqueIds = [...new Set(ids.map((id) => id.trim()).filter((id) => id.length > 0))].slice(0, 50);
+  const uniqueIds = [...new Set(ids.map((id) => id.trim()).filter((id) => id.length > 0))].slice(
+    0,
+    50,
+  );
   if (uniqueIds.length === 0) {
     return [];
   }

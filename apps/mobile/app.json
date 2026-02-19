@@ -5,7 +5,9 @@
     "version": "0.1.0",
     "orientation": "portrait",
     "scheme": "veevalve",
+    "newArchEnabled": true,
     "userInterfaceStyle": "light",
+    "plugins": ["expo-dev-client"],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "ee.veevalve.app"

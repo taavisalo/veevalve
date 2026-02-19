@@ -156,6 +156,35 @@ pnpm --filter @veevalve/web dev
 pnpm --filter @veevalve/mobile dev
 ```
 
+### Mobile Development Workflow (Expo)
+
+Quick Expo Go loop:
+
+```bash
+pnpm --filter @veevalve/mobile dev
+```
+
+Recommended development build workflow:
+
+```bash
+# Build native dev client once (or after native dependency/config changes)
+pnpm --filter @veevalve/mobile ios
+pnpm --filter @veevalve/mobile android
+
+# Start Metro for development build
+pnpm --filter @veevalve/mobile dev:client
+```
+
+Optional EAS dev-client build commands:
+
+```bash
+pnpm --filter @veevalve/mobile eas:build:dev:ios
+pnpm --filter @veevalve/mobile eas:build:dev:android
+```
+
+If testing on a physical device, set `EXPO_PUBLIC_API_BASE_URL` to your machine's LAN IP
+(for example `http://192.168.1.100:3001`).
+
 ## Environment Variables
 
 See `.env.example` for full defaults.
@@ -171,6 +200,7 @@ Important variables:
 - `TERVISEAMET_SAMPLE_YEARS_BACK`
 - `TERVISEAMET_ALLOWED_HOSTS`
 - `NEXT_PUBLIC_API_BASE_URL`
+- `EXPO_PUBLIC_API_BASE_URL`
 - `NEXT_PUBLIC_SITE_URL`
 - `GOOGLE_SITE_VERIFICATION`
 - `CORS_ORIGIN`
@@ -189,6 +219,9 @@ Important variables:
 - `WEB_PUSH_RATE_LIMIT_MAX_TRACKED_IPS`
 - `NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY`
 - Expo/EAS credentials for production builds
+
+For local web + Expo web development, include both web and Expo origins in `CORS_ORIGIN`
+(for example `http://localhost:3000,http://localhost:8081,http://localhost:8082,http://localhost:19006`).
 
 Generate a secure sync token locally:
 

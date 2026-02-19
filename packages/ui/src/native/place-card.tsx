@@ -1,12 +1,19 @@
-import { t, type AppLocale, type PlaceType, type PlaceWithLatestReading, type QualityStatus } from '@veevalve/core/client';
+import {
+  t,
+  type AppLocale,
+  type PlaceType,
+  type PlaceWithLatestReading,
+  type QualityStatus,
+} from '@veevalve/core/client';
 import { useState } from 'react';
-import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 
 export interface NativePlaceCardProps {
   place: PlaceWithLatestReading;
   locale?: AppLocale;
   referenceTimeIso?: string;
   isFavorite?: boolean;
+  favoriteUpdating?: boolean;
   onToggleFavorite?: (placeId: string) => void;
 }
 
@@ -24,8 +31,7 @@ const buildGoogleMapsSearchUrl = (address: string): string =>
 const isSafeGoogleMapsSearchUrl = (url: string): boolean =>
   url.startsWith(GOOGLE_MAPS_SEARCH_BASE_URL);
 
-const toTerviseametTabId = (placeType: PlaceType): string =>
-  placeType === 'POOL' ? 'U' : 'A';
+const toTerviseametTabId = (placeType: PlaceType): string => (placeType === 'POOL' ? 'U' : 'A');
 
 const buildTerviseametReportUrl = (externalId: string, placeType: PlaceType): string =>
   `${TERVISEAMET_REPORT_BASE_URL}?id=${encodeURIComponent(externalId)}&active_tab_id=${toTerviseametTabId(placeType)}`;
@@ -157,7 +163,10 @@ const getStatusSymbol = (status: QualityStatus): string => {
   return '?';
 };
 
-const statusLabelKeyByStatus: Record<QualityStatus, 'qualityGood' | 'qualityBad' | 'qualityUnknown'> = {
+const statusLabelKeyByStatus: Record<
+  QualityStatus,
+  'qualityGood' | 'qualityBad' | 'qualityUnknown'
+> = {
   GOOD: 'qualityGood',
   BAD: 'qualityBad',
   UNKNOWN: 'qualityUnknown',
@@ -168,6 +177,7 @@ export const NativePlaceCard = ({
   locale = 'et',
   referenceTimeIso,
   isFavorite = false,
+  favoriteUpdating = false,
   onToggleFavorite,
 }: NativePlaceCardProps) => {
   const placeName = locale === 'en' ? place.nameEn : place.nameEt;
@@ -195,8 +205,15 @@ export const NativePlaceCard = ({
       : 'Avab aadressi Google Mapsis eraldi rakenduses.';
   const toggleFavoriteLabel =
     locale === 'en'
-      ? (isFavorite ? 'Remove from favorites' : 'Add to favorites')
-      : (isFavorite ? 'Eemalda lemmikutest' : 'Lisa lemmikutesse');
+      ? isFavorite
+        ? 'Remove from favorites'
+        : 'Add to favorites'
+      : isFavorite
+        ? 'Eemalda lemmikutest'
+        : 'Lisa lemmikutesse';
+  const toggleFavoriteUpdatingLabel =
+    locale === 'en' ? 'Updating favorite...' : 'Uuendan lemmikut...';
+  const favoriteButtonLabel = favoriteUpdating ? toggleFavoriteUpdatingLabel : toggleFavoriteLabel;
   const status = place.latestReading?.status ?? 'UNKNOWN';
   const statusPalette = getStatusPalette(status);
   const statusLabel = t(statusLabelKeyByStatus[status], locale);
@@ -205,32 +222,43 @@ export const NativePlaceCard = ({
     locale === 'en'
       ? (place.latestReading?.badDetailsEn ?? place.latestReading?.badDetailsEt ?? [])
       : (place.latestReading?.badDetailsEt ?? place.latestReading?.badDetailsEn ?? []);
-  const statusReason =
-    place.latestReading
-      ? (locale === 'en' ? place.latestReading.statusReasonEn : place.latestReading.statusReasonEt)
-      : undefined;
+  const statusReason = place.latestReading
+    ? locale === 'en'
+      ? place.latestReading.statusReasonEn
+      : place.latestReading.statusReasonEt
+    : undefined;
   const badDetails = mergeUniqueDetails(badDetailCandidates, statusReason);
   const badDetailsToggleLabel =
     locale === 'en'
-      ? (showBadDetails ? 'Hide details' : 'Show details')
-      : (showBadDetails ? 'Peida detailid' : 'Näita detaile');
+      ? showBadDetails
+        ? 'Hide details'
+        : 'Show details'
+      : showBadDetails
+        ? 'Peida detailid'
+        : 'Näita detaile';
   const statusPanelTitle = locale === 'en' ? 'Water quality' : 'Vee kvaliteet';
   const statusInlineHint =
     status === 'BAD'
-      ? (showBadDetails
-          ? (locale === 'en' ? 'Hide details' : 'Peida detailid')
-          : (locale === 'en' ? 'Show details' : 'Näita detaile'))
+      ? showBadDetails
+        ? locale === 'en'
+          ? 'Hide details'
+          : 'Peida detailid'
+        : locale === 'en'
+          ? 'Show details'
+          : 'Näita detaile'
       : status === 'GOOD'
-        ? (locale === 'en' ? 'Compliant' : 'Korras')
-        : (locale === 'en' ? 'No rating' : 'Hinnang puudub');
+        ? locale === 'en'
+          ? 'Compliant'
+          : 'Korras'
+        : locale === 'en'
+          ? 'No rating'
+          : 'Hinnang puudub';
   const badDetailsFallbackText =
     locale === 'en'
       ? 'The source did not include additional detailed reasons.'
       : 'Allikandmed ei sisaldanud täpsemaid põhjuseid.';
   const fullReportLabel =
-    locale === 'en'
-      ? 'Open full report on Terviseamet'
-      : 'Ava täielik raport Terviseameti lehel';
+    locale === 'en' ? 'Open full report on Terviseamet' : 'Ava täielik raport Terviseameti lehel';
   const reportExternalId = place.externalId.trim();
   const fullReportUrl =
     reportExternalId.length > 0
@@ -285,17 +313,33 @@ export const NativePlaceCard = ({
           {onToggleFavorite ? (
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={toggleFavoriteLabel}
+              accessibilityLabel={favoriteButtonLabel}
+              accessibilityState={{ disabled: favoriteUpdating, busy: favoriteUpdating }}
+              disabled={favoriteUpdating}
               style={({ pressed }) => [
                 styles.favoriteButton,
+                favoriteUpdating ? styles.favoriteButtonBusy : null,
                 isFavorite ? styles.favoriteButtonActive : null,
                 pressed ? styles.favoriteButtonPressed : null,
               ]}
-              onPress={() => onToggleFavorite(place.id)}
+              onPress={() => {
+                if (!favoriteUpdating) {
+                  onToggleFavorite(place.id);
+                }
+              }}
             >
-              <Text style={[styles.favoriteButtonText, isFavorite ? styles.favoriteButtonTextActive : null]}>
-                {isFavorite ? '★' : '☆'}
-              </Text>
+              {favoriteUpdating ? (
+                <ActivityIndicator size="small" color="#0A8F78" />
+              ) : (
+                <Text
+                  style={[
+                    styles.favoriteButtonText,
+                    isFavorite ? styles.favoriteButtonTextActive : null,
+                  ]}
+                >
+                  {isFavorite ? '★' : '☆'}
+                </Text>
+              )}
             </Pressable>
           ) : null}
         </View>
@@ -304,25 +348,38 @@ export const NativePlaceCard = ({
         <View
           style={[
             styles.statusPanel,
-            { backgroundColor: statusPalette.panelBackground, borderColor: statusPalette.panelBorder },
+            {
+              backgroundColor: statusPalette.panelBackground,
+              borderColor: statusPalette.panelBorder,
+            },
           ]}
         >
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={badDetailsToggleLabel}
             accessibilityState={{ expanded: showBadDetails }}
-            style={({ pressed }) => [styles.statusPanelToggle, pressed ? styles.statusPanelPressed : null]}
+            style={({ pressed }) => [
+              styles.statusPanelToggle,
+              pressed ? styles.statusPanelPressed : null,
+            ]}
             onPress={() => setShowBadDetails((value) => !value)}
           >
             <View style={styles.statusPanelTopRow}>
               <View style={styles.statusPanelMainRow}>
-                <View style={[styles.statusSymbolWrap, { backgroundColor: statusPalette.iconBackground }]}>
+                <View
+                  style={[
+                    styles.statusSymbolWrap,
+                    { backgroundColor: statusPalette.iconBackground },
+                  ]}
+                >
                   <Text style={[styles.statusSymbolText, { color: statusPalette.iconText }]}>
                     {getStatusSymbol(status)}
                   </Text>
                 </View>
                 <View style={styles.statusPanelTextBlock}>
-                  <Text style={[styles.statusPanelTitle, { color: statusPalette.panelText }]}>{statusPanelTitle}</Text>
+                  <Text style={[styles.statusPanelTitle, { color: statusPalette.panelText }]}>
+                    {statusPanelTitle}
+                  </Text>
                   <Text style={[styles.statusLabel, { color: statusPalette.panelText }]}>
                     {statusLabel}
                     <Text style={[styles.statusInlineHint, { color: statusPalette.panelText }]}>
@@ -355,7 +412,10 @@ export const NativePlaceCard = ({
                 <Pressable
                   accessibilityRole="link"
                   accessibilityLabel={fullReportLabel}
-                  style={({ pressed }) => [styles.reportLink, pressed ? styles.reportLinkPressed : null]}
+                  style={({ pressed }) => [
+                    styles.reportLink,
+                    pressed ? styles.reportLinkPressed : null,
+                  ]}
                   onPress={() => {
                     void openFullReport(fullReportUrl);
                   }}
@@ -373,18 +433,25 @@ export const NativePlaceCard = ({
         <View
           style={[
             styles.statusPanel,
-            { backgroundColor: statusPalette.panelBackground, borderColor: statusPalette.panelBorder },
+            {
+              backgroundColor: statusPalette.panelBackground,
+              borderColor: statusPalette.panelBorder,
+            },
           ]}
         >
           <View style={styles.statusPanelTopRow}>
             <View style={styles.statusPanelMainRow}>
-              <View style={[styles.statusSymbolWrap, { backgroundColor: statusPalette.iconBackground }]}>
+              <View
+                style={[styles.statusSymbolWrap, { backgroundColor: statusPalette.iconBackground }]}
+              >
                 <Text style={[styles.statusSymbolText, { color: statusPalette.iconText }]}>
                   {getStatusSymbol(status)}
                 </Text>
               </View>
               <View style={styles.statusPanelTextBlock}>
-                <Text style={[styles.statusPanelTitle, { color: statusPalette.panelText }]}>{statusPanelTitle}</Text>
+                <Text style={[styles.statusPanelTitle, { color: statusPalette.panelText }]}>
+                  {statusPanelTitle}
+                </Text>
                 <Text style={[styles.statusLabel, { color: statusPalette.panelText }]}>
                   {statusLabel}
                   <Text style={[styles.statusInlineHint, { color: statusPalette.panelText }]}>
@@ -480,6 +547,10 @@ const styles = StyleSheet.create({
   favoriteButtonActive: {
     borderColor: '#FCD34D',
     backgroundColor: '#FFFBEB',
+  },
+  favoriteButtonBusy: {
+    borderColor: '#86EFAC',
+    backgroundColor: '#ECFDF5',
   },
   favoriteButtonPressed: {
     opacity: 0.8,
