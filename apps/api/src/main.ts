@@ -1,6 +1,7 @@
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import type { FastifyRequest } from 'fastify';
 
 import { AppModule } from './app.module';
@@ -8,6 +9,8 @@ import { applyApiSecurityHeaders } from './security/security-headers';
 
 const DEFAULT_API_PORT = 3001;
 const DEFAULT_BODY_LIMIT_BYTES = 1_048_576; // 1 MiB
+const SWAGGER_UI_PATH = '/docs';
+const OPENAPI_JSON_PATH = '/openapi.json';
 const DEFAULT_LOCALHOST_CORS_PORTS = [3000, 8081, 8082, 19006];
 const DEFAULT_CORS_ORIGINS = DEFAULT_LOCALHOST_CORS_PORTS.flatMap((port) => [
   `http://localhost:${port}`,
@@ -36,6 +39,16 @@ const resolveCorsOrigins = (): Set<string> => {
   return new Set(DEFAULT_CORS_ORIGINS);
 };
 
+const isSwaggerRouteRequest = (request: FastifyRequest): boolean => {
+  const url = request.raw.url ?? request.url;
+  const path = url.split('?')[0] ?? '';
+  return (
+    path === OPENAPI_JSON_PATH ||
+    path === SWAGGER_UI_PATH ||
+    path.startsWith(`${SWAGGER_UI_PATH}/`)
+  );
+};
+
 const bootstrap = async (): Promise<void> => {
   const isProduction = process.env.NODE_ENV === 'production';
   const bodyLimit = parsePositiveInteger(
@@ -59,6 +72,30 @@ const bootstrap = async (): Promise<void> => {
       },
     }),
   );
+  const openApiConfig = new DocumentBuilder()
+    .setTitle('VeeValve API')
+    .setDescription('API for public pool and beach water-quality status in Estonia.')
+    .setVersion('1.0.0')
+    .addApiKey(
+      {
+        type: 'apiKey',
+        name: 'X-Sync-Token',
+        in: 'header',
+        description: 'Required for POST /water-quality/sync when token auth is enabled.',
+      },
+      'syncToken',
+    )
+    .build();
+  const openApiDocument = SwaggerModule.createDocument(app, openApiConfig);
+  SwaggerModule.setup(SWAGGER_UI_PATH, app, openApiDocument, {
+    jsonDocumentUrl: OPENAPI_JSON_PATH,
+    raw: ['json'],
+    customSiteTitle: 'VeeValve API Docs',
+    swaggerOptions: {
+      layout: 'BaseLayout',
+      persistAuthorization: true,
+    },
+  });
 
   const fastify = app.getHttpAdapter().getInstance();
   fastify.addHook('onRequest', (request, _reply, done) => {
@@ -76,7 +113,9 @@ const bootstrap = async (): Promise<void> => {
       reply.header('X-Response-Time', `${roundedDuration}ms`);
     }
 
-    applyApiSecurityHeaders(reply, isProduction);
+    if (!isSwaggerRouteRequest(request)) {
+      applyApiSecurityHeaders(reply, isProduction);
+    }
     done(null, payload);
   });
 

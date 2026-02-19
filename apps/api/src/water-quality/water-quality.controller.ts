@@ -11,8 +11,17 @@ import {
   Req,
   UnauthorizedException,
 } from '@nestjs/common';
+import {
+  ApiAcceptedResponse,
+  ApiHeader,
+  ApiOperation,
+  ApiTooManyRequestsResponse,
+  ApiUnauthorizedResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import type { FastifyRequest } from 'fastify';
 
+import { SyncSummaryDto } from './dto/sync-summary.dto';
 import { WaterQualityService } from './water-quality.service';
 
 const DEFAULT_SYNC_RATE_LIMIT_MAX = 20;
@@ -35,6 +44,7 @@ const safeTokenEquals = (left: string, right: string): boolean => {
   return timingSafeEqual(leftBuffer, rightBuffer);
 };
 
+@ApiTags('water-quality')
 @Controller('water-quality')
 export class WaterQualityController {
   private readonly logger = new Logger(WaterQualityController.name);
@@ -56,10 +66,27 @@ export class WaterQualityController {
 
   @Post('sync')
   @HttpCode(202)
+  @ApiOperation({
+    summary: 'Trigger source sync',
+    description:
+      'Triggers ingestion from Terviseamet XML feeds and returns a sync summary. Requires `X-Sync-Token` unless development fallback is enabled.',
+  })
+  @ApiHeader({
+    name: 'X-Sync-Token',
+    required: false,
+    description: 'Sync API token. Required in production.',
+    example: 'replace-with-sync-token',
+  })
+  @ApiAcceptedResponse({
+    type: SyncSummaryDto,
+    description: 'Sync accepted and processed.',
+  })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid sync token.' })
+  @ApiTooManyRequestsResponse({ description: 'Sync rate limit exceeded.' })
   sync(
     @Req() request: FastifyRequest,
     @Headers('x-sync-token') syncTokenHeader: string | string[] | undefined,
-  ) {
+  ): Promise<SyncSummaryDto> {
     this.assertSyncRateLimit(request.ip ?? 'unknown');
     this.ensureSyncAuthorized(syncTokenHeader);
     return this.waterQualityService.syncFromTerviseamet();

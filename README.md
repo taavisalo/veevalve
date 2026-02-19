@@ -72,6 +72,8 @@ App-level `node_modules` are mounted as Docker volumes to avoid host/container s
 Services:
 - Web: `http://localhost:3000`
 - API: `http://localhost:3001`
+- API Swagger UI: `http://localhost:3001/docs`
+- API OpenAPI JSON: `http://localhost:3001/openapi.json`
 - Postgres: `localhost:5432`
 - Expo Metro: `localhost:8081`
 
@@ -154,6 +156,13 @@ Or start per app:
 pnpm --filter @veevalve/api dev
 pnpm --filter @veevalve/web dev
 pnpm --filter @veevalve/mobile dev
+```
+
+API documentation is available at:
+
+```bash
+http://localhost:3001/docs
+http://localhost:3001/openapi.json
 ```
 
 ### Mobile Development Workflow (Expo)

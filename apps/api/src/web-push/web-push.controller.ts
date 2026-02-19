@@ -9,12 +9,22 @@ import {
   Post,
   Req,
 } from '@nestjs/common';
+import {
+  ApiBadRequestResponse,
+  ApiNoContentResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiServiceUnavailableResponse,
+  ApiTags,
+  ApiTooManyRequestsResponse,
+} from '@nestjs/swagger';
 import type { FastifyRequest } from 'fastify';
 
 import {
   DeleteWebPushSubscriptionDto,
   UpsertWebPushSubscriptionDto,
 } from './dto/push-subscription.dto';
+import { WebPushUpsertResponseDto } from './dto/web-push-response.dto';
 import { WebPushService } from './web-push.service';
 
 const DEFAULT_RATE_LIMIT_MAX = 60;
@@ -30,6 +40,7 @@ const readPositiveInteger = (value: string | undefined, fallback: number): numbe
   return parsed;
 };
 
+@ApiTags('web-push')
 @Controller('web-push/subscriptions')
 export class WebPushController {
   private readonly logger = new Logger(WebPushController.name);
@@ -50,10 +61,22 @@ export class WebPushController {
   constructor(private readonly webPushService: WebPushService) {}
 
   @Post()
+  @ApiOperation({
+    summary: 'Create or update web push subscription',
+    description:
+      'Registers a browser push subscription and replaces the favorite place ids linked to it.',
+  })
+  @ApiOkResponse({
+    type: WebPushUpsertResponseDto,
+    description: 'Subscription saved successfully.',
+  })
+  @ApiBadRequestResponse({ description: 'Invalid subscription payload.' })
+  @ApiTooManyRequestsResponse({ description: 'Web push rate limit exceeded.' })
+  @ApiServiceUnavailableResponse({ description: 'Web push is not configured on the server.' })
   async upsertSubscription(
     @Req() request: FastifyRequest,
     @Body() body: UpsertWebPushSubscriptionDto,
-  ): Promise<{ favoriteCount: number }> {
+  ): Promise<WebPushUpsertResponseDto> {
     this.assertRateLimit(request.ip ?? 'unknown');
     return this.webPushService.upsertSubscription({
       subscription: body.subscription,
@@ -65,6 +88,13 @@ export class WebPushController {
 
   @Delete()
   @HttpCode(204)
+  @ApiOperation({
+    summary: 'Delete web push subscription',
+    description: 'Deletes a subscription by endpoint URL if it exists.',
+  })
+  @ApiNoContentResponse({ description: 'Subscription deleted (or already absent).' })
+  @ApiBadRequestResponse({ description: 'Invalid request payload.' })
+  @ApiTooManyRequestsResponse({ description: 'Web push rate limit exceeded.' })
   async deleteSubscription(
     @Req() request: FastifyRequest,
     @Body() body: DeleteWebPushSubscriptionDto,
