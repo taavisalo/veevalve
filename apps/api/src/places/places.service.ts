@@ -820,13 +820,27 @@ export class PlacesService {
     locale: 'et' | 'en',
     includeBadDetails = true,
   ): Promise<PlaceListResponse[]> {
+    if (places.length === 0) {
+      return [];
+    }
+
     if (!includeBadDetails) {
       return places.map((place) => this.toListResponse(place, locale));
     }
 
-    const badSampleIds = places.flatMap((place) =>
-      place.latestStatus?.status === 'BAD' ? [place.latestStatus.sampleId] : [],
-    );
+    const badSampleIdSet = new Set<string>();
+    for (const place of places) {
+      const sampleId = place.latestStatus?.status === 'BAD' ? place.latestStatus.sampleId : null;
+      if (sampleId) {
+        badSampleIdSet.add(sampleId);
+      }
+    }
+
+    if (badSampleIdSet.size === 0) {
+      return places.map((place) => this.toListResponse(place, locale));
+    }
+
+    const badSampleIds = [...badSampleIdSet];
     const badDetailsBySampleId = await this.buildBadDetailsBySampleId(badSampleIds, locale);
 
     return places.map((place) => this.toListResponse(place, locale, badDetailsBySampleId));
@@ -841,7 +855,7 @@ export class PlacesService {
       return new Map();
     }
 
-    const detailsBySampleId = new Map<string, string[]>();
+    const detailsBySampleId = new Map<string, Set<string>>();
 
     const indicatorRows = await this.prisma.waterQualityIndicator.findMany({
       where: {
@@ -861,30 +875,20 @@ export class PlacesService {
         name: true,
         valueRaw: true,
         unit: true,
-        indicatorOrder: true,
         protocol: {
           select: {
             sampleId: true,
-            protocolOrder: true,
           },
         },
       },
+      orderBy: [
+        { protocol: { sampleId: 'asc' } },
+        { protocol: { protocolOrder: 'asc' } },
+        { indicatorOrder: 'asc' },
+      ],
     });
 
-    const sortedIndicatorRows = [...indicatorRows].sort((left, right) => {
-      const sampleOrder = left.protocol.sampleId.localeCompare(right.protocol.sampleId);
-      if (sampleOrder !== 0) {
-        return sampleOrder;
-      }
-
-      if (left.protocol.protocolOrder !== right.protocol.protocolOrder) {
-        return left.protocol.protocolOrder - right.protocol.protocolOrder;
-      }
-
-      return left.indicatorOrder - right.indicatorOrder;
-    });
-
-    for (const indicator of sortedIndicatorRows) {
+    for (const indicator of indicatorRows) {
       const detail = this.formatIndicatorBadDetail({
         name: indicator.name,
         valueRaw: indicator.valueRaw,
@@ -894,15 +898,10 @@ export class PlacesService {
         continue;
       }
 
-      const existingDetails = detailsBySampleId.get(indicator.protocol.sampleId);
-      if (!existingDetails) {
-        detailsBySampleId.set(indicator.protocol.sampleId, [detail]);
-        continue;
-      }
-
-      if (!existingDetails.includes(detail)) {
-        existingDetails.push(detail);
-      }
+      const existingDetails =
+        detailsBySampleId.get(indicator.protocol.sampleId) ?? new Set<string>();
+      existingDetails.add(detail);
+      detailsBySampleId.set(indicator.protocol.sampleId, existingDetails);
     }
 
     const protocolRows = await this.prisma.waterQualityProtocol.findMany({
@@ -914,7 +913,6 @@ export class PlacesService {
       },
       select: {
         sampleId: true,
-        protocolOrder: true,
         protocolNumber: true,
         assessmentRaw: true,
       },
@@ -922,7 +920,7 @@ export class PlacesService {
     });
 
     for (const protocol of protocolRows) {
-      if ((detailsBySampleId.get(protocol.sampleId)?.length ?? 0) > 0) {
+      if ((detailsBySampleId.get(protocol.sampleId)?.size ?? 0) > 0) {
         continue;
       }
 
@@ -937,10 +935,15 @@ export class PlacesService {
         continue;
       }
 
-      detailsBySampleId.set(protocol.sampleId, [fallbackDetail]);
+      detailsBySampleId.set(protocol.sampleId, new Set([fallbackDetail]));
     }
 
-    return detailsBySampleId;
+    const result = new Map<string, string[]>();
+    for (const [sampleId, details] of detailsBySampleId) {
+      result.set(sampleId, [...details]);
+    }
+
+    return result;
   }
 
   private formatIndicatorBadDetail(input: {
