@@ -359,17 +359,13 @@ const App = () => {
   const favoriteIdSet = useMemo(() => new Set(favoriteIds), [favoriteIds]);
   const hasFavorites = favoriteIds.length > 0;
   const favoriteCount = favoritePlaces.length > 0 ? favoritePlaces.length : favoriteIds.length;
-  const favoritesNotice = hasFavorites
-    ? statusAlertsEnabled
-      ? locale === 'et'
-        ? 'Muutuste märguanded on sees.'
-        : 'Status-change alerts are enabled.'
-      : locale === 'et'
-        ? 'Lülita märguanded sisse, et saada teavitus lemmikute staatuse muutustest.'
-        : 'Enable alerts to get notified when favorite statuses change.'
+  const favoritesNotice = statusAlertsEnabled
+    ? locale === 'et'
+      ? 'Muutuste märguanded on sees.'
+      : 'Status-change alerts are enabled.'
     : locale === 'et'
-      ? 'Lisa kohti lemmikutesse, et näha neid siin kohe avamisel.'
-      : 'Add places to favorites to see them here right away on open.';
+      ? 'Lülita märguanded sisse, et saada teavitus lemmikute staatuse muutustest.'
+      : 'Enable alerts to get notified when favorite statuses change.';
 
   const toggleMetricsVisible = () => {
     setMetricsVisible((value) => !value);
@@ -1107,56 +1103,50 @@ const App = () => {
             </ScrollView>
           </View>
 
-          <View style={styles.favoritesSection}>
-            <View style={styles.favoritesHeaderRow}>
-              <Text style={styles.favoritesTitle}>{t('favorites', locale)}</Text>
-              <Text style={styles.favoritesCountBadge}>{favoriteCount}</Text>
-            </View>
-            <Text style={styles.favoritesNoticeText}>{favoritesNotice}</Text>
+          {hasFavorites ? (
+            <View style={styles.favoritesSection}>
+              <View style={styles.favoritesHeaderRow}>
+                <Text style={styles.favoritesTitle}>{t('favorites', locale)}</Text>
+                <Text style={styles.favoritesCountBadge}>{favoriteCount}</Text>
+              </View>
+              <Text style={styles.favoritesNoticeText}>{favoritesNotice}</Text>
 
-            {!favoritesHydrated || (favoritesLoading && favoritePlaces.length === 0) ? (
-              <View
-                style={styles.favoritesSkeletonWrap}
-                accessibilityRole="progressbar"
-                accessibilityLabel={
-                  locale === 'et' ? 'Laadin lemmikuid...' : 'Loading favorites...'
-                }
-              >
-                <View style={styles.favoritesSkeletonCard} />
+              {!favoritesHydrated || (favoritesLoading && favoritePlaces.length === 0) ? (
                 <View
-                  style={[styles.favoritesSkeletonCard, styles.favoritesSkeletonCardSecondary]}
-                />
-              </View>
-            ) : hasFavorites && favoritePlaces.length === 0 ? (
-              <View style={styles.emptyCard}>
-                <Text style={styles.emptyText}>
-                  {locale === 'et'
-                    ? 'Lemmikuid ei õnnestunud hetkel laadida.'
-                    : 'Could not load favorites right now.'}
-                </Text>
-              </View>
-            ) : hasFavorites ? (
-              favoritePlaces.map((place) => (
-                <NativePlaceCard
-                  key={`favorite-${place.id}`}
-                  place={place}
-                  locale={locale}
-                  referenceTimeIso={referenceTimeIso}
-                  isFavorite
-                  favoriteUpdating={favoriteActionPendingIds.has(place.id)}
-                  onToggleFavorite={toggleFavorite}
-                />
-              ))
-            ) : (
-              <View style={styles.emptyCard}>
-                <Text style={styles.emptyText}>
-                  {locale === 'et'
-                    ? 'Lemmikute lisamiseks vajuta tulemustes tärniikooni.'
-                    : 'To add favorites, tap the star icon on result cards.'}
-                </Text>
-              </View>
-            )}
-          </View>
+                  style={styles.favoritesSkeletonWrap}
+                  accessibilityRole="progressbar"
+                  accessibilityLabel={
+                    locale === 'et' ? 'Laadin lemmikuid...' : 'Loading favorites...'
+                  }
+                >
+                  <View style={styles.favoritesSkeletonCard} />
+                  <View
+                    style={[styles.favoritesSkeletonCard, styles.favoritesSkeletonCardSecondary]}
+                  />
+                </View>
+              ) : favoritePlaces.length === 0 ? (
+                <View style={styles.emptyCard}>
+                  <Text style={styles.emptyText}>
+                    {locale === 'et'
+                      ? 'Lemmikuid ei õnnestunud hetkel laadida.'
+                      : 'Could not load favorites right now.'}
+                  </Text>
+                </View>
+              ) : (
+                favoritePlaces.map((place) => (
+                  <NativePlaceCard
+                    key={`favorite-${place.id}`}
+                    place={place}
+                    locale={locale}
+                    referenceTimeIso={referenceTimeIso}
+                    isFavorite
+                    favoriteUpdating={favoriteActionPendingIds.has(place.id)}
+                    onToggleFavorite={toggleFavorite}
+                  />
+                ))
+              )}
+            </View>
+          ) : null}
 
           <View style={styles.resultsSection}>
             <Text style={styles.resultsTitle}>{locale === 'et' ? 'Tulemused' : 'Results'}</Text>
