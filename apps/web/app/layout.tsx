@@ -8,7 +8,6 @@ const bodyFont = Manrope({
   subsets: ['latin'],
   weight: ['400', '700'],
   display: 'swap',
-  preload: false,
   variable: '--font-body',
 });
 
@@ -16,7 +15,6 @@ const titleFont = Newsreader({
   subsets: ['latin'],
   weight: ['400', '700'],
   display: 'swap',
-  preload: false,
   variable: '--font-title',
 });
 

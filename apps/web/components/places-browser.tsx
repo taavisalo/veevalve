@@ -10,6 +10,7 @@ import {
   type PlaceWithLatestReading,
   type QualityStatus,
 } from '@veevalve/core/client';
+import dynamic from 'next/dynamic';
 import { PlaceCard } from '@veevalve/ui/web';
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 
@@ -31,7 +32,6 @@ const SUGGESTION_LIMIT = 8;
 const SEARCH_DEBOUNCE_MS = 180;
 const FAVORITE_ACTION_MIN_PENDING_MS = 350;
 const WEB_PUSH_VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY ?? '';
-const TERVISEAMET_DATA_URL = 'https://vtiav.sm.ee/index.php/?active_tab_id=A';
 const CARD_STAGGER_CLASSES = [
   'fade-delay-0',
   'fade-delay-1',
@@ -100,6 +100,14 @@ const loadWebPushClientModule = (): Promise<typeof WebPushClientModule> => {
 
   return webPushClientModulePromise;
 };
+
+const AboutPanel = dynamic(() =>
+  import('./about-panel').then((module) => module.AboutPanel),
+);
+
+const MetricsPanel = dynamic(() =>
+  import('./metrics-panel').then((module) => module.MetricsPanel),
+);
 
 interface PlacesBrowserProps {
   initialLocale: AppLocale;
@@ -1022,204 +1030,18 @@ export const PlacesBrowser = ({
             : 'Water quality for beaches and pools'}
         </h1>
 
-        {aboutVisible ? (
-          <div className="mt-4 rounded-2xl border border-emerald-100 bg-white/85 p-4 text-sm text-slate-700">
-            <p className="font-semibold text-ink">
-              {locale === 'et' ? 'Abi: andmeallikas ja uuendused' : 'Help: data source and updates'}
-            </p>
-            <p className="mt-1">
-              {locale === 'et'
-                ? (
-                    <>
-                      VeeValve kasutab Terviseameti avalikke XML-andmeid (
-                      <a
-                        href={TERVISEAMET_DATA_URL}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-accent underline decoration-dotted underline-offset-2"
-                      >
-                        vtiav.sm.ee
-                      </a>
-                      ). Kuvatakse viimased teadaolevad tulemused.
-                    </>
-                  )
-                : (
-                    <>
-                      VeeValve uses public XML feeds by the Estonian Health Board (
-                      <a
-                        href={TERVISEAMET_DATA_URL}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-accent underline decoration-dotted underline-offset-2"
-                      >
-                        vtiav.sm.ee
-                      </a>
-                      ). The app shows the latest known sample status.
-                    </>
-                  )}
-            </p>
-            <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-slate-600">
-              {locale === 'et' ? (
-                <>
-                  <li>Ujulate ja basseinide allikad: `ujulad.xml`, `basseinid.xml`, `basseini_veeproovid_{'{year}'}.xml`.</li>
-                  <li>Supluskohtade allikad: `supluskohad.xml`, `supluskoha_veeproovid_{'{year}'}.xml`.</li>
-                  <li>Automaatne sünkroon käivitub iga tunni 15. minutil.</li>
-                  <li>Muutuseid kontrollitakse `ETag`/`Last-Modified` päistega ja sisuräsi abil.</li>
-                  <li>Asukohafaile kontrollitakse umbes kord ööpäevas; proovifaile sagedamini (basseinid ~2 h, rannad hooajal ~2 h, väljaspool hooaega ~24 h).</li>
-                </>
-              ) : (
-                <>
-                  <li>Pool sources: `ujulad.xml`, `basseinid.xml`, `basseini_veeproovid_{'{year}'}.xml`.</li>
-                  <li>Beach sources: `supluskohad.xml`, `supluskoha_veeproovid_{'{year}'}.xml`.</li>
-                  <li>Automatic sync runs every hour at minute 15.</li>
-                  <li>Changes are detected via `ETag`/`Last-Modified` headers and content hash checks.</li>
-                  <li>Location feeds are checked about once per day; sample feeds more often (pools ~2h, beaches in season ~2h, off-season ~24h).</li>
-                </>
-              )}
-            </ul>
-
-            <p className="mt-3 font-semibold text-ink">
-              {locale === 'et' ? 'Mida tähendavad staatused?' : 'What do statuses mean?'}
-            </p>
-            <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-slate-600">
-              {locale === 'et' ? (
-                <>
-                  <li>`Hea`: viimane proov vastab nõuetele.</li>
-                  <li>`Halb`: viimane proov ei vasta nõuetele.</li>
-                  <li>`Teadmata`: värske hinnang puudub või staatust ei saanud määrata.</li>
-                </>
-              ) : (
-                <>
-                  <li>`Good`: the latest sample meets requirements.</li>
-                  <li>`Bad`: the latest sample does not meet requirements.</li>
-                  <li>`Unknown`: no recent rating is available, or a status could not be determined.</li>
-                </>
-              )}
-            </ul>
-
-            <p className="mt-3 font-semibold text-ink">
-              {locale === 'et'
-                ? 'Kuidas brauseri tõuketeavitused töötavad?'
-                : 'How do browser push notifications work?'}
-            </p>
-            <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-slate-600">
-              {locale === 'et' ? (
-                <>
-                  <li>Teavitused on valikulised: esmalt lisa koht lemmikutesse, siis lülita teavitused sisse.</li>
-                  <li>Teavitusi saadetakse ainult lemmikutes olevatele kohtadele.</li>
-                  <li>Märguanne tuleb staatuse muutuse korral (`Hea` ↔ `Halb`), mitte iga uuenduse peale.</li>
-                  <li>Teavitused töötavad ka siis, kui leht on suletud (service workeri kaudu).</li>
-                  <li>Kui teavitused on blokeeritud, ava need brauseri saidi seadetes uuesti.</li>
-                </>
-              ) : (
-                <>
-                  <li>Push alerts are opt-in: add a place to favorites first, then enable alerts.</li>
-                  <li>Notifications are sent only for favorited places.</li>
-                  <li>An alert is sent on status transition (`Good` ↔ `Bad`), not on every sync run.</li>
-                  <li>Alerts can be delivered even when the page is closed (via service worker).</li>
-                  <li>If notifications are blocked, re-enable them in browser site settings.</li>
-                </>
-              )}
-            </ul>
-          </div>
-        ) : null}
+        {aboutVisible ? <AboutPanel locale={locale} /> : null}
 
         {metricsVisible ? (
-          <div id="metrics-panel" className="mt-4">
-            {metricsLoading ? (
-              <p className="mb-2 text-xs text-slate-500">
-                {locale === 'et' ? 'Laadin mõõdikuid…' : 'Loading metrics…'}
-              </p>
-            ) : null}
-            <div className="grid gap-2 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)]">
-              <div className="rounded-2xl border border-rose-200 bg-rose-50/80 px-3 py-2">
-                <p className="text-[11px] uppercase tracking-[0.08em] text-rose-700">
-                  {locale === 'et' ? 'Halva kvaliteediga' : 'Bad quality'}
-                </p>
-                <div className="mt-1 flex items-end gap-2">
-                  <p className="text-2xl font-semibold leading-none text-rose-700">
-                    {metrics.badQualityEntries}
-                  </p>
-                  <p className="text-xs font-semibold text-rose-600">{badShare}</p>
-                </div>
-                <p className="mt-1 text-xs text-rose-700/90">
-                  {locale === 'et'
-                    ? `Basseinid ${metrics.badPoolEntries} • rannad ${metrics.badBeachEntries}`
-                    : `Pools ${metrics.badPoolEntries} • beaches ${metrics.badBeachEntries}`}
-                </p>
-              </div>
-              <div className="rounded-2xl border border-emerald-100 bg-white/80 px-3 py-2">
-                <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500">
-                  {locale === 'et' ? 'Viimane uuendus' : 'Last update'}
-                </p>
-                <p className="mt-1 text-sm font-semibold text-ink">
-                  {formatMetricsDate(metrics.latestSourceUpdatedAt, locale)}
-                </p>
-              </div>
-              <div className="rounded-2xl border border-emerald-100 bg-white/80 px-3 py-2">
-                <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500">
-                  {locale === 'et' ? 'Kohti kokku' : 'Total places'}
-                </p>
-                <p className="mt-1 text-sm font-semibold text-ink">{metrics.totalEntries}</p>
-              </div>
-            </div>
-
-            <div className="mt-1 flex justify-end">
-              <button
-                type="button"
-                aria-pressed={metricsExpanded}
-                onClick={() => setMetricsExpanded((value) => !value)}
-                className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
-                  metricsExpanded
-                    ? 'border-emerald-700 bg-emerald-700 text-white'
-                    : 'border-emerald-100 bg-white text-emerald-800 hover:border-emerald-700'
-                }`}
-              >
-                {locale === 'et' ? 'Detailid' : 'Details'}
-              </button>
-            </div>
-
-            {metricsExpanded ? (
-              <div id="extra-metrics" className="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-                <div className="rounded-xl border border-emerald-100 bg-white/80 px-3 py-2">
-                  <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500">
-                    {locale === 'et' ? 'Hea kvaliteet' : 'Good quality'}
-                  </p>
-                  <p className="mt-1 text-sm font-semibold text-emerald-700">{metrics.goodQualityEntries}</p>
-                </div>
-                <div className="rounded-xl border border-emerald-100 bg-white/80 px-3 py-2">
-                  <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500">
-                    {locale === 'et' ? 'Teadmata kvaliteet' : 'Unknown quality'}
-                  </p>
-                  <p className="mt-1 text-sm font-semibold text-slate-700">{metrics.unknownQualityEntries}</p>
-                </div>
-                <div className="rounded-xl border border-emerald-100 bg-white/80 px-3 py-2">
-                  <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500">
-                    {locale === 'et' ? 'Jälgitavad basseinid' : 'Pools monitored'}
-                  </p>
-                  <p className="mt-1 text-sm font-semibold text-ink">{metrics.poolEntries}</p>
-                </div>
-                <div className="rounded-xl border border-emerald-100 bg-white/80 px-3 py-2">
-                  <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500">
-                    {locale === 'et' ? 'Jälgitavad rannad' : 'Beaches monitored'}
-                  </p>
-                  <p className="mt-1 text-sm font-semibold text-ink">{metrics.beachEntries}</p>
-                </div>
-                <div className="rounded-xl border border-emerald-100 bg-white/80 px-3 py-2">
-                  <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500">
-                    {locale === 'et' ? 'Uuendatud viimase 24 h jooksul' : 'Updated in last 24h'}
-                  </p>
-                  <p className="mt-1 text-sm font-semibold text-ink">{metrics.updatedWithin24hEntries}</p>
-                </div>
-                <div className="rounded-xl border border-emerald-100 bg-white/80 px-3 py-2">
-                  <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500">
-                    {locale === 'et' ? 'Viimane proov üle 7 päeva tagasi' : 'Latest sample older than 7 days'}
-                  </p>
-                  <p className="mt-1 text-sm font-semibold text-ink">{metrics.staleOver7dEntries}</p>
-                </div>
-              </div>
-            ) : null}
-          </div>
+          <MetricsPanel
+            locale={locale}
+            metrics={metrics}
+            metricsLoading={metricsLoading}
+            metricsExpanded={metricsExpanded}
+            badShare={badShare}
+            formattedLatestUpdate={formatMetricsDate(metrics.latestSourceUpdatedAt, locale)}
+            onToggleExpanded={() => setMetricsExpanded((value) => !value)}
+          />
         ) : null}
         <div className="mt-5 max-w-3xl" ref={searchContainerRef}>
           <label htmlFor="place-search" className="sr-only">
@@ -1409,65 +1231,81 @@ export const PlacesBrowser = ({
         </div>
       </section>
 
-      {hasFavorites ? (
-        <section className="mt-8">
-          <div className="mb-3 flex items-center justify-between gap-2">
-            <h2 className="text-sm font-semibold uppercase tracking-[0.12em] text-accent">
-              {t('favorites', locale)}
-            </h2>
-            <span className="rounded-full border border-emerald-100 bg-white px-2 py-0.5 text-xs font-medium text-slate-600">
-              {favoritePlaces.length}
+      <section className="mt-8" aria-live="polite">
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold uppercase tracking-[0.12em] text-accent">
+            {t('favorites', locale)}
+          </h2>
+          <span className="rounded-full border border-emerald-100 bg-white px-2 py-0.5 text-xs font-medium text-slate-600">
+            {favoritePlaces.length > 0 ? favoritePlaces.length : favoriteIds.length}
+          </span>
+        </div>
+        <p
+          className={`mb-3 text-xs text-slate-500 ${
+            hasFavorites && favoritesNoticeSingleLine ? 'whitespace-nowrap' : ''
+          }`}
+        >
+          {hasFavorites
+            ? (
+                !webPushConfigured
+                  ? locale === 'et'
+                    ? 'Brauseri tõuketeavitused pole veel seadistatud.'
+                    : 'Browser push notifications are not configured yet.'
+                  : notificationsSupported
+                  ? notificationsActive
+                    ? (locale === 'et'
+                        ? 'Tõuketeavitused sees: lemmikute muutused ka suletud lehel.'
+                        : 'Push alerts on: favorite changes are sent when closed.')
+                    : (locale === 'et'
+                        ? 'Lülita tõuketeavitused sisse, et saada märguanne lemmikute staatuse muutustest.'
+                        : 'Enable push alerts to get notified when favorite statuses change.')
+                  : (locale === 'et'
+                      ? 'Sinu brauser ei toeta tõuketeavitusi.'
+                      : 'Your browser does not support push notifications.')
+              )
+            : (
+                locale === 'et'
+                  ? 'Lisa kohti lemmikutesse, et näha neid siin kohe avamisel.'
+                  : 'Add places to favorites to see them here right away on open.'
+              )}
+        </p>
+        {!favoritesHydrated || (favoritesLoading && favoritePlaces.length === 0) ? (
+          <div role="status" className="grid min-h-[12rem] gap-4 md:grid-cols-2">
+            <div className="animate-pulse rounded-xl border border-emerald-100 bg-card p-4" />
+            <div className="hidden animate-pulse rounded-xl border border-emerald-100 bg-card p-4 md:block" />
+            <span className="sr-only">
+              {locale === 'et' ? 'Laadin lemmikuid...' : 'Loading favorites...'}
             </span>
           </div>
-          <p
-            className={`mb-3 text-xs text-slate-500 ${
-              favoritesNoticeSingleLine ? 'whitespace-nowrap' : ''
-            }`}
-          >
-            {!webPushConfigured
-              ? locale === 'et'
-                ? 'Brauseri tõuketeavitused pole veel seadistatud.'
-                : 'Browser push notifications are not configured yet.'
-              : notificationsSupported
-              ? notificationsActive
-                ? (locale === 'et'
-                    ? 'Tõuketeavitused sees: lemmikute muutused ka suletud lehel.'
-                    : 'Push alerts on: favorite changes are sent when closed.')
-                : (locale === 'et'
-                    ? 'Lülita tõuketeavitused sisse, et saada märguanne lemmikute staatuse muutustest.'
-                    : 'Enable push alerts to get notified when favorite statuses change.')
-              : (locale === 'et'
-                  ? 'Sinu brauser ei toeta tõuketeavitusi.'
-                  : 'Your browser does not support push notifications.')}
-          </p>
-          {favoritesLoading && favoritePlaces.length === 0 ? (
-            <div className="rounded-xl border border-emerald-100 bg-card p-4 text-sm text-slate-600">
-              {locale === 'et' ? 'Laadin lemmikuid...' : 'Loading favorites...'}
-            </div>
-          ) : favoritePlaces.length === 0 ? (
-            <div className="rounded-xl border border-emerald-100 bg-card p-4 text-sm text-slate-600">
-              {locale === 'et'
-                ? 'Lemmikuid ei õnnestunud hetkel laadida.'
-                : 'Could not load favorites right now.'}
-            </div>
-          ) : (
-            <div className="grid gap-4 md:grid-cols-2">
-              {favoritePlaces.map((place, index) => (
-                <div className={`fade-up ${getCardFadeDelayClass(index)}`} key={`favorite-${place.id}`}>
-                  <PlaceCard
-                    place={place}
-                    locale={locale}
-                    referenceTimeIso={referenceTimeIso}
-                    isFavorite
-                    favoriteUpdating={favoriteActionPendingIds.has(place.id)}
-                    onToggleFavorite={toggleFavorite}
-                  />
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-      ) : null}
+        ) : hasFavorites && favoritePlaces.length === 0 ? (
+          <div className="flex min-h-[12rem] items-center rounded-xl border border-emerald-100 bg-card p-4 text-sm text-slate-600">
+            {locale === 'et'
+              ? 'Lemmikuid ei õnnestunud hetkel laadida.'
+              : 'Could not load favorites right now.'}
+          </div>
+        ) : hasFavorites ? (
+          <div className="grid gap-4 md:grid-cols-2">
+            {favoritePlaces.map((place, index) => (
+              <div className={`fade-up ${getCardFadeDelayClass(index)}`} key={`favorite-${place.id}`}>
+                <PlaceCard
+                  place={place}
+                  locale={locale}
+                  referenceTimeIso={referenceTimeIso}
+                  isFavorite
+                  favoriteUpdating={favoriteActionPendingIds.has(place.id)}
+                  onToggleFavorite={toggleFavorite}
+                />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="flex min-h-[12rem] items-center rounded-xl border border-emerald-100 bg-card p-4 text-sm text-slate-600">
+            {locale === 'et'
+              ? 'Lemmikute lisamiseks vajuta tulemustes tärniikooni.'
+              : 'To add favorites, tap the star icon on result cards.'}
+          </div>
+        )}
+      </section>
 
       <section className="mt-8">
         <h2 className="sr-only">{locale === 'et' ? 'Tulemused' : 'Results'}</h2>
