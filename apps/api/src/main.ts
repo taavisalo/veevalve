@@ -30,17 +30,44 @@ const parsePositiveInteger = (value: string | undefined, fallback: number): numb
   return parsed;
 };
 
+const normalizeOriginFromUrlLike = (value: string | undefined): string | null => {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const candidate = trimmed.startsWith('http://') || trimmed.startsWith('https://')
+    ? trimmed
+    : `https://${trimmed}`;
+
+  try {
+    return new URL(candidate).origin;
+  } catch {
+    return null;
+  }
+};
+
 const resolveCorsOrigins = (): Set<string> => {
   const configuredOrigins = (process.env.CORS_ORIGIN ?? '')
     .split(',')
     .map((origin) => origin.trim())
     .filter((origin) => origin.length > 0);
 
-  if (configuredOrigins.length > 0) {
-    return new Set(configuredOrigins);
+  const origins = new Set(
+    configuredOrigins.length > 0 ? configuredOrigins : DEFAULT_CORS_ORIGINS,
+  );
+
+  // Ensure same-origin browser calls on deployed API hosts work (Swagger UI on /docs).
+  const inferredApiOrigins = [
+    normalizeOriginFromUrlLike(process.env.API_BASE_URL),
+    normalizeOriginFromUrlLike(process.env.VERCEL_URL),
+    normalizeOriginFromUrlLike(process.env.VERCEL_PROJECT_PRODUCTION_URL),
+  ].filter((origin): origin is string => Boolean(origin));
+  for (const origin of inferredApiOrigins) {
+    origins.add(origin);
   }
 
-  return new Set(DEFAULT_CORS_ORIGINS);
+  return origins;
 };
 
 const isSwaggerRouteRequest = (request: FastifyRequest): boolean => {
@@ -181,7 +208,8 @@ const bootstrap = async (): Promise<void> => {
         return;
       }
 
-      callback(new Error('CORS origin not allowed'), false);
+      // Do not throw. Returning "false" omits CORS headers and keeps route handlers working.
+      callback(null, false);
     },
     credentials: true,
     methods: ['GET', 'HEAD', 'POST', 'DELETE', 'OPTIONS'],
