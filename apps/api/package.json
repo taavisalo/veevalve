@@ -33,7 +33,7 @@
     "@nestjs/platform-fastify": "^11.1.14",
     "@nestjs/schedule": "^6.1.1",
     "@nestjs/swagger": "^11.2.6",
-    "@prisma/adapter-pg": "^7.4.0",
+    "@prisma/adapter-pg": "^7.4.1",
     "@prisma/client": "^7.4.0",
     "@veevalve/core": "workspace:*",
     "class-transformer": "^0.5.1",
