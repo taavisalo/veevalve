@@ -18,7 +18,7 @@
     "clean": "rm -rf .expo dist"
   },
   "dependencies": {
-    "@react-native-async-storage/async-storage": "^2.2.0",
+    "@react-native-async-storage/async-storage": "^3.0.1",
     "@veevalve/core": "workspace:*",
     "@veevalve/ui": "workspace:*",
     "expo": "~54.0.33",
