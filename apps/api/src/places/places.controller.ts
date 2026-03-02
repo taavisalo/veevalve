@@ -12,6 +12,7 @@ import { GetPlaceParams } from './dto/get-place.params';
 import { GetPlaceQuery } from './dto/get-place.query';
 import { GetPlacesByIdsQuery } from './dto/get-places-by-ids.query';
 import { ListPlacesQuery } from './dto/list-places.query';
+import { LIVE_PLACE_CACHE_CONTROL, PLACE_METRICS_CACHE_CONTROL } from './place-cache-control';
 import { PlaceListResponseDto, PlaceMetricsResponseDto } from './dto/place-response.dto';
 import { PlacesService } from './places.service';
 
@@ -21,7 +22,7 @@ export class PlacesController {
   constructor(private readonly placesService: PlacesService) {}
 
   @Get()
-  @Header('Cache-Control', 'public, max-age=0, s-maxage=30, stale-while-revalidate=300')
+  @Header('Cache-Control', LIVE_PLACE_CACHE_CONTROL)
   @ApiOperation({
     summary: 'List places',
     description:
@@ -38,7 +39,7 @@ export class PlacesController {
   }
 
   @Get('by-ids')
-  @Header('Cache-Control', 'public, max-age=0, s-maxage=30, stale-while-revalidate=300')
+  @Header('Cache-Control', LIVE_PLACE_CACHE_CONTROL)
   @ApiOperation({
     summary: 'Fetch places by id list',
     description:
@@ -59,7 +60,7 @@ export class PlacesController {
   }
 
   @Get('metrics')
-  @Header('Cache-Control', 'public, max-age=0, s-maxage=60, stale-while-revalidate=300')
+  @Header('Cache-Control', PLACE_METRICS_CACHE_CONTROL)
   @ApiOperation({
     summary: 'Get place metrics',
     description: 'Get aggregate counters for places and latest quality statuses.',
@@ -73,7 +74,7 @@ export class PlacesController {
   }
 
   @Get(':id')
-  @Header('Cache-Control', 'public, max-age=0, s-maxage=60, stale-while-revalidate=300')
+  @Header('Cache-Control', LIVE_PLACE_CACHE_CONTROL)
   @ApiOperation({
     summary: 'Get place by id',
     description: 'Fetch a single place with latest water-quality status.',
