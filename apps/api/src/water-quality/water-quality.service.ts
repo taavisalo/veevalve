@@ -25,6 +25,7 @@ import {
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { WebPushService } from '../web-push/web-push.service';
+import { pickRepresentativeLatestSamples } from './latest-place-status';
 
 const DEFAULT_POOL_SAMPLES_URL_TEMPLATE =
   'https://vtiav.sm.ee/index.php/opendata/basseini_veeproovid_{year}.xml';
@@ -1042,9 +1043,17 @@ export class WaterQualityService {
       return 0;
     }
 
-    const [latestSamples, places, previousLatestStatuses] = await this.prisma.$transaction([
+    const [latestSampleCandidates, places, previousLatestStatuses] = await this.prisma.$transaction([
       this.prisma.$queryRaw<LatestSampleRow[]>(Prisma.sql`
-        SELECT DISTINCT ON (sample."placeId")
+        WITH "latestSampledAt" AS (
+          SELECT
+            sample."placeId",
+            MAX(sample."sampledAt") AS "sampledAt"
+          FROM "WaterQualitySample" sample
+          WHERE sample."placeId" IN (${Prisma.join(normalizedPlaceIds)})
+          GROUP BY sample."placeId"
+        )
+        SELECT
           sample.id,
           sample."placeId",
           sample."sampledAt",
@@ -1052,7 +1061,9 @@ export class WaterQualityService {
           sample."overallAssessmentRaw",
           sample."sourceUrl"
         FROM "WaterQualitySample" sample
-        WHERE sample."placeId" IN (${Prisma.join(normalizedPlaceIds)})
+        INNER JOIN "latestSampledAt" latest
+          ON latest."placeId" = sample."placeId"
+         AND latest."sampledAt" = sample."sampledAt"
         ORDER BY sample."placeId" ASC, sample."sampledAt" DESC, sample.id DESC
       `),
       this.prisma.place.findMany({
@@ -1075,6 +1086,7 @@ export class WaterQualityService {
     ]);
 
     const placeById = new Map(places.map((place) => [place.id, place] as const));
+    const latestSamples = pickRepresentativeLatestSamples(latestSampleCandidates);
     const previousLatestByPlaceId = new Map(
       previousLatestStatuses.map((status) => [status.placeId, status as ExistingLatestStatusRow] as const),
     );
