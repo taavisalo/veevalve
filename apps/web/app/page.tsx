@@ -5,6 +5,7 @@ import type { AppLocale, PlaceType, QualityStatus } from '@veevalve/core/client'
 
 import { PlacesBrowser } from '../components/places-browser';
 import { EMPTY_PLACE_METRICS } from '../lib/fetch-place-metrics';
+import { getPlacesFetchPolicy } from '../lib/place-fetch-policy';
 import { fetchPlaces } from '../lib/fetch-places';
 import { resolveSiteUrl } from '../lib/site-url';
 
@@ -149,7 +150,7 @@ const HomePage = async ({ searchParams }: HomePageProps) => {
   const search = readParam(resolvedSearchParams, 'q')?.trim();
   const initialLimit = search ? 20 : 10;
   const initialNowIso = new Date().toISOString();
-  const shouldCacheInitialPlaces = !search;
+  const initialPlacesFetchPolicy = getPlacesFetchPolicy();
   const siteUrl = resolveSiteUrl();
   const websiteSchema = {
     '@context': 'https://schema.org',
@@ -191,8 +192,8 @@ const HomePage = async ({ searchParams }: HomePageProps) => {
     status: status === 'ALL' ? undefined : status,
     search,
     limit: initialLimit,
-    cacheMode: shouldCacheInitialPlaces ? 'force-cache' : 'no-store',
-    revalidateSeconds: shouldCacheInitialPlaces ? 60 : undefined,
+    cacheMode: initialPlacesFetchPolicy.cacheMode,
+    revalidateSeconds: initialPlacesFetchPolicy.revalidateSeconds,
     includeBadDetails: false,
   });
 

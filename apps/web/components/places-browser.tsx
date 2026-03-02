@@ -23,6 +23,10 @@ import {
   readFavoriteStatusNotificationsEnabled,
   writeFavoriteStatusNotificationsEnabled,
 } from '../lib/favorite-status-notifications-storage';
+import {
+  getFavoritePlacesFetchPolicy,
+  getPlaceMetricsFetchPolicy,
+} from '../lib/place-fetch-policy';
 import { readMetricsUiPreferences, writeMetricsUiPreferences } from '../lib/ui-preferences-storage';
 import type * as WebPushClientModule from '../lib/web-push-client';
 
@@ -361,12 +365,13 @@ export const PlacesBrowser = ({
     }
 
     let cancelled = false;
+    const placeMetricsFetchPolicy = getPlaceMetricsFetchPolicy();
     setMetricsLoading(true);
     void loadFetchPlaceMetricsModule()
       .then(({ fetchPlaceMetrics }) =>
         fetchPlaceMetrics({
-          cacheMode: 'force-cache',
-          revalidateSeconds: 60,
+          cacheMode: placeMetricsFetchPolicy.cacheMode,
+          revalidateSeconds: placeMetricsFetchPolicy.revalidateSeconds,
         }),
       )
       .then((nextMetrics) => {
@@ -505,6 +510,7 @@ export const PlacesBrowser = ({
     }
 
     const controller = new AbortController();
+    const favoritePlacesFetchPolicy = getFavoritePlacesFetchPolicy();
     setFavoritesLoading(true);
     void loadFetchPlacesByIdsModule()
       .then(({ fetchPlacesByIds }) =>
@@ -512,8 +518,8 @@ export const PlacesBrowser = ({
           locale,
           ids: favoriteIds,
           signal: controller.signal,
-          cacheMode: 'force-cache',
-          revalidateSeconds: 60,
+          cacheMode: favoritePlacesFetchPolicy.cacheMode,
+          revalidateSeconds: favoritePlacesFetchPolicy.revalidateSeconds,
           includeBadDetails: false,
         }),
       )
