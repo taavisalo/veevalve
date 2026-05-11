@@ -1,11 +1,12 @@
 import { ValidationPipe } from '@nestjs/common';
-import { NestFactory } from '@nestjs/core';
+import { HttpAdapterHost, NestFactory } from '@nestjs/core';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
 import { AppModule } from './app.module';
 import { resolveCorsOrigins } from './cors';
+import { DatabaseExceptionFilter } from './prisma/database-exception.filter';
 import { applyApiSecurityHeaders } from './security/security-headers';
 
 const DEFAULT_API_PORT = 3001;
@@ -30,9 +31,7 @@ const isSwaggerRouteRequest = (request: FastifyRequest): boolean => {
   const url = request.raw.url ?? request.url;
   const path = url.split('?')[0] ?? '';
   return (
-    path === OPENAPI_JSON_PATH ||
-    path === SWAGGER_UI_PATH ||
-    path.startsWith(`${SWAGGER_UI_PATH}/`)
+    path === OPENAPI_JSON_PATH || path === SWAGGER_UI_PATH || path.startsWith(`${SWAGGER_UI_PATH}/`)
   );
 };
 
@@ -71,10 +70,7 @@ const buildSwaggerUiHtml = (): string => {
 
 const bootstrap = async (): Promise<void> => {
   const isProduction = process.env.NODE_ENV === 'production';
-  const bodyLimit = parsePositiveInteger(
-    process.env.BODY_LIMIT_BYTES,
-    DEFAULT_BODY_LIMIT_BYTES,
-  );
+  const bodyLimit = parsePositiveInteger(process.env.BODY_LIMIT_BYTES, DEFAULT_BODY_LIMIT_BYTES);
   const allowedCorsOrigins = resolveCorsOrigins();
 
   const app = await NestFactory.create<NestFastifyApplication>(
@@ -84,9 +80,7 @@ const bootstrap = async (): Promise<void> => {
       logger: {
         level: process.env.LOG_LEVEL ?? 'info',
         redact: {
-          paths: [
-            'req.headers',
-          ],
+          paths: ['req.headers'],
           censor: '[REDACTED]',
         },
       },
@@ -156,6 +150,7 @@ const bootstrap = async (): Promise<void> => {
       },
     }),
   );
+  app.useGlobalFilters(new DatabaseExceptionFilter(app.get(HttpAdapterHost)));
 
   app.enableCors({
     origin: (origin, callback) => {
