@@ -5,6 +5,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
 import { AppModule } from './app.module';
+import { resolveCorsOrigins } from './cors';
 import { applyApiSecurityHeaders } from './security/security-headers';
 
 const DEFAULT_API_PORT = 3001;
@@ -15,11 +16,6 @@ const SWAGGER_UI_DIST_VERSION = '5.31.0';
 const SWAGGER_UI_CSS_URL = `https://cdn.jsdelivr.net/npm/swagger-ui-dist@${SWAGGER_UI_DIST_VERSION}/swagger-ui.css`;
 const SWAGGER_UI_BUNDLE_JS_URL = `https://cdn.jsdelivr.net/npm/swagger-ui-dist@${SWAGGER_UI_DIST_VERSION}/swagger-ui-bundle.js`;
 const SWAGGER_UI_PRESET_JS_URL = `https://cdn.jsdelivr.net/npm/swagger-ui-dist@${SWAGGER_UI_DIST_VERSION}/swagger-ui-standalone-preset.js`;
-const DEFAULT_LOCALHOST_CORS_PORTS = [3000, 8081, 8082, 19006];
-const DEFAULT_CORS_ORIGINS = DEFAULT_LOCALHOST_CORS_PORTS.flatMap((port) => [
-  `http://localhost:${port}`,
-  `http://127.0.0.1:${port}`,
-]);
 
 const parsePositiveInteger = (value: string | undefined, fallback: number): number => {
   const parsed = Number.parseInt(value ?? '', 10);
@@ -28,46 +24,6 @@ const parsePositiveInteger = (value: string | undefined, fallback: number): numb
   }
 
   return parsed;
-};
-
-const normalizeOriginFromUrlLike = (value: string | undefined): string | null => {
-  const trimmed = value?.trim();
-  if (!trimmed) {
-    return null;
-  }
-
-  const candidate = trimmed.startsWith('http://') || trimmed.startsWith('https://')
-    ? trimmed
-    : `https://${trimmed}`;
-
-  try {
-    return new URL(candidate).origin;
-  } catch {
-    return null;
-  }
-};
-
-const resolveCorsOrigins = (): Set<string> => {
-  const configuredOrigins = (process.env.CORS_ORIGIN ?? '')
-    .split(',')
-    .map((origin) => origin.trim())
-    .filter((origin) => origin.length > 0);
-
-  const origins = new Set(
-    configuredOrigins.length > 0 ? configuredOrigins : DEFAULT_CORS_ORIGINS,
-  );
-
-  // Ensure same-origin browser calls on deployed API hosts work (Swagger UI on /docs).
-  const inferredApiOrigins = [
-    normalizeOriginFromUrlLike(process.env.API_BASE_URL),
-    normalizeOriginFromUrlLike(process.env.VERCEL_URL),
-    normalizeOriginFromUrlLike(process.env.VERCEL_PROJECT_PRODUCTION_URL),
-  ].filter((origin): origin is string => Boolean(origin));
-  for (const origin of inferredApiOrigins) {
-    origins.add(origin);
-  }
-
-  return origins;
 };
 
 const isSwaggerRouteRequest = (request: FastifyRequest): boolean => {

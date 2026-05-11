@@ -231,6 +231,10 @@ Important variables:
 
 For local web + Expo web development, include both web and Expo origins in `CORS_ORIGIN`
 (for example `http://localhost:3000,http://localhost:8081,http://localhost:8082,http://localhost:19006`).
+For production, set the API deployment's `CORS_ORIGIN` to the public web origin
+(for example `https://veevalve.vercel.app`). CORS origin values are normalized, so
+trailing slashes and schemeless Vercel URLs are accepted. If `NEXT_PUBLIC_SITE_URL`
+is present in the API environment, it is also allowed as a web origin.
 
 Generate a secure sync token locally:
 
