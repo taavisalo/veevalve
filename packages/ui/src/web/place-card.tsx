@@ -368,6 +368,18 @@ export const PlaceCard = ({
               </p>
             </div>
           </div>
+          {status === 'GOOD' && fullReportUrl ? (
+            <a
+              href={fullReportUrl}
+              target="_blank"
+              rel="noopener noreferrer nofollow external"
+              referrerPolicy="no-referrer"
+              className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-emerald-700 underline decoration-dotted underline-offset-2 hover:text-emerald-800"
+            >
+              <span>{fullReportLabel}</span>
+              <span aria-hidden>↗</span>
+            </a>
+          ) : null}
         </div>
       )}
       {placeAddress && mapsAddressUrl ? (

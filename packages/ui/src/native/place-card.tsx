@@ -462,6 +462,26 @@ export const NativePlaceCard = ({
               </View>
             </View>
           </View>
+          {status === 'GOOD' && fullReportUrl ? (
+            <Pressable
+              accessibilityRole="link"
+              accessibilityLabel={fullReportLabel}
+              style={({ pressed }) => [
+                styles.reportLink,
+                pressed ? styles.reportLinkPressed : null,
+              ]}
+              onPress={() => {
+                void openFullReport(fullReportUrl);
+              }}
+            >
+              <Text style={[styles.reportLinkText, styles.reportLinkTextGood]}>
+                {fullReportLabel}
+              </Text>
+              <Text aria-hidden style={[styles.reportLinkIcon, styles.reportLinkIconGood]}>
+                ↗
+              </Text>
+            </Pressable>
+          ) : null}
         </View>
       )}
       {mapsSearchQuery ? (
@@ -754,11 +774,17 @@ const styles = StyleSheet.create({
     textDecorationLine: 'underline',
     textDecorationStyle: 'dotted',
   },
+  reportLinkTextGood: {
+    color: '#0F7A4D',
+  },
   reportLinkIcon: {
     marginLeft: 5,
     marginTop: 1,
     fontSize: 12,
     color: '#A92F27',
     fontWeight: '700',
+  },
+  reportLinkIconGood: {
+    color: '#0F7A4D',
   },
 });
