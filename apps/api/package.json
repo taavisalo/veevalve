@@ -10,7 +10,7 @@
     "lint": "eslint \"src/**/*.{ts,tsx}\"",
     "typecheck": "pnpm prisma:ensure && tsc --noEmit",
     "vercel:check": "pnpm build && tsc --noEmit --pretty false",
-    "test": "vitest run",
+    "test": "pnpm --filter @veevalve/core build && pnpm prisma:ensure && vitest run",
     "format": "prettier --check \"src/**/*.{ts,tsx,json}\" prisma/schema.prisma",
     "clean": "rm -rf dist",
     "prisma:ensure": "sh ./scripts/ensure-prisma-client.sh",
