@@ -1,4 +1,5 @@
 import {
+  isWaterQualityReadingStale,
   t,
   type AppLocale,
   type PlaceType,
@@ -109,8 +110,10 @@ const mergeUniqueDetails = (details: string[], fallbackDetail: string | undefine
   return merged;
 };
 
+type StatusTone = QualityStatus | 'STALE';
+
 const getStatusPalette = (
-  status: QualityStatus,
+  tone: StatusTone,
 ): {
   cardBorder: string;
   panelBackground: string;
@@ -119,7 +122,18 @@ const getStatusPalette = (
   iconBackground: string;
   iconText: string;
 } => {
-  if (status === 'BAD') {
+  if (tone === 'STALE') {
+    return {
+      cardBorder: '#F3C35B',
+      panelBackground: '#FFFBEB',
+      panelBorder: '#F59E0B',
+      panelText: '#78350F',
+      iconBackground: '#FDE68A',
+      iconText: '#78350F',
+    };
+  }
+
+  if (tone === 'BAD') {
     return {
       cardBorder: '#F8C6C3',
       panelBackground: '#FFF1F1',
@@ -130,7 +144,7 @@ const getStatusPalette = (
     };
   }
 
-  if (status === 'GOOD') {
+  if (tone === 'GOOD') {
     return {
       cardBorder: '#B7E9CA',
       panelBackground: '#ECFBF2',
@@ -151,12 +165,12 @@ const getStatusPalette = (
   };
 };
 
-const getStatusSymbol = (status: QualityStatus): string => {
-  if (status === 'BAD') {
+const getStatusSymbol = (tone: StatusTone): string => {
+  if (tone === 'STALE' || tone === 'BAD') {
     return '!';
   }
 
-  if (status === 'GOOD') {
+  if (tone === 'GOOD') {
     return '✓';
   }
 
@@ -216,7 +230,11 @@ export const NativePlaceCard = ({
     locale === 'en' ? 'Updating favorite...' : 'Uuendan lemmikut...';
   const favoriteButtonLabel = favoriteUpdating ? toggleFavoriteUpdatingLabel : toggleFavoriteLabel;
   const status = place.latestReading?.status ?? 'UNKNOWN';
-  const statusPalette = getStatusPalette(status);
+  const isLatestReadingStale = place.latestReading
+    ? isWaterQualityReadingStale(place.latestReading.sampledAt, referenceTimeIso)
+    : false;
+  const statusTone: StatusTone = isLatestReadingStale ? 'STALE' : status;
+  const statusPalette = getStatusPalette(statusTone);
   const statusLabel = t(statusLabelKeyByStatus[status], locale);
   const isBadStatus = status === 'BAD';
   const badDetailCandidates =
@@ -251,8 +269,11 @@ export const NativePlaceCard = ({
       ? buildTerviseametReportUrl(reportExternalId, place.type)
       : undefined;
   const statusPanelTitle = locale === 'en' ? 'Water quality' : 'Vee kvaliteet';
-  const statusInlineHint =
-    status === 'BAD'
+  const statusInlineHint = isLatestReadingStale
+    ? locale === 'en'
+      ? 'Info may be old'
+      : 'Info võib olla aegunud'
+    : status === 'BAD'
       ? showBadDetails
         ? locale === 'en'
           ? 'Hide details'
@@ -275,6 +296,10 @@ export const NativePlaceCard = ({
       : 'Allikandmed ei sisaldanud täpsemaid põhjuseid.';
   const fullReportLabel =
     locale === 'en' ? 'Open full report on Terviseamet' : 'Ava täielik raport Terviseameti lehel';
+  const staleWarningText =
+    locale === 'en'
+      ? 'Last sample is over 3 months old. This info may be outdated.'
+      : 'Viimane proov on üle 3 kuu vana. Info võib olla aegunud.';
 
   const openAddressInMaps = async (query: string): Promise<void> => {
     const url = buildGoogleMapsSearchUrl(query);
@@ -310,20 +335,33 @@ export const NativePlaceCard = ({
     <Pressable
       accessibilityRole="link"
       accessibilityLabel={fullReportLabel}
-      style={({ pressed }) => [
-        styles.reportLink,
-        pressed ? styles.reportLinkPressed : null,
-      ]}
+      style={({ pressed }) => [styles.reportLink, pressed ? styles.reportLinkPressed : null]}
       onPress={() => {
         void openFullReport(fullReportUrl);
       }}
     >
-      <Text style={[styles.reportLinkText, status === 'GOOD' ? styles.reportLinkTextGood : null]}>
+      <Text
+        style={[
+          styles.reportLinkText,
+          isLatestReadingStale
+            ? styles.reportLinkTextStale
+            : status === 'GOOD'
+              ? styles.reportLinkTextGood
+              : null,
+        ]}
+      >
         {fullReportLabel}
       </Text>
       <Text
         aria-hidden
-        style={[styles.reportLinkIcon, status === 'GOOD' ? styles.reportLinkIconGood : null]}
+        style={[
+          styles.reportLinkIcon,
+          isLatestReadingStale
+            ? styles.reportLinkIconStale
+            : status === 'GOOD'
+              ? styles.reportLinkIconGood
+              : null,
+        ]}
       >
         ↗
       </Text>
@@ -407,7 +445,7 @@ export const NativePlaceCard = ({
                   ]}
                 >
                   <Text style={[styles.statusSymbolText, { color: statusPalette.iconText }]}>
-                    {getStatusSymbol(status)}
+                    {getStatusSymbol(statusTone)}
                   </Text>
                 </View>
                 <View style={styles.statusPanelTextBlock}>
@@ -429,7 +467,9 @@ export const NativePlaceCard = ({
             </View>
           </Pressable>
           {showBadDetails ? (
-            <View style={styles.statusDetailsSection}>
+            <View
+              style={[styles.statusDetailsSection, { borderTopColor: statusPalette.panelBorder }]}
+            >
               {badDetails.length > 0 ? (
                 <View style={styles.badDetailsList}>
                   {badDetails.map((detail) => (
@@ -476,7 +516,7 @@ export const NativePlaceCard = ({
                     ]}
                   >
                     <Text style={[styles.statusSymbolText, { color: statusPalette.iconText }]}>
-                      {getStatusSymbol(status)}
+                      {getStatusSymbol(statusTone)}
                     </Text>
                   </View>
                   <View style={styles.statusPanelTextBlock}>
@@ -507,7 +547,7 @@ export const NativePlaceCard = ({
                   ]}
                 >
                   <Text style={[styles.statusSymbolText, { color: statusPalette.iconText }]}>
-                    {getStatusSymbol(status)}
+                    {getStatusSymbol(statusTone)}
                   </Text>
                 </View>
                 <View style={styles.statusPanelTextBlock}>
@@ -526,12 +566,19 @@ export const NativePlaceCard = ({
             </View>
           )}
           {status === 'GOOD' && showGoodReport ? (
-            <View style={[styles.statusDetailsSection, { borderTopColor: statusPalette.panelBorder }]}>
+            <View
+              style={[styles.statusDetailsSection, { borderTopColor: statusPalette.panelBorder }]}
+            >
               {fullReportLink}
             </View>
           ) : null}
         </View>
       )}
+      {isLatestReadingStale ? (
+        <View style={styles.staleWarning}>
+          <Text style={styles.staleWarningText}>{staleWarningText}</Text>
+        </View>
+      ) : null}
       {mapsSearchQuery ? (
         <Pressable
           accessibilityRole="link"
@@ -745,6 +792,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
   },
+  staleWarning: {
+    marginTop: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    backgroundColor: '#FFFBEB',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  staleWarningText: {
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: '600',
+    color: '#78350F',
+  },
   latestSampleInline: {
     position: 'relative',
     flexDirection: 'row',
@@ -825,6 +887,9 @@ const styles = StyleSheet.create({
   reportLinkTextGood: {
     color: '#0F7A4D',
   },
+  reportLinkTextStale: {
+    color: '#92400E',
+  },
   reportLinkIcon: {
     marginLeft: 5,
     marginTop: 1,
@@ -834,5 +899,8 @@ const styles = StyleSheet.create({
   },
   reportLinkIconGood: {
     color: '#0F7A4D',
+  },
+  reportLinkIconStale: {
+    color: '#92400E',
   },
 });

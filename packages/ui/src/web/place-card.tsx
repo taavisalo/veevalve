@@ -1,4 +1,11 @@
-import { t, type AppLocale, type PlaceType, type PlaceWithLatestReading, type QualityStatus } from '@veevalve/core/client';
+import {
+  isWaterQualityReadingStale,
+  t,
+  type AppLocale,
+  type PlaceType,
+  type PlaceWithLatestReading,
+  type QualityStatus,
+} from '@veevalve/core/client';
 import { useState } from 'react';
 
 export interface PlaceCardProps {
@@ -63,8 +70,7 @@ const buildGoogleMapsSearchUrl = (address: string): string => {
   return url.toString();
 };
 
-const toTerviseametTabId = (placeType: PlaceType): string =>
-  placeType === 'POOL' ? 'U' : 'SV';
+const toTerviseametTabId = (placeType: PlaceType): string => (placeType === 'POOL' ? 'U' : 'SV');
 
 const buildTerviseametReportUrl = (externalId: string, placeType: PlaceType): string => {
   const url = new URL(TERVISEAMET_REPORT_URL);
@@ -105,67 +111,88 @@ const mergeUniqueDetails = (details: string[], fallbackDetail: string | undefine
   return merged;
 };
 
-const getStatusCardBorderClass = (status: QualityStatus): string => {
-  if (status === 'BAD') {
+type StatusTone = QualityStatus | 'STALE';
+
+const getStatusCardBorderClass = (tone: StatusTone): string => {
+  if (tone === 'STALE') {
+    return 'border-amber-300';
+  }
+
+  if (tone === 'BAD') {
     return 'border-rose-200';
   }
 
-  if (status === 'GOOD') {
+  if (tone === 'GOOD') {
     return 'border-emerald-200';
   }
 
   return 'border-slate-200';
 };
 
-const getStatusPanelClass = (status: QualityStatus): string => {
-  if (status === 'BAD') {
+const getStatusPanelClass = (tone: StatusTone): string => {
+  if (tone === 'STALE') {
+    return 'border-amber-300 bg-gradient-to-r from-amber-100 to-amber-50';
+  }
+
+  if (tone === 'BAD') {
     return 'border-rose-300 bg-gradient-to-r from-rose-100 to-rose-50';
   }
 
-  if (status === 'GOOD') {
+  if (tone === 'GOOD') {
     return 'border-emerald-300 bg-gradient-to-r from-emerald-100 to-emerald-50';
   }
 
   return 'border-slate-300 bg-gradient-to-r from-slate-100 to-slate-50';
 };
 
-const getStatusPanelTextClass = (status: QualityStatus): string => {
-  if (status === 'BAD') {
+const getStatusPanelTextClass = (tone: StatusTone): string => {
+  if (tone === 'STALE') {
+    return 'text-amber-950';
+  }
+
+  if (tone === 'BAD') {
     return 'text-rose-900';
   }
 
-  if (status === 'GOOD') {
+  if (tone === 'GOOD') {
     return 'text-emerald-900';
   }
 
   return 'text-slate-800';
 };
 
-const getStatusIconWrapClass = (status: QualityStatus): string => {
-  if (status === 'BAD') {
+const getStatusIconWrapClass = (tone: StatusTone): string => {
+  if (tone === 'STALE') {
+    return 'bg-amber-200 text-amber-900';
+  }
+
+  if (tone === 'BAD') {
     return 'bg-rose-200 text-rose-800';
   }
 
-  if (status === 'GOOD') {
+  if (tone === 'GOOD') {
     return 'bg-emerald-200 text-emerald-800';
   }
 
   return 'bg-slate-200 text-slate-700';
 };
 
-const getStatusSymbol = (status: QualityStatus): string => {
-  if (status === 'BAD') {
+const getStatusSymbol = (tone: StatusTone): string => {
+  if (tone === 'STALE' || tone === 'BAD') {
     return '!';
   }
 
-  if (status === 'GOOD') {
+  if (tone === 'GOOD') {
     return '✓';
   }
 
   return '?';
 };
 
-const statusLabelKeyByStatus: Record<QualityStatus, 'qualityGood' | 'qualityBad' | 'qualityUnknown'> = {
+const statusLabelKeyByStatus: Record<
+  QualityStatus,
+  'qualityGood' | 'qualityBad' | 'qualityUnknown'
+> = {
   GOOD: 'qualityGood',
   BAD: 'qualityBad',
   UNKNOWN: 'qualityUnknown',
@@ -210,48 +237,80 @@ export const PlaceCard = ({
       : `Ava asukoht Google Mapsis: ${mapsSearchQuery ?? ''}`;
   const toggleFavoriteLabel =
     locale === 'en'
-      ? (isFavorite ? 'Remove from favorites' : 'Add to favorites')
-      : (isFavorite ? 'Eemalda lemmikutest' : 'Lisa lemmikutesse');
+      ? isFavorite
+        ? 'Remove from favorites'
+        : 'Add to favorites'
+      : isFavorite
+        ? 'Eemalda lemmikutest'
+        : 'Lisa lemmikutesse';
   const toggleFavoriteUpdatingLabel =
     locale === 'en' ? 'Updating favorite...' : 'Uuendan lemmikut...';
   const favoriteButtonLabel = favoriteUpdating ? toggleFavoriteUpdatingLabel : toggleFavoriteLabel;
   const status = place.latestReading?.status ?? 'UNKNOWN';
+  const isLatestReadingStale = place.latestReading
+    ? isWaterQualityReadingStale(place.latestReading.sampledAt, referenceTimeIso)
+    : false;
+  const statusTone: StatusTone = isLatestReadingStale ? 'STALE' : status;
   const statusLabel = t(statusLabelKeyByStatus[status], locale);
   const isBadStatus = status === 'BAD';
   const badDetailCandidates =
     locale === 'en'
       ? (place.latestReading?.badDetailsEn ?? place.latestReading?.badDetailsEt ?? [])
       : (place.latestReading?.badDetailsEt ?? place.latestReading?.badDetailsEn ?? []);
-  const statusReason =
-    place.latestReading
-      ? (locale === 'en' ? place.latestReading.statusReasonEn : place.latestReading.statusReasonEt)
-      : undefined;
+  const statusReason = place.latestReading
+    ? locale === 'en'
+      ? place.latestReading.statusReasonEn
+      : place.latestReading.statusReasonEt
+    : undefined;
   const badDetails = mergeUniqueDetails(badDetailCandidates, statusReason);
   const badDetailsToggleLabel =
     locale === 'en'
-      ? (showBadDetails ? 'Hide details' : 'Show details')
-      : (showBadDetails ? 'Peida detailid' : 'Näita detaile');
+      ? showBadDetails
+        ? 'Hide details'
+        : 'Show details'
+      : showBadDetails
+        ? 'Peida detailid'
+        : 'Näita detaile';
   const goodReportToggleLabel =
     locale === 'en'
-      ? (showGoodReport ? 'Hide report' : 'Show report')
-      : (showGoodReport ? 'Peida raport' : 'Näita raportit');
+      ? showGoodReport
+        ? 'Hide report'
+        : 'Show report'
+      : showGoodReport
+        ? 'Peida raport'
+        : 'Näita raportit';
   const statusPanelTitle = locale === 'en' ? 'Water quality' : 'Vee kvaliteet';
-  const statusInlineHint =
-    status === 'BAD'
-      ? (showBadDetails
-          ? (locale === 'en' ? 'Hide details' : 'Peida detailid')
-          : (locale === 'en' ? 'Show details' : 'Näita detaile'))
+  const statusInlineHint = isLatestReadingStale
+    ? locale === 'en'
+      ? 'Info may be old'
+      : 'Info võib olla aegunud'
+    : status === 'BAD'
+      ? showBadDetails
+        ? locale === 'en'
+          ? 'Hide details'
+          : 'Peida detailid'
+        : locale === 'en'
+          ? 'Show details'
+          : 'Näita detaile'
       : status === 'GOOD'
-        ? (fullReportUrl ? goodReportToggleLabel : (locale === 'en' ? 'Compliant' : 'Korras'))
-        : (locale === 'en' ? 'No rating' : 'Hinnang puudub');
+        ? fullReportUrl
+          ? goodReportToggleLabel
+          : locale === 'en'
+            ? 'Compliant'
+            : 'Korras'
+        : locale === 'en'
+          ? 'No rating'
+          : 'Hinnang puudub';
   const badDetailsFallbackText =
     locale === 'en'
       ? 'The source did not include additional detailed reasons.'
       : 'Allikandmed ei sisaldanud täpsemaid põhjuseid.';
   const fullReportLabel =
+    locale === 'en' ? 'Open full report on Terviseamet' : 'Ava täielik raport Terviseameti lehel';
+  const staleWarningText =
     locale === 'en'
-      ? 'Open full report on Terviseamet'
-      : 'Ava täielik raport Terviseameti lehel';
+      ? 'Last sample is over 3 months old. This info may be outdated.'
+      : 'Viimane proov on üle 3 kuu vana. Info võib olla aegunud.';
   const fullReportLink = fullReportUrl ? (
     <a
       href={fullReportUrl}
@@ -259,9 +318,11 @@ export const PlaceCard = ({
       rel="noopener noreferrer nofollow external"
       referrerPolicy="no-referrer"
       className={`mt-2 inline-flex items-center gap-1 text-xs font-medium underline decoration-dotted underline-offset-2 ${
-        status === 'GOOD'
-          ? 'text-emerald-700 hover:text-emerald-800'
-          : 'text-rose-700 hover:text-rose-800'
+        isLatestReadingStale
+          ? 'text-amber-800 hover:text-amber-900'
+          : status === 'GOOD'
+            ? 'text-emerald-700 hover:text-emerald-800'
+            : 'text-rose-700 hover:text-rose-800'
       }`}
     >
       <span>{fullReportLabel}</span>
@@ -271,7 +332,7 @@ export const PlaceCard = ({
 
   return (
     <article
-      className={`relative overflow-visible rounded-xl border bg-card p-4 shadow-card transition hover:-translate-y-0.5 ${getStatusCardBorderClass(status)} ${
+      className={`relative overflow-visible rounded-xl border bg-card p-4 shadow-card transition hover:-translate-y-0.5 ${getStatusCardBorderClass(statusTone)} ${
         showExactSampledAt ? 'z-30' : ''
       }`}
     >
@@ -303,47 +364,64 @@ export const PlaceCard = ({
                   aria-hidden="true"
                   className="h-4 w-4 animate-spin rounded-full border-2 border-current border-r-transparent"
                 />
+              ) : isFavorite ? (
+                '★'
               ) : (
-                isFavorite ? '★' : '☆'
+                '☆'
               )}
             </button>
           ) : null}
         </div>
       </header>
       {isBadStatus ? (
-        <div className={`mt-3 w-full rounded-xl border p-3 ${getStatusPanelClass(status)}`}>
+        <div className={`mt-3 w-full rounded-xl border p-3 ${getStatusPanelClass(statusTone)}`}>
           <button
             type="button"
             onClick={() => setShowBadDetails((value) => !value)}
             aria-expanded={showBadDetails}
             title={badDetailsToggleLabel}
-            className="w-full text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:ring-offset-2"
+            className={`w-full text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ${
+              isLatestReadingStale ? 'focus-visible:ring-amber-400' : 'focus-visible:ring-rose-400'
+            }`}
           >
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-3">
                 <span
                   aria-hidden
-                  className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-sm font-black ${getStatusIconWrapClass(status)}`}
+                  className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-sm font-black ${getStatusIconWrapClass(statusTone)}`}
                 >
-                  {getStatusSymbol(status)}
+                  {getStatusSymbol(statusTone)}
                 </span>
                 <div>
-                  <p className={`text-[11px] font-semibold uppercase tracking-wide ${getStatusPanelTextClass(status)}`}>
+                  <p
+                    className={`text-[11px] font-semibold uppercase tracking-wide ${getStatusPanelTextClass(statusTone)}`}
+                  >
                     {statusPanelTitle}
                   </p>
-                  <p className={`mt-0.5 text-sm font-extrabold leading-tight ${getStatusPanelTextClass(status)}`}>
+                  <p
+                    className={`mt-0.5 text-sm font-extrabold leading-tight ${getStatusPanelTextClass(statusTone)}`}
+                  >
                     {statusLabel}
-                    <span className="ml-1.5 text-xs font-semibold opacity-90">• {statusInlineHint}</span>
+                    <span className="ml-1.5 text-xs font-semibold opacity-90">
+                      • {statusInlineHint}
+                    </span>
                   </p>
                 </div>
               </div>
-              <span className={`text-lg font-bold ${getStatusPanelTextClass(status)}`} aria-hidden>
+              <span
+                className={`text-lg font-bold ${getStatusPanelTextClass(statusTone)}`}
+                aria-hidden
+              >
                 {showBadDetails ? '▾' : '▸'}
               </span>
             </div>
           </button>
           {showBadDetails ? (
-            <div className="mt-2 border-t border-rose-200/80 pt-2">
+            <div
+              className={`mt-2 border-t pt-2 ${
+                isLatestReadingStale ? 'border-amber-200/80' : 'border-rose-200/80'
+              }`}
+            >
               {badDetails.length > 0 ? (
                 <ul className="list-disc space-y-1 pl-4 text-xs text-rose-900">
                   {badDetails.map((detail) => (
@@ -360,34 +438,47 @@ export const PlaceCard = ({
           ) : null}
         </div>
       ) : (
-        <div className={`mt-3 rounded-xl border p-3 ${getStatusPanelClass(status)}`}>
+        <div className={`mt-3 rounded-xl border p-3 ${getStatusPanelClass(statusTone)}`}>
           {status === 'GOOD' && fullReportUrl ? (
             <button
               type="button"
               onClick={() => setShowGoodReport((value) => !value)}
               aria-expanded={showGoodReport}
               title={goodReportToggleLabel}
-              className="w-full text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2"
+              className={`w-full text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ${
+                isLatestReadingStale
+                  ? 'focus-visible:ring-amber-400'
+                  : 'focus-visible:ring-emerald-400'
+              }`}
             >
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
                   <span
                     aria-hidden
-                    className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-sm font-black ${getStatusIconWrapClass(status)}`}
+                    className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-sm font-black ${getStatusIconWrapClass(statusTone)}`}
                   >
-                    {getStatusSymbol(status)}
+                    {getStatusSymbol(statusTone)}
                   </span>
                   <div>
-                    <p className={`text-[11px] font-semibold uppercase tracking-wide ${getStatusPanelTextClass(status)}`}>
+                    <p
+                      className={`text-[11px] font-semibold uppercase tracking-wide ${getStatusPanelTextClass(statusTone)}`}
+                    >
                       {statusPanelTitle}
                     </p>
-                    <p className={`mt-0.5 text-sm font-extrabold leading-tight ${getStatusPanelTextClass(status)}`}>
+                    <p
+                      className={`mt-0.5 text-sm font-extrabold leading-tight ${getStatusPanelTextClass(statusTone)}`}
+                    >
                       {statusLabel}
-                      <span className="ml-1.5 text-xs font-semibold opacity-90">• {statusInlineHint}</span>
+                      <span className="ml-1.5 text-xs font-semibold opacity-90">
+                        • {statusInlineHint}
+                      </span>
                     </p>
                   </div>
                 </div>
-                <span className={`text-lg font-bold ${getStatusPanelTextClass(status)}`} aria-hidden>
+                <span
+                  className={`text-lg font-bold ${getStatusPanelTextClass(statusTone)}`}
+                  aria-hidden
+                >
                   {showGoodReport ? '▾' : '▸'}
                 </span>
               </div>
@@ -396,26 +487,46 @@ export const PlaceCard = ({
             <div className="flex items-center gap-3">
               <span
                 aria-hidden
-                className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-sm font-black ${getStatusIconWrapClass(status)}`}
+                className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-sm font-black ${getStatusIconWrapClass(statusTone)}`}
               >
-                {getStatusSymbol(status)}
+                {getStatusSymbol(statusTone)}
               </span>
               <div>
-                <p className={`text-[11px] font-semibold uppercase tracking-wide ${getStatusPanelTextClass(status)}`}>
+                <p
+                  className={`text-[11px] font-semibold uppercase tracking-wide ${getStatusPanelTextClass(statusTone)}`}
+                >
                   {statusPanelTitle}
                 </p>
-                <p className={`mt-0.5 text-sm font-extrabold leading-tight ${getStatusPanelTextClass(status)}`}>
+                <p
+                  className={`mt-0.5 text-sm font-extrabold leading-tight ${getStatusPanelTextClass(statusTone)}`}
+                >
                   {statusLabel}
-                  <span className="ml-1.5 text-xs font-semibold opacity-90">• {statusInlineHint}</span>
+                  <span className="ml-1.5 text-xs font-semibold opacity-90">
+                    • {statusInlineHint}
+                  </span>
                 </p>
               </div>
             </div>
           )}
           {status === 'GOOD' && showGoodReport ? (
-            <div className="mt-2 border-t border-emerald-200/80 pt-2">{fullReportLink}</div>
+            <div
+              className={`mt-2 border-t pt-2 ${
+                isLatestReadingStale ? 'border-amber-200/80' : 'border-emerald-200/80'
+              }`}
+            >
+              {fullReportLink}
+            </div>
           ) : null}
         </div>
       )}
+      {isLatestReadingStale ? (
+        <p
+          role="note"
+          className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-xs font-semibold text-amber-900"
+        >
+          {staleWarningText}
+        </p>
+      ) : null}
       {placeAddress && mapsAddressUrl ? (
         <a
           href={mapsAddressUrl}
@@ -431,10 +542,7 @@ export const PlaceCard = ({
             viewBox="0 0 20 20"
             className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent"
           >
-            <path
-              d="M7 4h9v9h-2V7.41l-8.29 8.3-1.42-1.42L12.59 6H7V4Z"
-              fill="currentColor"
-            />
+            <path d="M7 4h9v9h-2V7.41l-8.29 8.3-1.42-1.42L12.59 6H7V4Z" fill="currentColor" />
           </svg>
         </a>
       ) : (
