@@ -94,6 +94,8 @@ export const AboutPanel = ({ locale }: AboutPanelProps) => {
             <li>Teavitusi saadetakse ainult lemmikutes olevatele kohtadele.</li>
             <li>Märguanne tuleb staatuse muutuse korral (`Hea` ↔ `Halb`), mitte iga uuenduse peale.</li>
             <li>Teavitused töötavad ka siis, kui leht on suletud (service workeri kaudu).</li>
+            <li>iPhone'is ja iPadis on vaja iOS/iPadOS 16.4+ ning `Home Screen`ile lisatud veebirakendust: ava Safaris `Share`, vali `Add to Home Screen`, käivita VeeValve `Home Screen`i ikoonist ja vajuta teavituste loas `Luba`.</li>
+            <li>Tavalises Safari vahekaardis jääb teavitusnupp väljalülitatuks, sest iOS ei luba seal Push API-t kasutada.</li>
             <li>Kui teavitused on blokeeritud, ava need brauseri saidi seadetes uuesti.</li>
           </>
         ) : (
@@ -102,6 +104,8 @@ export const AboutPanel = ({ locale }: AboutPanelProps) => {
             <li>Notifications are sent only for favorited places.</li>
             <li>An alert is sent on status transition (`Good` ↔ `Bad`), not on every sync run.</li>
             <li>Alerts can be delivered even when the page is closed (via service worker).</li>
+            <li>On iPhone and iPad, push requires iOS/iPadOS 16.4+ and the Home Screen web app: in Safari, open Share, choose `Add to Home Screen`, launch VeeValve from that icon, then enable alerts there.</li>
+            <li>In a normal Safari tab, the alerts button stays off because iOS does not expose the Push API there.</li>
             <li>If notifications are blocked, re-enable them in browser site settings.</li>
           </>
         )}
