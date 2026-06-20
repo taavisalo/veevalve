@@ -102,6 +102,26 @@ interface PlaceRow {
   }>;
 }
 
+interface DistanceRankedPlaceRow {
+  id: string;
+  externalId: string;
+  type: PlaceType;
+  nameEt: string;
+  nameEn: string;
+  municipality: string;
+  addressEt: string | null;
+  addressEn: string | null;
+  coordinateX: number | null;
+  coordinateY: number | null;
+  latitude: number;
+  longitude: number;
+  sampleId: string;
+  sampledAt: Date;
+  status: QualityStatus;
+  statusReasonEt: string | null;
+  statusReasonEn: string | null;
+}
+
 const DEFAULT_LIST_LIMIT = 10;
 const SEARCH_LIST_LIMIT = 20;
 const DEFAULT_FUZZY_THRESHOLD = 0.12;
@@ -364,6 +384,158 @@ export class PlacesService {
       );
     }
 
+    const origin = {
+      latitude: originLatitude,
+      longitude: originLongitude,
+    };
+
+    const rankedPlaces = await this.findDistanceRankedPlaceRows({
+      latitude: origin.latitude,
+      longitude: origin.longitude,
+      type,
+      status,
+      limit,
+      offset,
+    });
+
+    if (rankedPlaces.length > 0) {
+      return this.toListResponsesWithBadDetails(rankedPlaces, locale, includeBadDetails);
+    }
+
+    const hasLegacyCandidates = await this.hasLegacyDistanceCandidates({ type, status });
+    if (!hasLegacyCandidates) {
+      return [];
+    }
+
+    return this.listPlacesByDistanceInMemory({
+      origin,
+      type,
+      status,
+      limit,
+      offset,
+      locale,
+      includeBadDetails,
+    });
+  }
+
+  private async findDistanceRankedPlaceRows(input: {
+    latitude: number;
+    longitude: number;
+    type?: PlaceType;
+    status?: QualityStatus;
+    limit: number;
+    offset: number;
+  }): Promise<PlaceRow[]> {
+    const { latitude, longitude, type, status, limit, offset } = input;
+    const typeFilter = type ? Prisma.sql`AND p.type = ${type}` : Prisma.empty;
+    const statusFilter = status ? Prisma.sql`AND ls.status = ${status}` : Prisma.empty;
+    const distanceExpression = Prisma.sql`
+      6371000 * acos(
+        LEAST(
+          1,
+          GREATEST(
+            -1,
+            sin(radians(${latitude})) * sin(radians(p.latitude))
+            + cos(radians(${latitude})) * cos(radians(p.latitude))
+            * cos(radians(p.longitude) - radians(${longitude}))
+          )
+        )
+      )
+    `;
+
+    const rows = await this.prisma.$queryRaw<DistanceRankedPlaceRow[]>(Prisma.sql`
+      SELECT
+        p.id,
+        p."externalId",
+        p.type,
+        p."nameEt",
+        p."nameEn",
+        p.municipality,
+        p."addressEt",
+        p."addressEn",
+        p."coordinateX",
+        p."coordinateY",
+        p.latitude,
+        p.longitude,
+        ls."sampleId",
+        ls."sampledAt",
+        ls.status,
+        ls."statusReasonEt",
+        ls."statusReasonEn",
+        ${distanceExpression} AS "distanceMeters"
+      FROM "Place" p
+      INNER JOIN "PlaceLatestStatus" ls ON ls."placeId" = p.id
+      WHERE p.latitude IS NOT NULL
+      AND p.longitude IS NOT NULL
+      ${typeFilter}
+      ${statusFilter}
+      ORDER BY "distanceMeters" ASC, ls."sampledAt" DESC, p."nameEt" ASC
+      LIMIT ${limit}
+      OFFSET ${offset}
+    `);
+
+    return rows.map((row) => ({
+      id: row.id,
+      externalId: row.externalId,
+      type: row.type,
+      nameEt: row.nameEt,
+      nameEn: row.nameEn,
+      municipality: row.municipality,
+      addressEt: row.addressEt,
+      addressEn: row.addressEn,
+      coordinateX: row.coordinateX,
+      coordinateY: row.coordinateY,
+      latitude: row.latitude,
+      longitude: row.longitude,
+      latestStatus: {
+        sampleId: row.sampleId,
+        sampledAt: row.sampledAt,
+        status: row.status,
+        statusReasonEt: row.statusReasonEt,
+        statusReasonEn: row.statusReasonEn,
+      },
+    }));
+  }
+
+  private async hasLegacyDistanceCandidates(input: {
+    type?: PlaceType;
+    status?: QualityStatus;
+  }): Promise<boolean> {
+    const { type, status } = input;
+    const legacyCandidate = await this.prisma.place.findFirst({
+      where: {
+        type,
+        OR: [{ latitude: null }, { longitude: null }],
+        coordinateX: { not: null },
+        coordinateY: { not: null },
+        latestStatus: status
+          ? {
+              is: {
+                status,
+              },
+            }
+          : {
+              isNot: null,
+            },
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    return Boolean(legacyCandidate);
+  }
+
+  private async listPlacesByDistanceInMemory(input: {
+    origin: GeoPoint;
+    type?: PlaceType;
+    status?: QualityStatus;
+    limit: number;
+    offset: number;
+    locale: 'et' | 'en';
+    includeBadDetails: boolean;
+  }): Promise<PlaceListResponse[]> {
+    const { origin, type, status, limit, offset, locale, includeBadDetails } = input;
     const places = (await this.prisma.place.findMany({
       where: {
         type,
@@ -390,10 +562,6 @@ export class PlacesService {
       select: PLACE_BASE_SELECT,
     })) as PlaceRow[];
 
-    const origin = {
-      latitude: originLatitude,
-      longitude: originLongitude,
-    };
     const orderedPlaces = places
       .flatMap((place): PlaceDistanceCandidate[] => {
         const geoPoint = this.resolvePlaceGeoPoint(place);

@@ -1,8 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { cookies } from 'next/headers';
 import { Manrope, Newsreader } from 'next/font/google';
-import { Analytics } from '@vercel/analytics/next';
-import { SpeedInsights } from '@vercel/speed-insights/next';
 
 import { resolveSiteUrl } from '../lib/site-url';
 import {
@@ -128,7 +126,6 @@ interface RootLayoutProps {
 }
 
 const RootLayout = async ({ children }: RootLayoutProps) => {
-  const isProduction = process.env.NODE_ENV === 'production';
   const requestCookies = await cookies();
   const themePreferences = parseThemeUiPreferences(
     requestCookies.get(THEME_PREFERENCES_COOKIE_NAME)?.value,
@@ -141,8 +138,6 @@ const RootLayout = async ({ children }: RootLayoutProps) => {
         className={`${bodyFont.variable} ${titleFont.variable} bg-surface text-ink antialiased`}
       >
         <div className="min-h-screen bg-grid-pattern">{children}</div>
-        {isProduction ? <Analytics /> : null}
-        {isProduction ? <SpeedInsights /> : null}
       </body>
     </html>
   );

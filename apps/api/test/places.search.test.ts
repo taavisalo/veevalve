@@ -6,6 +6,7 @@ import { PlacesService } from '../src/places/places.service';
 const createPrismaMock = () => ({
   $queryRaw: vi.fn(),
   place: {
+    findFirst: vi.fn(),
     findMany: vi.fn(),
     findUnique: vi.fn(),
   },
@@ -113,28 +114,7 @@ describe('PlacesService search ranking', () => {
 
   it('returns distance-sorted places in ranked order', async () => {
     const prisma = createPrismaMock();
-    prisma.place.findMany.mockResolvedValue([
-      {
-        id: 'far-place',
-        externalId: 'ext-2',
-        type: 'BEACH',
-        nameEt: 'Pirita rand',
-        nameEn: 'Pirita Beach',
-        municipality: 'Tallinn',
-        addressEt: 'Merivälja tee 1',
-        addressEn: 'Merivälja tee 1',
-        coordinateX: null,
-        coordinateY: null,
-        latitude: 59.4697,
-        longitude: 24.8405,
-        latestStatus: {
-          sampleId: 'sample-2',
-          sampledAt: new Date('2025-01-02T00:00:00.000Z'),
-          status: 'GOOD',
-          statusReasonEt: 'Hea',
-          statusReasonEn: 'Good',
-        },
-      },
+    prisma.$queryRaw.mockResolvedValue([
       {
         id: 'near-place',
         externalId: 'ext-1',
@@ -148,13 +128,30 @@ describe('PlacesService search ranking', () => {
         coordinateY: null,
         latitude: 59.4404,
         longitude: 24.7525,
-        latestStatus: {
-          sampleId: 'sample-1',
-          sampledAt: new Date('2025-01-01T00:00:00.000Z'),
-          status: 'GOOD',
-          statusReasonEt: 'Hea',
-          statusReasonEn: 'Good',
-        },
+        sampleId: 'sample-1',
+        sampledAt: new Date('2025-01-01T00:00:00.000Z'),
+        status: 'GOOD',
+        statusReasonEt: 'Hea',
+        statusReasonEn: 'Good',
+      },
+      {
+        id: 'far-place',
+        externalId: 'ext-2',
+        type: 'BEACH',
+        nameEt: 'Pirita rand',
+        nameEn: 'Pirita Beach',
+        municipality: 'Tallinn',
+        addressEt: 'Merivälja tee 1',
+        addressEn: 'Merivälja tee 1',
+        coordinateX: null,
+        coordinateY: null,
+        latitude: 59.4697,
+        longitude: 24.8405,
+        sampleId: 'sample-2',
+        sampledAt: new Date('2025-01-02T00:00:00.000Z'),
+        status: 'GOOD',
+        statusReasonEt: 'Hea',
+        statusReasonEn: 'Good',
       },
     ]);
 
@@ -167,13 +164,15 @@ describe('PlacesService search ranking', () => {
       includeBadDetails: false,
     });
 
-    expect(prisma.$queryRaw).not.toHaveBeenCalled();
-    expect(prisma.place.findMany).toHaveBeenCalledTimes(1);
+    expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
+    expect(prisma.place.findMany).not.toHaveBeenCalled();
     expect(rows.map((row) => row.id)).toEqual(['near-place', 'far-place']);
   });
 
   it('uses raw L-EST97 coordinates as a distance fallback', async () => {
     const prisma = createPrismaMock();
+    prisma.$queryRaw.mockResolvedValue([]);
+    prisma.place.findFirst.mockResolvedValue({ id: 'inglirand' });
     prisma.place.findMany.mockResolvedValue([
       {
         id: 'inglirand',
@@ -207,10 +206,33 @@ describe('PlacesService search ranking', () => {
       includeBadDetails: false,
     });
 
+    expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
+    expect(prisma.place.findFirst).toHaveBeenCalledTimes(1);
+    expect(prisma.place.findMany).toHaveBeenCalledTimes(1);
     expect(rows).toHaveLength(1);
     expect(rows[0]?.id).toBe('inglirand');
     expect(rows[0]?.latitude).toBeCloseTo(59.444979, 6);
     expect(rows[0]?.longitude).toBeCloseTo(24.792305, 6);
+  });
+
+  it('does not full-scan distance results when no WGS84 or legacy rows match', async () => {
+    const prisma = createPrismaMock();
+    prisma.$queryRaw.mockResolvedValue([]);
+    prisma.place.findFirst.mockResolvedValue(null);
+
+    const service = new PlacesService(prisma as never);
+    const rows = await service.listPlaces({
+      sort: 'DISTANCE',
+      nearLatitude: 59.437,
+      nearLongitude: 24.753,
+      locale: 'et',
+      includeBadDetails: false,
+    });
+
+    expect(rows).toEqual([]);
+    expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
+    expect(prisma.place.findFirst).toHaveBeenCalledTimes(1);
+    expect(prisma.place.findMany).not.toHaveBeenCalled();
   });
 
   it('rejects distance sorting without coordinates', async () => {
