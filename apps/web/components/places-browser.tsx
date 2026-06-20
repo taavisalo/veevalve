@@ -1,11 +1,13 @@
 'use client';
 
 import {
+  calculateDistanceMeters,
   fuzzySuggestionThreshold,
   normalizeFuzzyText,
   scoreFuzzyMatch,
   t,
   type AppLocale,
+  type GeoPoint,
   type PlaceType,
   type PlaceWithLatestReading,
   type QualityStatus,
@@ -32,9 +34,12 @@ import type * as WebPushClientModule from '../lib/web-push-client';
 
 const LATEST_RESULTS_LIMIT = 10;
 const SEARCH_RESULTS_LIMIT = 20;
+const NEARBY_RESULTS_LIMIT = 12;
 const SUGGESTION_LIMIT = 8;
 const SEARCH_DEBOUNCE_MS = 180;
 const FAVORITE_ACTION_MIN_PENDING_MS = 350;
+const GEOLOCATION_TIMEOUT_MS = 10_000;
+const GEOLOCATION_MAXIMUM_AGE_MS = 5 * 60 * 1_000;
 const WEB_PUSH_VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY ?? '';
 const CARD_STAGGER_CLASSES = [
   'fade-delay-0',
@@ -75,6 +80,43 @@ const runWhenIdle = (callback: () => void, timeout = 1_500): (() => void) => {
 
   const timeoutHandle = globalThis.setTimeout(callback, Math.min(timeout, 250));
   return () => globalThis.clearTimeout(timeoutHandle);
+};
+
+const hasBrowserGeolocation = (): boolean =>
+  typeof navigator !== 'undefined' && 'geolocation' in navigator;
+
+const requestCurrentPosition = (): Promise<GeolocationPosition> => {
+  if (!hasBrowserGeolocation()) {
+    return Promise.reject(new Error('Geolocation is not supported by this browser.'));
+  }
+
+  return new Promise((resolve, reject) => {
+    navigator.geolocation.getCurrentPosition(resolve, reject, {
+      enableHighAccuracy: false,
+      maximumAge: GEOLOCATION_MAXIMUM_AGE_MS,
+      timeout: GEOLOCATION_TIMEOUT_MS,
+    });
+  });
+};
+
+const toNearbySearchStatus = (error: unknown): NearbySearchStatus => {
+  const code = typeof (error as { code?: unknown }).code === 'number'
+    ? (error as { code: number }).code
+    : undefined;
+
+  if (code === 1) {
+    return 'denied';
+  }
+
+  if (code === 2) {
+    return 'unavailable';
+  }
+
+  if (code === 3) {
+    return 'timeout';
+  }
+
+  return 'error';
 };
 
 let fetchPlacesByIdsModulePromise: Promise<typeof FetchPlacesByIdsModule> | undefined;
@@ -130,6 +172,16 @@ interface Suggestion {
   address?: string;
   matchedBy: 'name' | 'municipality' | 'address';
 }
+
+type NearbySearchStatus =
+  | 'idle'
+  | 'requesting'
+  | 'ready'
+  | 'unsupported'
+  | 'denied'
+  | 'unavailable'
+  | 'timeout'
+  | 'error';
 
 interface FilterButtonProps {
   label: string;
@@ -217,6 +269,78 @@ const formatShare = (count: number, total: number): string => {
   return `${percentage.toFixed(1)}%`;
 };
 
+const formatCompactDistance = (distanceMeters: number, locale: AppLocale): string => {
+  const localeCode = locale === 'en' ? 'en-GB' : 'et-EE';
+
+  if (distanceMeters < 1_000) {
+    return `${new Intl.NumberFormat(localeCode, { maximumFractionDigits: 0 }).format(
+      Math.max(0, Math.round(distanceMeters)),
+    )} m`;
+  }
+
+  return `${new Intl.NumberFormat(localeCode, {
+    maximumFractionDigits: distanceMeters < 10_000 ? 1 : 0,
+  }).format(distanceMeters / 1_000)} km`;
+};
+
+const getNearbyStatusMessage = ({
+  status,
+  locale,
+  isNearbySearchActive,
+  accuracyLabel,
+}: {
+  status: NearbySearchStatus;
+  locale: AppLocale;
+  isNearbySearchActive: boolean;
+  accuracyLabel: string | null;
+}): string => {
+  if (status === 'requesting') {
+    return locale === 'et'
+      ? 'Brauser küsib seadme asukohta.'
+      : 'Waiting for browser location access.';
+  }
+
+  if (status === 'unsupported') {
+    return locale === 'et'
+      ? 'See brauser ei toeta seadme asukoha lugemist.'
+      : 'This browser does not support device location.';
+  }
+
+  if (status === 'denied') {
+    return locale === 'et'
+      ? 'Asukoha ligipääs on brauseris blokeeritud.'
+      : 'Location access is blocked in browser settings.';
+  }
+
+  if (status === 'timeout') {
+    return locale === 'et'
+      ? 'Asukoha leidmine võttis liiga kaua. Proovi uuesti.'
+      : 'Finding your location took too long. Try again.';
+  }
+
+  if (status === 'unavailable') {
+    return locale === 'et'
+      ? 'Brauser ei saanud seadme asukohta kätte.'
+      : 'The browser could not read your device location.';
+  }
+
+  if (status === 'error') {
+    return locale === 'et'
+      ? 'Asukoha lugemine ebaõnnestus. Proovi uuesti.'
+      : 'Failed to read your location. Try again.';
+  }
+
+  if (isNearbySearchActive) {
+    return locale === 'et'
+      ? `Kuvan lähimaid kohti seadme asukoha järgi${accuracyLabel ? `, täpsus umbes ${accuracyLabel}` : ''}. Asukohta ei salvestata.`
+      : `Showing nearby places from your device location${accuracyLabel ? `, accuracy about ${accuracyLabel}` : ''}. Location is not saved.`;
+  }
+
+  return locale === 'et'
+    ? 'Otsingusoovitused uuenevad kirjutamise ajal. Vajuta "/", et otsingusse liikuda.'
+    : 'Autocomplete suggestions update as you type. Press "/" to focus search.';
+};
+
 export const PlacesBrowser = ({
   initialLocale,
   initialType,
@@ -239,6 +363,9 @@ export const PlacesBrowser = ({
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(-1);
   const [error, setError] = useState<string | null>(null);
+  const [nearbyStatus, setNearbyStatus] = useState<NearbySearchStatus>('idle');
+  const [nearbyOrigin, setNearbyOrigin] = useState<GeoPoint | null>(null);
+  const [nearbyAccuracyMeters, setNearbyAccuracyMeters] = useState<number | null>(null);
   const [referenceTimeIso, setReferenceTimeIso] = useState(initialNowIso);
   const [metrics, setMetrics] = useState<PlaceMetrics>(initialMetrics);
   const [metricsLoading, setMetricsLoading] = useState(false);
@@ -310,7 +437,12 @@ export const PlacesBrowser = ({
       return;
     }
 
+    if (nearbyStatus === 'requesting') {
+      return;
+    }
+
     const controller = new AbortController();
+    const nearbySearchActive = nearbyStatus === 'ready' && nearbyOrigin !== null;
     setLoading(true);
     setError(null);
 
@@ -318,8 +450,11 @@ export const PlacesBrowser = ({
       locale,
       type: typeFilter === 'ALL' ? undefined : typeFilter,
       status: statusFilter === 'ALL' ? undefined : statusFilter,
-      search: debouncedSearch || undefined,
-      limit: getResultsLimit(debouncedSearch),
+      search: nearbySearchActive ? undefined : debouncedSearch || undefined,
+      sort: nearbySearchActive ? 'DISTANCE' : 'LATEST',
+      nearLatitude: nearbySearchActive ? nearbyOrigin.latitude : undefined,
+      nearLongitude: nearbySearchActive ? nearbyOrigin.longitude : undefined,
+      limit: nearbySearchActive ? NEARBY_RESULTS_LIMIT : getResultsLimit(debouncedSearch),
       includeBadDetails: false,
       signal: controller.signal,
     })
@@ -344,7 +479,7 @@ export const PlacesBrowser = ({
       });
 
     return () => controller.abort();
-  }, [debouncedSearch, locale, statusFilter, typeFilter]);
+  }, [debouncedSearch, locale, nearbyOrigin, nearbyStatus, statusFilter, typeFilter]);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -670,9 +805,29 @@ export const PlacesBrowser = ({
   }, []);
 
   const searchQuery = searchInput.trim();
-  const visibleResultsLimit = getResultsLimit(searchQuery);
+  const isNearbySearchActive = nearbyStatus === 'ready' && nearbyOrigin !== null;
+  const visibleResultsLimit = isNearbySearchActive
+    ? NEARBY_RESULTS_LIMIT
+    : getResultsLimit(searchQuery);
   const visiblePlaces = places.slice(0, visibleResultsLimit);
   const shownResultsCount = visiblePlaces.length;
+  const nearbyDistanceByPlaceId = useMemo(() => {
+    if (!isNearbySearchActive || !nearbyOrigin) {
+      return new Map<string, number>();
+    }
+
+    return new Map(
+      places
+        .map((place) => [
+          place.id,
+          calculateDistanceMeters(nearbyOrigin, {
+            latitude: place.latitude,
+            longitude: place.longitude,
+          }),
+        ] as const)
+        .filter(([, distanceMeters]) => Number.isFinite(distanceMeters)),
+    );
+  }, [isNearbySearchActive, nearbyOrigin, places]);
   const badShare = formatShare(metrics.badQualityEntries, metrics.totalEntries);
   const favoriteIdSet = useMemo(() => new Set(favoriteIds), [favoriteIds]);
   const hasFavorites = favoriteIds.length > 0;
@@ -693,6 +848,63 @@ export const PlacesBrowser = ({
     : notificationsActive
       ? (locale === 'et' ? 'Teavitused sees' : 'Alerts on')
       : (locale === 'et' ? 'Teavitused väljas' : 'Alerts off');
+  const nearbyAccuracyLabel =
+    typeof nearbyAccuracyMeters === 'number' && Number.isFinite(nearbyAccuracyMeters)
+      ? formatCompactDistance(nearbyAccuracyMeters, locale)
+      : null;
+  const nearbyButtonTitle =
+    locale === 'et'
+      ? 'Leia lähimad rannad ja basseinid seadme asukoha järgi'
+      : 'Find nearest beaches and pools from your device location';
+  const nearbyStatusMessage = getNearbyStatusMessage({
+    status: nearbyStatus,
+    locale,
+    isNearbySearchActive,
+    accuracyLabel: nearbyAccuracyLabel,
+  });
+
+  const clearNearbySearch = useCallback(() => {
+    setNearbyOrigin(null);
+    setNearbyAccuracyMeters(null);
+    setNearbyStatus('idle');
+  }, []);
+
+  const requestNearbySearch = useCallback(async () => {
+    if (!hasBrowserGeolocation()) {
+      setNearbyOrigin(null);
+      setNearbyAccuracyMeters(null);
+      setNearbyStatus('unsupported');
+      return;
+    }
+
+    setNearbyStatus('requesting');
+    setNearbyOrigin(null);
+    setNearbyAccuracyMeters(null);
+    setError(null);
+    setSuggestionsOpen(false);
+    setActiveSuggestionIndex(-1);
+
+    try {
+      const position = await requestCurrentPosition();
+      setSearchInput('');
+      setDebouncedSearch('');
+      setNearbyOrigin({
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+      });
+      setNearbyAccuracyMeters(position.coords.accuracy);
+      setNearbyStatus('ready');
+    } catch (geolocationError) {
+      const nextNearbyStatus = toNearbySearchStatus(geolocationError);
+      setNearbyOrigin(null);
+      setNearbyAccuracyMeters(null);
+      setNearbyStatus(nextNearbyStatus);
+
+      if (nextNearbyStatus === 'error') {
+        console.error(geolocationError);
+      }
+    }
+  }, []);
 
   const toggleStatusNotifications = async () => {
     if (!webPushConfigured) {
@@ -884,6 +1096,7 @@ export const PlacesBrowser = ({
   const showSuggestions = suggestionsOpen && searchQuery.length > 0 && suggestions.length > 0;
 
   const applySuggestion = (suggestion: Suggestion) => {
+    clearNearbySearch();
     setSearchInput(suggestion.name);
     setDebouncedSearch(suggestion.name);
     setSuggestionsOpen(false);
@@ -1071,6 +1284,7 @@ export const PlacesBrowser = ({
               value={searchInput}
               onFocus={() => setSuggestionsOpen(true)}
               onChange={(event) => {
+                clearNearbySearch();
                 setSearchInput(event.target.value);
                 setSuggestionsOpen(true);
                 setActiveSuggestionIndex(-1);
@@ -1129,29 +1343,64 @@ export const PlacesBrowser = ({
                   ? `${suggestionsListId}-${activeSuggestionIndex}`
                   : undefined
               }
-              className="h-14 w-full rounded-2xl border border-emerald-200 bg-white pl-12 pr-12 text-base text-ink shadow-card outline-none transition placeholder:text-slate-400 focus:border-accent focus:ring-2 focus:ring-emerald-200"
+              className="h-14 w-full rounded-2xl border border-emerald-200 bg-white pl-12 pr-24 text-base text-ink shadow-card outline-none transition placeholder:text-slate-400 focus:border-accent focus:ring-2 focus:ring-emerald-200 sm:pr-28"
             />
-            {searchInput ? (
+            <div className="absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-1">
+              {searchInput ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    clearNearbySearch();
+                    setSearchInput('');
+                    setDebouncedSearch('');
+                    setSuggestionsOpen(false);
+                    setActiveSuggestionIndex(-1);
+                    inputRef.current?.focus();
+                  }}
+                  aria-label={locale === 'et' ? 'Puhasta otsing' : 'Clear search'}
+                  title={locale === 'et' ? 'Puhasta otsing' : 'Clear search'}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-emerald-200 bg-emerald-50/80 text-sm font-semibold leading-none text-accent shadow-sm transition hover:border-accent hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2"
+                >
+                  <span aria-hidden="true">×</span>
+                </button>
+              ) : (
+                <kbd className="rounded border border-emerald-100 bg-emerald-50 px-1.5 py-0.5 text-[11px] text-slate-500 sm:px-2">
+                  /
+                </kbd>
+              )}
               <button
                 type="button"
                 onClick={() => {
-                  setSearchInput('');
-                  setDebouncedSearch('');
-                  setSuggestionsOpen(false);
-                  setActiveSuggestionIndex(-1);
-                  inputRef.current?.focus();
+                  void requestNearbySearch();
                 }}
-                aria-label={locale === 'et' ? 'Puhasta otsing' : 'Clear search'}
-                title={locale === 'et' ? 'Puhasta otsing' : 'Clear search'}
-                className="absolute right-2 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-emerald-200 bg-emerald-50/80 text-sm font-semibold leading-none text-accent shadow-sm transition hover:border-accent hover:bg-white sm:right-3"
+                disabled={nearbyStatus === 'requesting'}
+                aria-label={nearbyButtonTitle}
+                aria-pressed={isNearbySearchActive}
+                aria-busy={nearbyStatus === 'requesting'}
+                title={nearbyButtonTitle}
+                className={`inline-flex h-8 w-8 items-center justify-center rounded border text-emerald-700 transition duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 ${
+                  nearbyStatus === 'requesting'
+                    ? 'cursor-wait border-emerald-200 bg-emerald-50 text-accent'
+                    : isNearbySearchActive
+                      ? 'border-emerald-500 bg-emerald-100 text-emerald-900 shadow-inner hover:border-emerald-600 hover:bg-emerald-100 active:bg-emerald-200'
+                      : 'border-emerald-100 bg-emerald-50 text-slate-500 hover:border-emerald-300 hover:bg-emerald-100 hover:text-emerald-800 active:bg-emerald-200'
+                }`}
               >
-                <span aria-hidden="true">×</span>
+                {nearbyStatus === 'requesting' ? (
+                  <span
+                    aria-hidden="true"
+                    className="h-4 w-4 animate-spin rounded-full border-2 border-current border-r-transparent"
+                  />
+                ) : (
+                  <svg aria-hidden="true" viewBox="0 0 20 20" className="h-4.5 w-4.5">
+                    <path
+                      d="M10 2a1 1 0 0 1 1 1v1.07A6.02 6.02 0 0 1 15.93 9H17a1 1 0 1 1 0 2h-1.07A6.02 6.02 0 0 1 11 15.93V17a1 1 0 1 1-2 0v-1.07A6.02 6.02 0 0 1 4.07 11H3a1 1 0 1 1 0-2h1.07A6.02 6.02 0 0 1 9 4.07V3a1 1 0 0 1 1-1Zm0 4a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm0 2.25A1.75 1.75 0 1 1 10 11.75 1.75 1.75 0 0 1 10 8.25Z"
+                      fill="currentColor"
+                    />
+                  </svg>
+                )}
               </button>
-            ) : (
-              <kbd className="absolute right-2 top-1/2 -translate-y-1/2 rounded border border-emerald-100 bg-emerald-50 px-1.5 py-0.5 text-[11px] text-slate-500 sm:right-4 sm:px-2">
-                /
-              </kbd>
-            )}
+            </div>
           </div>
 
           {showSuggestions ? (
@@ -1196,11 +1445,18 @@ export const PlacesBrowser = ({
             </ul>
           ) : null}
 
-          <p className="mt-2 text-xs text-slate-500">
-            {locale === 'et'
-              ? 'Otsingusoovitused uuenevad kirjutamise ajal. Vajuta "/", et otsingusse liikuda.'
-              : 'Autocomplete suggestions update as you type. Press "/" to focus search.'}
-          </p>
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500" aria-live="polite">
+            <p>{nearbyStatusMessage}</p>
+            {nearbyStatus !== 'idle' ? (
+              <button
+                type="button"
+                onClick={clearNearbySearch}
+                className="font-semibold text-accent underline decoration-dotted underline-offset-2 hover:text-emerald-700"
+              >
+                {locale === 'et' ? 'Lõpeta' : 'Clear'}
+              </button>
+            ) : null}
+          </div>
         </div>
 
         <div className="-mx-0.5 mt-5 overflow-x-auto pb-1">
@@ -1303,7 +1559,11 @@ export const PlacesBrowser = ({
         <h2 className="sr-only">{locale === 'et' ? 'Tulemused' : 'Results'}</h2>
         <div className="relative mb-3 pr-10 text-xs text-slate-500">
           <p>
-            {searchQuery
+            {isNearbySearchActive
+              ? locale === 'et'
+                ? `Kuvan ${shownResultsCount} lähimat kohta seadme asukoha järgi.`
+                : `Showing ${shownResultsCount} closest places near your device location.`
+              : searchQuery
               ? locale === 'et'
                 ? `Otsing: "${searchQuery}". Näitan ${shownResultsCount} tulemust (maksimaalselt ${visibleResultsLimit}).`
                 : `Search: "${searchQuery}". Showing ${shownResultsCount} of up to ${visibleResultsLimit} results.`
@@ -1349,6 +1609,7 @@ export const PlacesBrowser = ({
                   referenceTimeIso={referenceTimeIso}
                   isFavorite={favoriteIdSet.has(place.id)}
                   favoriteUpdating={favoriteActionPendingIds.has(place.id)}
+                  distanceMeters={nearbyDistanceByPlaceId.get(place.id)}
                   onToggleFavorite={toggleFavorite}
                 />
               </div>

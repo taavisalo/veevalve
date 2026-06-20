@@ -1,8 +1,10 @@
 const resolveApiBaseUrl = (): string => {
-  const rawBaseUrl =
-    process.env.API_BASE_URL ??
-    process.env.NEXT_PUBLIC_API_BASE_URL ??
-    'http://localhost:3001';
+  const rawBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+
+  if (!rawBaseUrl?.trim()) {
+    return 'http://localhost:3001';
+  }
+
   return rawBaseUrl.replace(/\/+$/, '');
 };
 

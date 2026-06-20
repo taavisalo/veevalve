@@ -57,7 +57,7 @@ export const getWebSecurityHeaders = (isProduction: boolean): SecurityHeader[] =
     {
       key: 'Permissions-Policy',
       value:
-        'accelerometer=(), autoplay=(), camera=(), display-capture=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), midi=(), payment=(), usb=()',
+        'accelerometer=(), autoplay=(), camera=(), display-capture=(), geolocation=(self), gyroscope=(), magnetometer=(), microphone=(), midi=(), payment=(), usb=()',
     },
     { key: 'X-Content-Type-Options', value: 'nosniff' },
     { key: 'X-Frame-Options', value: 'DENY' },

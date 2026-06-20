@@ -39,7 +39,17 @@ export const fetchPlacesByIds = async ({
       cacheMode,
       revalidateSeconds,
     }),
-  );
+  ).catch((error: unknown) => {
+    if (signal?.aborted) {
+      throw error;
+    }
+
+    return null;
+  });
+
+  if (!response) {
+    return [];
+  }
 
   if (!response.ok) {
     return [];

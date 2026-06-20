@@ -13,6 +13,9 @@ interface FetchPlacesOptions {
   type?: PlaceType;
   status?: QualityStatus;
   search?: string;
+  sort?: 'LATEST' | 'NAME' | 'DISTANCE';
+  nearLatitude?: number;
+  nearLongitude?: number;
   limit?: number;
   signal?: AbortSignal;
   cacheMode?: RequestCache;
@@ -27,6 +30,9 @@ export const fetchPlaces = async ({
   type,
   status,
   search,
+  sort = 'LATEST',
+  nearLatitude,
+  nearLongitude,
   limit = search?.trim() ? 20 : DEFAULT_LIMIT,
   signal,
   cacheMode = 'no-store',
@@ -37,7 +43,7 @@ export const fetchPlaces = async ({
   const params = new URLSearchParams();
   params.set('locale', locale);
   params.set('limit', String(limit));
-  params.set('sort', 'LATEST');
+  params.set('sort', sort);
 
   if (type) {
     params.set('type', type);
@@ -50,6 +56,15 @@ export const fetchPlaces = async ({
   if (search) {
     params.set('search', search);
   }
+
+  if (typeof nearLatitude === 'number') {
+    params.set('nearLatitude', String(nearLatitude));
+  }
+
+  if (typeof nearLongitude === 'number') {
+    params.set('nearLongitude', String(nearLongitude));
+  }
+
   params.set('includeBadDetails', includeBadDetails ? 'true' : 'false');
 
   const response = await fetch(

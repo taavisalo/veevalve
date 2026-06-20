@@ -14,11 +14,34 @@ export interface PlaceCardProps {
   referenceTimeIso?: string;
   isFavorite?: boolean;
   favoriteUpdating?: boolean;
+  distanceMeters?: number;
   onToggleFavorite?: (placeId: string) => void;
 }
 
 const GOOGLE_MAPS_SEARCH_URL = 'https://www.google.com/maps/search/';
 const TERVISEAMET_REPORT_URL = 'https://vtiav.sm.ee/frontpage/show';
+
+const formatDistanceMeters = (
+  distanceMeters: number | undefined,
+  locale: AppLocale,
+): string | undefined => {
+  if (typeof distanceMeters !== 'number' || !Number.isFinite(distanceMeters)) {
+    return undefined;
+  }
+
+  const localeCode = locale === 'en' ? 'en-GB' : 'et-EE';
+  if (distanceMeters < 1_000) {
+    const roundedMeters = Math.max(0, Math.round(distanceMeters / 50) * 50);
+    return `${new Intl.NumberFormat(localeCode, { maximumFractionDigits: 0 }).format(roundedMeters)} m`;
+  }
+
+  const kilometers = distanceMeters / 1_000;
+  const maximumFractionDigits = kilometers < 10 ? 1 : 0;
+
+  return `${new Intl.NumberFormat(localeCode, {
+    maximumFractionDigits,
+  }).format(kilometers)} km`;
+};
 
 const formatSampledAtRelative = (
   sampledAtIso: string,
@@ -204,6 +227,7 @@ export const PlaceCard = ({
   referenceTimeIso,
   isFavorite = false,
   favoriteUpdating = false,
+  distanceMeters,
   onToggleFavorite,
 }: PlaceCardProps) => {
   const placeName = locale === 'en' ? place.nameEn : place.nameEt;
@@ -246,6 +270,12 @@ export const PlaceCard = ({
   const toggleFavoriteUpdatingLabel =
     locale === 'en' ? 'Updating favorite...' : 'Uuendan lemmikut...';
   const favoriteButtonLabel = favoriteUpdating ? toggleFavoriteUpdatingLabel : toggleFavoriteLabel;
+  const formattedDistance = formatDistanceMeters(distanceMeters, locale);
+  const distanceLabel = formattedDistance
+    ? locale === 'en'
+      ? `Approximately ${formattedDistance} away`
+      : `Ligikaudu ${formattedDistance} kaugusel`
+    : undefined;
   const status = place.latestReading?.status ?? 'UNKNOWN';
   const isLatestReadingStale = place.latestReading
     ? isWaterQualityReadingStale(place.latestReading.sampledAt, referenceTimeIso)
@@ -301,16 +331,17 @@ export const PlaceCard = ({
         : locale === 'en'
           ? 'No rating'
           : 'Hinnang puudub';
+  const statusInlineHintTitle = isLatestReadingStale
+    ? locale === 'en'
+      ? 'Last sample is over 3 months old'
+      : 'Proov on üle 3 kuu vana'
+    : undefined;
   const badDetailsFallbackText =
     locale === 'en'
       ? 'The source did not include additional detailed reasons.'
       : 'Allikandmed ei sisaldanud täpsemaid põhjuseid.';
   const fullReportLabel =
     locale === 'en' ? 'Open full report on Terviseamet' : 'Ava täielik raport Terviseameti lehel';
-  const staleWarningText =
-    locale === 'en'
-      ? 'Last sample is over 3 months old. This info may be outdated.'
-      : 'Viimane proov on üle 3 kuu vana. Info võib olla aegunud.';
   const fullReportLink = fullReportUrl ? (
     <a
       href={fullReportUrl}
@@ -339,7 +370,28 @@ export const PlaceCard = ({
       <header className="flex items-start justify-between gap-2">
         <div>
           <h3 className="text-base font-semibold text-ink">{placeName}</h3>
-          <p className="text-sm text-slate-600">{place.municipality}</p>
+          <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-600">
+            <span>{place.municipality}</span>
+            {formattedDistance ? (
+              <>
+                <span aria-hidden className="text-slate-300">
+                  •
+                </span>
+                <span
+                  className="inline-flex items-center gap-1 rounded-full border border-emerald-100 bg-emerald-50 px-1.5 py-0.5 text-xs font-semibold leading-none text-emerald-800"
+                  aria-label={distanceLabel}
+                >
+                  <svg aria-hidden="true" viewBox="0 0 20 20" className="h-3 w-3">
+                    <path
+                      d="M10 2.5a5.5 5.5 0 0 0-5.5 5.5c0 3.9 4.5 8.8 5.1 9.4a.6.6 0 0 0 .8 0c.6-.6 5.1-5.5 5.1-9.4A5.5 5.5 0 0 0 10 2.5Zm0 7.5a2 2 0 1 1 0-4 2 2 0 0 1 0 4Z"
+                      fill="currentColor"
+                    />
+                  </svg>
+                  <span>{formattedDistance}</span>
+                </span>
+              </>
+            ) : null}
+          </p>
         </div>
         <div className="flex items-center gap-2">
           {onToggleFavorite ? (
@@ -402,7 +454,10 @@ export const PlaceCard = ({
                     className={`mt-0.5 text-sm font-extrabold leading-tight ${getStatusPanelTextClass(statusTone)}`}
                   >
                     {statusLabel}
-                    <span className="ml-1.5 text-xs font-semibold opacity-90">
+                    <span
+                      className="ml-1.5 text-xs font-semibold opacity-90"
+                      title={statusInlineHintTitle}
+                    >
                       • {statusInlineHint}
                     </span>
                   </p>
@@ -469,7 +524,10 @@ export const PlaceCard = ({
                       className={`mt-0.5 text-sm font-extrabold leading-tight ${getStatusPanelTextClass(statusTone)}`}
                     >
                       {statusLabel}
-                      <span className="ml-1.5 text-xs font-semibold opacity-90">
+                      <span
+                        className="ml-1.5 text-xs font-semibold opacity-90"
+                        title={statusInlineHintTitle}
+                      >
                         • {statusInlineHint}
                       </span>
                     </p>
@@ -501,7 +559,10 @@ export const PlaceCard = ({
                   className={`mt-0.5 text-sm font-extrabold leading-tight ${getStatusPanelTextClass(statusTone)}`}
                 >
                   {statusLabel}
-                  <span className="ml-1.5 text-xs font-semibold opacity-90">
+                  <span
+                    className="ml-1.5 text-xs font-semibold opacity-90"
+                    title={statusInlineHintTitle}
+                  >
                     • {statusInlineHint}
                   </span>
                 </p>
@@ -519,14 +580,6 @@ export const PlaceCard = ({
           ) : null}
         </div>
       )}
-      {isLatestReadingStale ? (
-        <p
-          role="note"
-          className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-xs font-semibold text-amber-900"
-        >
-          {staleWarningText}
-        </p>
-      ) : null}
       {placeAddress && mapsAddressUrl ? (
         <a
           href={mapsAddressUrl}

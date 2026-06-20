@@ -18,6 +18,7 @@ describe('web security headers', () => {
     expect(headers.get('X-Frame-Options')).toBe('DENY');
     expect(headers.get('Cross-Origin-Opener-Policy')).toBe('same-origin');
     expect(headers.get('Cross-Origin-Resource-Policy')).toBe('same-origin');
+    expect(headers.get('Permissions-Policy')).toContain('geolocation=(self)');
   });
 
   it('omits HSTS in development response headers', () => {
