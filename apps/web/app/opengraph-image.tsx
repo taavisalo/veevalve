@@ -53,7 +53,7 @@ const OpenGraphImage = () => {
           maxWidth: 980,
         }}
       >
-        Vee kvaliteet randades ja basseinides Eestis
+        Vee kvaliteet Eesti randades ja basseinides
       </div>
       <div
         style={{
@@ -64,7 +64,7 @@ const OpenGraphImage = () => {
           maxWidth: 980,
         }}
       >
-        Reaalajas staatused, otsing, filtrid ja lemmikute märguanded.
+        Reaalaja info, otsing, filtrid ja lemmikute märguanded.
       </div>
     </div>,
     {

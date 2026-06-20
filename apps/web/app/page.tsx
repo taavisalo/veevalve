@@ -58,7 +58,7 @@ const getLocaleLandingPath = (locale: AppLocale): string => {
 const getHomeTitle = (locale: AppLocale): string => {
   return locale === 'en'
     ? 'Water quality for beaches and pools in Estonia'
-    : 'Vee kvaliteet randades ja basseinides Eestis';
+    : 'Vee kvaliteet Eesti randades ja basseinides';
 };
 
 const getHomeDescription = (locale: AppLocale): string => {
