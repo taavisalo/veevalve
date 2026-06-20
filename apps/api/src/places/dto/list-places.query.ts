@@ -1,6 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
-import { IsBoolean, IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+import { IsBoolean, IsIn, IsInt, IsNumber, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 
 const parseBoolean = (value: unknown, fallback: boolean): boolean => {
   if (typeof value === 'boolean') {
@@ -53,13 +53,40 @@ export class ListPlacesQuery {
   search?: string;
 
   @ApiPropertyOptional({
-    enum: ['LATEST', 'NAME'],
-    description: 'Sort order. Defaults to latest sample time when omitted.',
+    enum: ['LATEST', 'NAME', 'DISTANCE'],
+    description:
+      'Sort order. Defaults to latest sample time when omitted. `DISTANCE` requires `nearLatitude` and `nearLongitude`.',
     example: 'LATEST',
   })
   @IsOptional()
-  @IsIn(['LATEST', 'NAME'])
-  sort?: 'LATEST' | 'NAME';
+  @IsIn(['LATEST', 'NAME', 'DISTANCE'])
+  sort?: 'LATEST' | 'NAME' | 'DISTANCE';
+
+  @ApiPropertyOptional({
+    description: 'Latitude used when sorting by distance.',
+    minimum: -90,
+    maximum: 90,
+    example: 59.437,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(-90)
+  @Max(90)
+  nearLatitude?: number;
+
+  @ApiPropertyOptional({
+    description: 'Longitude used when sorting by distance.',
+    minimum: -180,
+    maximum: 180,
+    example: 24.753,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(-180)
+  @Max(180)
+  nearLongitude?: number;
 
   @ApiPropertyOptional({
     description:

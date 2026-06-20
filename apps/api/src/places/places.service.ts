@@ -1,6 +1,12 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import type { PlaceType, QualityStatus } from '@prisma/client';
 import { Prisma, SourceFileKind } from '@prisma/client';
+import {
+  calculateDistanceMeters,
+  isValidGeoPoint,
+  lest97ToWgs84,
+  type GeoPoint,
+} from '@veevalve/core';
 
 import { PrismaService } from '../prisma/prisma.service';
 import type { ListPlacesQuery } from './dto/list-places.query';
@@ -45,6 +51,11 @@ interface CompactAliasRule {
   initialsPart: string;
 }
 
+interface PlaceDistanceCandidate {
+  place: PlaceRow;
+  distanceMeters: number;
+}
+
 interface MetricsAggregateRow {
   totalEntries: number;
   poolEntries: number;
@@ -80,6 +91,8 @@ interface PlaceRow {
   municipality: string;
   addressEt: string | null;
   addressEn: string | null;
+  coordinateX: number | null;
+  coordinateY: number | null;
   latitude: number | null;
   longitude: number | null;
   latestStatus: LatestStatusRow | null;
@@ -114,6 +127,8 @@ const PLACE_CORE_SELECT = {
   municipality: true,
   addressEt: true,
   addressEn: true,
+  coordinateX: true,
+  coordinateY: true,
   latitude: true,
   longitude: true,
 } satisfies Prisma.PlaceSelect;
@@ -194,6 +209,19 @@ export class PlacesService {
     const search = query.search?.trim();
     const limit = query.limit ?? (search ? SEARCH_LIST_LIMIT : DEFAULT_LIST_LIMIT);
     const offset = query.offset ?? 0;
+
+    if (query.sort === 'DISTANCE') {
+      return this.listPlacesByDistance({
+        latitude: query.nearLatitude,
+        longitude: query.nearLongitude,
+        type: query.type,
+        status: query.status,
+        limit,
+        offset,
+        locale,
+        includeBadDetails: query.includeBadDetails,
+      });
+    }
 
     if (search) {
       const rankedPlaceIds = await this.findRankedPlaceIds({
@@ -306,6 +334,96 @@ export class PlacesService {
     });
 
     return this.toListResponsesWithBadDetails(places as PlaceRow[], locale, query.includeBadDetails);
+  }
+
+  private async listPlacesByDistance(input: {
+    latitude?: number;
+    longitude?: number;
+    type?: PlaceType;
+    status?: QualityStatus;
+    limit: number;
+    offset: number;
+    locale: 'et' | 'en';
+    includeBadDetails: boolean;
+  }): Promise<PlaceListResponse[]> {
+    const { latitude, longitude, type, status, limit, offset, locale, includeBadDetails } = input;
+    const originLatitude = latitude;
+    const originLongitude = longitude;
+
+    if (
+      typeof originLatitude !== 'number' ||
+      typeof originLongitude !== 'number' ||
+      !Number.isFinite(originLatitude) ||
+      !Number.isFinite(originLongitude)
+    ) {
+      throw new BadRequestException(
+        'nearLatitude and nearLongitude are required when sort=DISTANCE',
+      );
+    }
+
+    const places = (await this.prisma.place.findMany({
+      where: {
+        type,
+        OR: [
+          {
+            latitude: { not: null },
+            longitude: { not: null },
+          },
+          {
+            coordinateX: { not: null },
+            coordinateY: { not: null },
+          },
+        ],
+        latestStatus: status
+          ? {
+              is: {
+                status,
+              },
+            }
+          : {
+              isNot: null,
+            },
+      },
+      select: PLACE_BASE_SELECT,
+    })) as PlaceRow[];
+
+    const origin = {
+      latitude: originLatitude,
+      longitude: originLongitude,
+    };
+    const orderedPlaces = places
+      .flatMap((place): PlaceDistanceCandidate[] => {
+        const geoPoint = this.resolvePlaceGeoPoint(place);
+        if (!geoPoint) {
+          return [];
+        }
+
+        return [
+          {
+            place,
+            distanceMeters: calculateDistanceMeters(origin, geoPoint),
+          },
+        ];
+      })
+      .filter(({ distanceMeters }) => Number.isFinite(distanceMeters))
+      .sort((left, right) => {
+        if (left.distanceMeters !== right.distanceMeters) {
+          return left.distanceMeters - right.distanceMeters;
+        }
+
+        const sampledAtComparison =
+          (right.place.latestStatus?.sampledAt.getTime() ?? 0) -
+          (left.place.latestStatus?.sampledAt.getTime() ?? 0);
+        if (sampledAtComparison !== 0) {
+          return sampledAtComparison;
+        }
+
+        return left.place.nameEt.localeCompare(right.place.nameEt, 'et');
+      })
+      .slice(offset, offset + limit)
+      .map(({ place }) => place);
+
+    return this.toListResponsesWithBadDetails(orderedPlaces, locale, includeBadDetails);
   }
 
   async getPlaceById(id: string, locale: 'et' | 'en' = 'et'): Promise<PlaceListResponse> {
@@ -779,12 +897,36 @@ export class PlacesService {
     });
   }
 
+  private resolvePlaceGeoPoint(place: PlaceRow): GeoPoint | null {
+    const storedGeoPoint =
+      typeof place.latitude === 'number' && typeof place.longitude === 'number'
+        ? {
+            latitude: place.latitude,
+            longitude: place.longitude,
+          }
+        : null;
+    if (storedGeoPoint && isValidGeoPoint(storedGeoPoint)) {
+      return storedGeoPoint;
+    }
+
+    const convertedGeoPoint =
+      typeof place.coordinateX === 'number' && typeof place.coordinateY === 'number'
+        ? lest97ToWgs84({
+            x: place.coordinateX,
+            y: place.coordinateY,
+          })
+        : undefined;
+
+    return convertedGeoPoint && isValidGeoPoint(convertedGeoPoint) ? convertedGeoPoint : null;
+  }
+
   private toListResponse(
     place: PlaceRow,
     locale: 'et' | 'en',
     badDetailsBySampleId?: ReadonlyMap<string, string[]>,
   ): PlaceListResponse {
     const latest = place.latestStatus;
+    const geoPoint = this.resolvePlaceGeoPoint(place);
     const badDetails =
       latest?.status === 'BAD'
         ? badDetailsBySampleId?.get(latest.sampleId)?.filter((detail) => detail.trim().length > 0)
@@ -797,8 +939,8 @@ export class PlacesService {
       name: locale === 'en' ? place.nameEn : place.nameEt,
       municipality: place.municipality,
       address: locale === 'en' ? (place.addressEn ?? null) : (place.addressEt ?? null),
-      latitude: place.latitude ?? null,
-      longitude: place.longitude ?? null,
+      latitude: geoPoint?.latitude ?? null,
+      longitude: geoPoint?.longitude ?? null,
       latestReading: latest
         ? {
             sampledAt: latest.sampledAt.toISOString(),

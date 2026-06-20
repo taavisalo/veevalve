@@ -11,6 +11,7 @@ import {
 } from '@prisma/client';
 import {
   detectStatusChange,
+  lest97ToWgs84,
   parseBeachLocationsXml,
   parseBeachSamplesXml,
   parsePoolFacilitiesXml,
@@ -693,6 +694,7 @@ export class WaterQualityService {
     facilities: ReturnType<typeof parsePoolFacilitiesXml>,
   ): Promise<number> {
     for (const facility of facilities) {
+      const geoPoint = this.coordinateToGeoPoint(facility.coordinate);
       const savedFacility = await this.prisma.poolFacility.upsert({
         where: { externalId: facility.externalId },
         update: {
@@ -702,6 +704,8 @@ export class WaterQualityService {
           sourceUrl: facility.sourceUrl,
           coordinateX: facility.coordinate?.x,
           coordinateY: facility.coordinate?.y,
+          latitude: geoPoint?.latitude,
+          longitude: geoPoint?.longitude,
           userCount: facility.userCount,
           ownerExternalId: facility.ownerExternalId,
           ownerName: facility.ownerName,
@@ -718,6 +722,8 @@ export class WaterQualityService {
           sourceUrl: facility.sourceUrl,
           coordinateX: facility.coordinate?.x,
           coordinateY: facility.coordinate?.y,
+          latitude: geoPoint?.latitude,
+          longitude: geoPoint?.longitude,
           userCount: facility.userCount,
           ownerExternalId: facility.ownerExternalId,
           ownerName: facility.ownerName,
@@ -1288,6 +1294,10 @@ export class WaterQualityService {
     return `name:${hash}`;
   }
 
+  private coordinateToGeoPoint(coordinate: ParsedCoordinate | undefined) {
+    return coordinate ? lest97ToWgs84(coordinate) : undefined;
+  }
+
   private async upsertPlace(input: UpsertPlaceInput): Promise<Place> {
     const key = this.externalKey(input.type, input.externalId);
     const cached = this.placeCache.get(key);
@@ -1298,6 +1308,7 @@ export class WaterQualityService {
     const municipality =
       input.municipality ??
       this.resolveMunicipality(input.addressEt);
+    const geoPoint = this.coordinateToGeoPoint(input.coordinate);
 
     const place = await this.prisma.place.upsert({
       where: { externalKey: key },
@@ -1310,6 +1321,8 @@ export class WaterQualityService {
         addressEn: input.addressEt,
         coordinateX: input.coordinate?.x,
         coordinateY: input.coordinate?.y,
+        latitude: geoPoint?.latitude,
+        longitude: geoPoint?.longitude,
         sourceUrl: input.sourceUrl,
       },
       create: {
@@ -1323,6 +1336,8 @@ export class WaterQualityService {
         addressEn: input.addressEt,
         coordinateX: input.coordinate?.x,
         coordinateY: input.coordinate?.y,
+        latitude: geoPoint?.latitude,
+        longitude: geoPoint?.longitude,
         sourceUrl: input.sourceUrl,
       },
     });
@@ -1335,6 +1350,8 @@ export class WaterQualityService {
     placeId: string,
     point: ParsedSamplingPoint,
   ) {
+    const geoPoint = this.coordinateToGeoPoint(point.coordinate);
+
     return this.prisma.samplingPoint.upsert({
       where: {
         placeId_externalId: {
@@ -1347,6 +1364,8 @@ export class WaterQualityService {
         address: point.address,
         coordinateX: point.coordinate?.x,
         coordinateY: point.coordinate?.y,
+        latitude: geoPoint?.latitude,
+        longitude: geoPoint?.longitude,
         locationDetails: point.locationDetails,
         waterSourceType: point.waterSourceType,
         pointType: point.pointType,
@@ -1359,6 +1378,8 @@ export class WaterQualityService {
         address: point.address,
         coordinateX: point.coordinate?.x,
         coordinateY: point.coordinate?.y,
+        latitude: geoPoint?.latitude,
+        longitude: geoPoint?.longitude,
         locationDetails: point.locationDetails,
         waterSourceType: point.waterSourceType,
         pointType: point.pointType,

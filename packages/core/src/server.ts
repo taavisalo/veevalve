@@ -9,3 +9,5 @@ export * from './notifications/status-change';
 export * from './notifications/location';
 export * from './places/place-api';
 export * from './search/fuzzy';
+export * from './geo/distance';
+export * from './geo/lest97';
