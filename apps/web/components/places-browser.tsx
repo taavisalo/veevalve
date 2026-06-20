@@ -1129,7 +1129,7 @@ export const PlacesBrowser = ({
                   ? `${suggestionsListId}-${activeSuggestionIndex}`
                   : undefined
               }
-              className="h-14 w-full rounded-2xl border border-emerald-200 bg-white pl-12 pr-12 text-sm text-ink shadow-card outline-none transition placeholder:text-slate-400 focus:border-accent focus:ring-2 focus:ring-emerald-200 sm:text-base"
+              className="h-14 w-full rounded-2xl border border-emerald-200 bg-white pl-12 pr-12 text-base text-ink shadow-card outline-none transition placeholder:text-slate-400 focus:border-accent focus:ring-2 focus:ring-emerald-200"
             />
             {searchInput ? (
               <button
