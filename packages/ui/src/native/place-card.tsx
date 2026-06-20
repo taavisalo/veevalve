@@ -31,7 +31,7 @@ const buildGoogleMapsSearchUrl = (address: string): string =>
 const isSafeGoogleMapsSearchUrl = (url: string): boolean =>
   url.startsWith(GOOGLE_MAPS_SEARCH_BASE_URL);
 
-const toTerviseametTabId = (placeType: PlaceType): string => (placeType === 'POOL' ? 'U' : 'A');
+const toTerviseametTabId = (placeType: PlaceType): string => (placeType === 'POOL' ? 'U' : 'SV');
 
 const buildTerviseametReportUrl = (externalId: string, placeType: PlaceType): string =>
   `${TERVISEAMET_REPORT_BASE_URL}?id=${encodeURIComponent(externalId)}&active_tab_id=${toTerviseametTabId(placeType)}`;
@@ -190,6 +190,7 @@ export const NativePlaceCard = ({
       : (placeAddress ?? placeName);
   const [showExactSampledAt, setShowExactSampledAt] = useState(false);
   const [showBadDetails, setShowBadDetails] = useState(false);
+  const [showGoodReport, setShowGoodReport] = useState(false);
 
   const sampledDate = place.latestReading ? toValidDate(place.latestReading.sampledAt) : undefined;
   const exactSampledAtIso = place.latestReading
@@ -236,6 +237,19 @@ export const NativePlaceCard = ({
       : showBadDetails
         ? 'Peida detailid'
         : 'Näita detaile';
+  const goodReportToggleLabel =
+    locale === 'en'
+      ? showGoodReport
+        ? 'Hide report'
+        : 'Show report'
+      : showGoodReport
+        ? 'Peida raport'
+        : 'Näita raportit';
+  const reportExternalId = place.externalId.trim();
+  const fullReportUrl =
+    reportExternalId.length > 0
+      ? buildTerviseametReportUrl(reportExternalId, place.type)
+      : undefined;
   const statusPanelTitle = locale === 'en' ? 'Water quality' : 'Vee kvaliteet';
   const statusInlineHint =
     status === 'BAD'
@@ -247,9 +261,11 @@ export const NativePlaceCard = ({
           ? 'Show details'
           : 'Näita detaile'
       : status === 'GOOD'
-        ? locale === 'en'
-          ? 'Compliant'
-          : 'Korras'
+        ? fullReportUrl
+          ? goodReportToggleLabel
+          : locale === 'en'
+            ? 'Compliant'
+            : 'Korras'
         : locale === 'en'
           ? 'No rating'
           : 'Hinnang puudub';
@@ -259,11 +275,6 @@ export const NativePlaceCard = ({
       : 'Allikandmed ei sisaldanud täpsemaid põhjuseid.';
   const fullReportLabel =
     locale === 'en' ? 'Open full report on Terviseamet' : 'Ava täielik raport Terviseameti lehel';
-  const reportExternalId = place.externalId.trim();
-  const fullReportUrl =
-    reportExternalId.length > 0
-      ? buildTerviseametReportUrl(reportExternalId, place.type)
-      : undefined;
 
   const openAddressInMaps = async (query: string): Promise<void> => {
     const url = buildGoogleMapsSearchUrl(query);
@@ -295,6 +306,29 @@ export const NativePlaceCard = ({
       console.error(error);
     }
   };
+  const fullReportLink = fullReportUrl ? (
+    <Pressable
+      accessibilityRole="link"
+      accessibilityLabel={fullReportLabel}
+      style={({ pressed }) => [
+        styles.reportLink,
+        pressed ? styles.reportLinkPressed : null,
+      ]}
+      onPress={() => {
+        void openFullReport(fullReportUrl);
+      }}
+    >
+      <Text style={[styles.reportLinkText, status === 'GOOD' ? styles.reportLinkTextGood : null]}>
+        {fullReportLabel}
+      </Text>
+      <Text
+        aria-hidden
+        style={[styles.reportLinkIcon, status === 'GOOD' ? styles.reportLinkIconGood : null]}
+      >
+        ↗
+      </Text>
+    </Pressable>
+  ) : null;
 
   return (
     <View
@@ -408,24 +442,7 @@ export const NativePlaceCard = ({
               ) : (
                 <Text style={styles.badDetailsFallback}>{badDetailsFallbackText}</Text>
               )}
-              {fullReportUrl ? (
-                <Pressable
-                  accessibilityRole="link"
-                  accessibilityLabel={fullReportLabel}
-                  style={({ pressed }) => [
-                    styles.reportLink,
-                    pressed ? styles.reportLinkPressed : null,
-                  ]}
-                  onPress={() => {
-                    void openFullReport(fullReportUrl);
-                  }}
-                >
-                  <Text style={styles.reportLinkText}>{fullReportLabel}</Text>
-                  <Text aria-hidden style={styles.reportLinkIcon}>
-                    ↗
-                  </Text>
-                </Pressable>
-              ) : null}
+              {fullReportLink}
             </View>
           ) : null}
         </View>
@@ -439,48 +456,79 @@ export const NativePlaceCard = ({
             },
           ]}
         >
-          <View style={styles.statusPanelTopRow}>
-            <View style={styles.statusPanelMainRow}>
-              <View
-                style={[styles.statusSymbolWrap, { backgroundColor: statusPalette.iconBackground }]}
-              >
-                <Text style={[styles.statusSymbolText, { color: statusPalette.iconText }]}>
-                  {getStatusSymbol(status)}
-                </Text>
-              </View>
-              <View style={styles.statusPanelTextBlock}>
-                <Text style={[styles.statusPanelTitle, { color: statusPalette.panelText }]}>
-                  {statusPanelTitle}
-                </Text>
-                <Text style={[styles.statusLabel, { color: statusPalette.panelText }]}>
-                  {statusLabel}
-                  <Text style={[styles.statusInlineHint, { color: statusPalette.panelText }]}>
-                    {' '}
-                    • {statusInlineHint}
-                  </Text>
-                </Text>
-              </View>
-            </View>
-          </View>
           {status === 'GOOD' && fullReportUrl ? (
             <Pressable
-              accessibilityRole="link"
-              accessibilityLabel={fullReportLabel}
+              accessibilityRole="button"
+              accessibilityLabel={goodReportToggleLabel}
+              accessibilityState={{ expanded: showGoodReport }}
               style={({ pressed }) => [
-                styles.reportLink,
-                pressed ? styles.reportLinkPressed : null,
+                styles.statusPanelToggle,
+                pressed ? styles.statusPanelPressed : null,
               ]}
-              onPress={() => {
-                void openFullReport(fullReportUrl);
-              }}
+              onPress={() => setShowGoodReport((value) => !value)}
             >
-              <Text style={[styles.reportLinkText, styles.reportLinkTextGood]}>
-                {fullReportLabel}
-              </Text>
-              <Text aria-hidden style={[styles.reportLinkIcon, styles.reportLinkIconGood]}>
-                ↗
-              </Text>
+              <View style={styles.statusPanelTopRow}>
+                <View style={styles.statusPanelMainRow}>
+                  <View
+                    style={[
+                      styles.statusSymbolWrap,
+                      { backgroundColor: statusPalette.iconBackground },
+                    ]}
+                  >
+                    <Text style={[styles.statusSymbolText, { color: statusPalette.iconText }]}>
+                      {getStatusSymbol(status)}
+                    </Text>
+                  </View>
+                  <View style={styles.statusPanelTextBlock}>
+                    <Text style={[styles.statusPanelTitle, { color: statusPalette.panelText }]}>
+                      {statusPanelTitle}
+                    </Text>
+                    <Text style={[styles.statusLabel, { color: statusPalette.panelText }]}>
+                      {statusLabel}
+                      <Text style={[styles.statusInlineHint, { color: statusPalette.panelText }]}>
+                        {' '}
+                        • {statusInlineHint}
+                      </Text>
+                    </Text>
+                  </View>
+                </View>
+                <Text style={[styles.statusPanelChevron, { color: statusPalette.panelText }]}>
+                  {showGoodReport ? '▾' : '▸'}
+                </Text>
+              </View>
             </Pressable>
+          ) : (
+            <View style={styles.statusPanelTopRow}>
+              <View style={styles.statusPanelMainRow}>
+                <View
+                  style={[
+                    styles.statusSymbolWrap,
+                    { backgroundColor: statusPalette.iconBackground },
+                  ]}
+                >
+                  <Text style={[styles.statusSymbolText, { color: statusPalette.iconText }]}>
+                    {getStatusSymbol(status)}
+                  </Text>
+                </View>
+                <View style={styles.statusPanelTextBlock}>
+                  <Text style={[styles.statusPanelTitle, { color: statusPalette.panelText }]}>
+                    {statusPanelTitle}
+                  </Text>
+                  <Text style={[styles.statusLabel, { color: statusPalette.panelText }]}>
+                    {statusLabel}
+                    <Text style={[styles.statusInlineHint, { color: statusPalette.panelText }]}>
+                      {' '}
+                      • {statusInlineHint}
+                    </Text>
+                  </Text>
+                </View>
+              </View>
+            </View>
+          )}
+          {status === 'GOOD' && showGoodReport ? (
+            <View style={[styles.statusDetailsSection, { borderTopColor: statusPalette.panelBorder }]}>
+              {fullReportLink}
+            </View>
           ) : null}
         </View>
       )}

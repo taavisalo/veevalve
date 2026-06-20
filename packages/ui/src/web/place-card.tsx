@@ -64,7 +64,7 @@ const buildGoogleMapsSearchUrl = (address: string): string => {
 };
 
 const toTerviseametTabId = (placeType: PlaceType): string =>
-  placeType === 'POOL' ? 'U' : 'A';
+  placeType === 'POOL' ? 'U' : 'SV';
 
 const buildTerviseametReportUrl = (externalId: string, placeType: PlaceType): string => {
   const url = new URL(TERVISEAMET_REPORT_URL);
@@ -189,6 +189,7 @@ export const PlaceCard = ({
       : (placeAddress ?? placeName);
   const [showExactSampledAt, setShowExactSampledAt] = useState(false);
   const [showBadDetails, setShowBadDetails] = useState(false);
+  const [showGoodReport, setShowGoodReport] = useState(false);
 
   const sampledDate = place.latestReading ? toValidDate(place.latestReading.sampledAt) : undefined;
   const exactSampledAtIso = place.latestReading
@@ -230,6 +231,10 @@ export const PlaceCard = ({
     locale === 'en'
       ? (showBadDetails ? 'Hide details' : 'Show details')
       : (showBadDetails ? 'Peida detailid' : 'Näita detaile');
+  const goodReportToggleLabel =
+    locale === 'en'
+      ? (showGoodReport ? 'Hide report' : 'Show report')
+      : (showGoodReport ? 'Peida raport' : 'Näita raportit');
   const statusPanelTitle = locale === 'en' ? 'Water quality' : 'Vee kvaliteet';
   const statusInlineHint =
     status === 'BAD'
@@ -237,7 +242,7 @@ export const PlaceCard = ({
           ? (locale === 'en' ? 'Hide details' : 'Peida detailid')
           : (locale === 'en' ? 'Show details' : 'Näita detaile'))
       : status === 'GOOD'
-        ? (locale === 'en' ? 'Compliant' : 'Korras')
+        ? (fullReportUrl ? goodReportToggleLabel : (locale === 'en' ? 'Compliant' : 'Korras'))
         : (locale === 'en' ? 'No rating' : 'Hinnang puudub');
   const badDetailsFallbackText =
     locale === 'en'
@@ -247,6 +252,22 @@ export const PlaceCard = ({
     locale === 'en'
       ? 'Open full report on Terviseamet'
       : 'Ava täielik raport Terviseameti lehel';
+  const fullReportLink = fullReportUrl ? (
+    <a
+      href={fullReportUrl}
+      target="_blank"
+      rel="noopener noreferrer nofollow external"
+      referrerPolicy="no-referrer"
+      className={`mt-2 inline-flex items-center gap-1 text-xs font-medium underline decoration-dotted underline-offset-2 ${
+        status === 'GOOD'
+          ? 'text-emerald-700 hover:text-emerald-800'
+          : 'text-rose-700 hover:text-rose-800'
+      }`}
+    >
+      <span>{fullReportLabel}</span>
+      <span aria-hidden>↗</span>
+    </a>
+  ) : null;
 
   return (
     <article
@@ -334,51 +355,64 @@ export const PlaceCard = ({
               ) : (
                 <p className="text-xs text-rose-800">{badDetailsFallbackText}</p>
               )}
-              {fullReportUrl ? (
-                <a
-                  href={fullReportUrl}
-                  target="_blank"
-                  rel="noopener noreferrer nofollow external"
-                  referrerPolicy="no-referrer"
-                  className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-rose-700 underline decoration-dotted underline-offset-2 hover:text-rose-800"
-                >
-                  <span>{fullReportLabel}</span>
-                  <span aria-hidden>↗</span>
-                </a>
-              ) : null}
+              {fullReportLink}
             </div>
           ) : null}
         </div>
       ) : (
         <div className={`mt-3 rounded-xl border p-3 ${getStatusPanelClass(status)}`}>
-          <div className="flex items-center gap-3">
-            <span
-              aria-hidden
-              className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-sm font-black ${getStatusIconWrapClass(status)}`}
-            >
-              {getStatusSymbol(status)}
-            </span>
-            <div>
-              <p className={`text-[11px] font-semibold uppercase tracking-wide ${getStatusPanelTextClass(status)}`}>
-                {statusPanelTitle}
-              </p>
-              <p className={`mt-0.5 text-sm font-extrabold leading-tight ${getStatusPanelTextClass(status)}`}>
-                {statusLabel}
-                <span className="ml-1.5 text-xs font-semibold opacity-90">• {statusInlineHint}</span>
-              </p>
-            </div>
-          </div>
           {status === 'GOOD' && fullReportUrl ? (
-            <a
-              href={fullReportUrl}
-              target="_blank"
-              rel="noopener noreferrer nofollow external"
-              referrerPolicy="no-referrer"
-              className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-emerald-700 underline decoration-dotted underline-offset-2 hover:text-emerald-800"
+            <button
+              type="button"
+              onClick={() => setShowGoodReport((value) => !value)}
+              aria-expanded={showGoodReport}
+              title={goodReportToggleLabel}
+              className="w-full text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2"
             >
-              <span>{fullReportLabel}</span>
-              <span aria-hidden>↗</span>
-            </a>
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <span
+                    aria-hidden
+                    className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-sm font-black ${getStatusIconWrapClass(status)}`}
+                  >
+                    {getStatusSymbol(status)}
+                  </span>
+                  <div>
+                    <p className={`text-[11px] font-semibold uppercase tracking-wide ${getStatusPanelTextClass(status)}`}>
+                      {statusPanelTitle}
+                    </p>
+                    <p className={`mt-0.5 text-sm font-extrabold leading-tight ${getStatusPanelTextClass(status)}`}>
+                      {statusLabel}
+                      <span className="ml-1.5 text-xs font-semibold opacity-90">• {statusInlineHint}</span>
+                    </p>
+                  </div>
+                </div>
+                <span className={`text-lg font-bold ${getStatusPanelTextClass(status)}`} aria-hidden>
+                  {showGoodReport ? '▾' : '▸'}
+                </span>
+              </div>
+            </button>
+          ) : (
+            <div className="flex items-center gap-3">
+              <span
+                aria-hidden
+                className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-sm font-black ${getStatusIconWrapClass(status)}`}
+              >
+                {getStatusSymbol(status)}
+              </span>
+              <div>
+                <p className={`text-[11px] font-semibold uppercase tracking-wide ${getStatusPanelTextClass(status)}`}>
+                  {statusPanelTitle}
+                </p>
+                <p className={`mt-0.5 text-sm font-extrabold leading-tight ${getStatusPanelTextClass(status)}`}>
+                  {statusLabel}
+                  <span className="ml-1.5 text-xs font-semibold opacity-90">• {statusInlineHint}</span>
+                </p>
+              </div>
+            </div>
+          )}
+          {status === 'GOOD' && showGoodReport ? (
+            <div className="mt-2 border-t border-emerald-200/80 pt-2">{fullReportLink}</div>
           ) : null}
         </div>
       )}
