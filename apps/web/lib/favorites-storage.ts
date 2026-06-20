@@ -1,7 +1,8 @@
 const FAVORITES_STORAGE_KEY = 'veevalve.favorite_place_ids.v1';
+export const FAVORITE_PLACE_IDS_COOKIE_NAME = '__Host-veevalve.favorite_place_ids.v1';
 const MAX_FAVORITES = 50;
 
-const normalizeFavoriteIds = (value: unknown): string[] => {
+export const normalizeFavoritePlaceIds = (value: unknown): string[] => {
   if (!Array.isArray(value)) {
     return [];
   }
@@ -26,20 +27,58 @@ const normalizeFavoriteIds = (value: unknown): string[] => {
   return [...uniqueIds];
 };
 
-export const readFavoritePlaceIds = (): string[] => {
-  if (typeof window === 'undefined') {
+export const parseFavoritePlaceIds = (serialized?: string): string[] => {
+  if (!serialized) {
     return [];
+  }
+
+  try {
+    return normalizeFavoritePlaceIds(JSON.parse(serialized));
+  } catch {
+    try {
+      return normalizeFavoritePlaceIds(JSON.parse(decodeURIComponent(serialized)));
+    } catch {
+      return [];
+    }
+  }
+};
+
+const writeFavoritePlaceIdsCookie = (ids: string[]): void => {
+  if (typeof window === 'undefined' || typeof fetch === 'undefined') {
+    return;
+  }
+
+  try {
+    void fetch('/api/preferences', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ favoritePlaceIds: ids }),
+      credentials: 'same-origin',
+      keepalive: true,
+    }).catch(() => {
+      // Ignore sync failures; local storage and in-memory UI state have already updated.
+    });
+  } catch {
+    // Ignore storage failures (private mode / blocked requests).
+  }
+};
+
+export const readFavoritePlaceIds = (fallbackIds: string[] = []): string[] => {
+  if (typeof window === 'undefined') {
+    return normalizeFavoritePlaceIds(fallbackIds);
   }
 
   try {
     const raw = window.localStorage.getItem(FAVORITES_STORAGE_KEY);
     if (!raw) {
-      return [];
+      return normalizeFavoritePlaceIds(fallbackIds);
     }
 
-    return normalizeFavoriteIds(JSON.parse(raw));
+    return parseFavoritePlaceIds(raw);
   } catch {
-    return [];
+    return normalizeFavoritePlaceIds(fallbackIds);
   }
 };
 
@@ -48,17 +87,17 @@ export const writeFavoritePlaceIds = (ids: string[]): void => {
     return;
   }
 
-  const normalized = normalizeFavoriteIds(ids);
+  const normalized = normalizeFavoritePlaceIds(ids);
 
   try {
     if (normalized.length === 0) {
       window.localStorage.removeItem(FAVORITES_STORAGE_KEY);
-      return;
+    } else {
+      window.localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(normalized));
     }
-
-    window.localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(normalized));
   } catch {
     // Ignore storage failures (private mode / quota).
   }
-};
 
+  writeFavoritePlaceIdsCookie(normalized);
+};

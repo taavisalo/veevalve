@@ -4,6 +4,10 @@ import { cookies, headers } from 'next/headers';
 import type { AppLocale, PlaceType, QualityStatus } from '@veevalve/core/client';
 
 import { PlacesBrowser } from '../components/places-browser';
+import {
+  FAVORITE_PLACE_IDS_COOKIE_NAME,
+  parseFavoritePlaceIds,
+} from '../lib/favorites-storage';
 import { EMPTY_PLACE_METRICS, fetchPlaceMetrics } from '../lib/fetch-place-metrics';
 import { getPlaceMetricsFetchPolicy, getPlacesFetchPolicy } from '../lib/place-fetch-policy';
 import { fetchPlaces } from '../lib/fetch-places';
@@ -161,6 +165,9 @@ const HomePage = async ({ searchParams }: HomePageProps) => {
   const placesBrowserPreferences = parsePlacesBrowserPreferences(
     requestCookies.get(PLACES_BROWSER_PREFERENCES_COOKIE_NAME)?.value,
   );
+  const initialFavoriteIds = parseFavoritePlaceIds(
+    requestCookies.get(FAVORITE_PLACE_IDS_COOKIE_NAME)?.value,
+  );
   const metricsUiPreferences = parseMetricsUiPreferences(
     requestCookies.get(METRICS_PREFERENCES_COOKIE_NAME)?.value,
   );
@@ -242,6 +249,8 @@ const HomePage = async ({ searchParams }: HomePageProps) => {
         initialStatus={status}
         initialSearch={search}
         initialNearbySearchEnabled={placesBrowserPreferences.nearbySearchEnabled}
+        initialFavoritesVisible={placesBrowserPreferences.favoritesVisible}
+        initialFavoriteIds={initialFavoriteIds}
         initialPlaces={initialPlaces}
         initialNowIso={initialNowIso}
         initialMetrics={initialMetrics}

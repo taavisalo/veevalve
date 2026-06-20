@@ -3,6 +3,10 @@ import { describe, expect, it } from 'vitest';
 
 import { PUT } from '../app/api/preferences/route';
 import {
+  FAVORITE_PLACE_IDS_COOKIE_NAME,
+  parseFavoritePlaceIds,
+} from '../lib/favorites-storage';
+import {
   parsePlacesBrowserPreferences,
   PLACES_BROWSER_PREFERENCES_COOKIE_NAME,
 } from '../lib/ui-preferences-storage';
@@ -25,6 +29,7 @@ describe('preferences route', () => {
             typeFilter: 'POOL',
             statusFilter: 'BAD',
             nearbySearchEnabled: true,
+            favoritesVisible: false,
           },
         },
       }),
@@ -49,6 +54,33 @@ describe('preferences route', () => {
       typeFilter: 'POOL',
       statusFilter: 'BAD',
       nearbySearchEnabled: true,
+      favoritesVisible: false,
     });
+  });
+
+  it('sets secure __Host prefixed favorite ID cookies', async () => {
+    const response = await PUT(
+      createPreferencesRequest({
+        payload: {
+          favoritePlaceIds: ['place-1', 'place-2', 'place-1', ''],
+        },
+      }),
+    );
+
+    const setCookie = response.headers.get('set-cookie') ?? '';
+    const cookieValue = setCookie
+      .split(';')[0]
+      ?.slice(`${FAVORITE_PLACE_IDS_COOKIE_NAME}=`.length);
+
+    expect(response.status).toBe(200);
+    expect(setCookie).toContain(`${FAVORITE_PLACE_IDS_COOKIE_NAME}=`);
+    expect(FAVORITE_PLACE_IDS_COOKIE_NAME).toMatch(/^__Host-/);
+    expect(setCookie).toContain('Secure');
+    expect(setCookie).toContain('HttpOnly');
+    expect(setCookie).toContain('SameSite=lax');
+    expect(setCookie).toContain('Path=/');
+    expect(setCookie).toContain('Max-Age=31536000');
+    expect(setCookie).not.toContain('Domain=');
+    expect(parseFavoritePlaceIds(cookieValue)).toEqual(['place-1', 'place-2']);
   });
 });

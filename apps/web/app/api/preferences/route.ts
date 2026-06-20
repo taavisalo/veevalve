@@ -2,6 +2,10 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 import {
+  FAVORITE_PLACE_IDS_COOKIE_NAME,
+  normalizeFavoritePlaceIds,
+} from '../../../lib/favorites-storage';
+import {
   METRICS_PREFERENCES_COOKIE_NAME,
   normalizeMetricsUiPreferences,
   normalizePlacesBrowserPreferences,
@@ -25,6 +29,7 @@ export const PUT = async (request: NextRequest) => {
   }
 
   const candidate = payload as {
+    favoritePlaceIds?: unknown;
     metricsUi?: unknown;
     placesBrowser?: unknown;
   };
@@ -53,6 +58,15 @@ export const PUT = async (request: NextRequest) => {
       value: serializePreferenceCookieValue(
         normalizePlacesBrowserPreferences(candidate.placesBrowser),
       ),
+      ...cookieOptions,
+    });
+    wrotePreference = true;
+  }
+
+  if ('favoritePlaceIds' in candidate) {
+    response.cookies.set({
+      name: FAVORITE_PLACE_IDS_COOKIE_NAME,
+      value: serializePreferenceCookieValue(normalizeFavoritePlaceIds(candidate.favoritePlaceIds)),
       ...cookieOptions,
     });
     wrotePreference = true;

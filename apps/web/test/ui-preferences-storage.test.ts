@@ -42,6 +42,7 @@ describe('places browser preferences storage', () => {
       typeFilter: 'ALL',
       statusFilter: 'ALL',
       nearbySearchEnabled: false,
+      favoritesVisible: true,
     });
   });
 
@@ -54,6 +55,7 @@ describe('places browser preferences storage', () => {
             typeFilter: 'POOL',
             statusFilter: 'BAD',
             nearbySearchEnabled: true,
+            favoritesVisible: false,
           }),
         ],
       ]),
@@ -64,6 +66,7 @@ describe('places browser preferences storage', () => {
       typeFilter: 'POOL',
       statusFilter: 'BAD',
       nearbySearchEnabled: true,
+      favoritesVisible: false,
     });
   });
 
@@ -76,6 +79,7 @@ describe('places browser preferences storage', () => {
             typeFilter: 'SPA',
             statusFilter: 'OK',
             nearbySearchEnabled: 'yes',
+            favoritesVisible: 'no',
           }),
         ],
       ]),
@@ -86,6 +90,7 @@ describe('places browser preferences storage', () => {
       typeFilter: 'ALL',
       statusFilter: 'ALL',
       nearbySearchEnabled: false,
+      favoritesVisible: true,
     });
   });
 
@@ -97,6 +102,7 @@ describe('places browser preferences storage', () => {
             typeFilter: 'BEACH',
             statusFilter: 'GOOD',
             nearbySearchEnabled: true,
+            favoritesVisible: false,
           }),
         ),
       ),
@@ -104,6 +110,7 @@ describe('places browser preferences storage', () => {
       typeFilter: 'BEACH',
       statusFilter: 'GOOD',
       nearbySearchEnabled: true,
+      favoritesVisible: false,
     });
   });
 
@@ -133,12 +140,14 @@ describe('places browser preferences storage', () => {
       typeFilter: 'BEACH',
       statusFilter: 'UNKNOWN',
       nearbySearchEnabled: true,
+      favoritesVisible: false,
     });
 
     const expectedPreferences = {
       typeFilter: 'BEACH',
       statusFilter: 'UNKNOWN',
       nearbySearchEnabled: true,
+      favoritesVisible: false,
     };
     expect(JSON.parse(storage.getItem(PLACES_BROWSER_LOCAL_STORAGE_KEY) ?? '')).toEqual(
       expectedPreferences,

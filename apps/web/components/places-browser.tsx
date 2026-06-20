@@ -164,6 +164,8 @@ interface PlacesBrowserProps {
   initialStatus: QualityStatus | 'ALL';
   initialSearch?: string;
   initialNearbySearchEnabled: boolean;
+  initialFavoritesVisible: boolean;
+  initialFavoriteIds: string[];
   initialPlaces: PlaceWithLatestReading[];
   initialNowIso: string;
   initialMetrics: PlaceMetrics;
@@ -353,6 +355,8 @@ export const PlacesBrowser = ({
   initialStatus,
   initialSearch,
   initialNearbySearchEnabled,
+  initialFavoritesVisible,
+  initialFavoriteIds,
   initialPlaces,
   initialNowIso,
   initialMetrics,
@@ -387,7 +391,8 @@ export const PlacesBrowser = ({
   const [metricsExpanded, setMetricsExpanded] = useState(initialMetricsExpanded);
   const [metricsVisible, setMetricsVisible] = useState(initialMetricsVisible);
   const [aboutVisible, setAboutVisible] = useState(false);
-  const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
+  const [favoriteIds, setFavoriteIds] = useState<string[]>(initialFavoriteIds);
+  const [favoritesVisible, setFavoritesVisible] = useState(initialFavoritesVisible);
   const [favoriteActionPendingIds, setFavoriteActionPendingIds] = useState<Set<string>>(new Set());
   const [favoritesHydrated, setFavoritesHydrated] = useState(false);
   const [favoritesLoading, setFavoritesLoading] = useState(false);
@@ -625,7 +630,7 @@ export const PlacesBrowser = ({
   }, [notificationsPreferencesHydrated, statusNotificationsEnabled]);
 
   useEffect(() => {
-    setFavoriteIds(readFavoritePlaceIds());
+    setFavoriteIds((currentIds) => readFavoritePlaceIds(currentIds));
     setFavoritesHydrated(true);
   }, []);
 
@@ -640,6 +645,11 @@ export const PlacesBrowser = ({
   useEffect(() => {
     if (favoriteIds.length === 0) {
       setFavoritePlaces([]);
+      setFavoritesLoading(false);
+      return;
+    }
+
+    if (!favoritesVisible) {
       setFavoritesLoading(false);
       return;
     }
@@ -684,7 +694,7 @@ export const PlacesBrowser = ({
     return () => {
       controller.abort();
     };
-  }, [favoriteIds, locale]);
+  }, [favoriteIds, favoritesVisible, locale]);
 
   useEffect(() => {
     if (!notificationsSupported || !notificationsPreferencesHydrated) {
@@ -830,7 +840,14 @@ export const PlacesBrowser = ({
   }, [isNearbySearchActive, nearbyOrigin, places]);
   const badShare = formatShare(metrics.badQualityEntries, metrics.totalEntries);
   const favoriteIdSet = useMemo(() => new Set(favoriteIds), [favoriteIds]);
-  const hasFavorites = favoriteIds.length > 0;
+  const favoriteCount = favoriteIds.length;
+  const formattedFavoriteCount = new Intl.NumberFormat(locale === 'en' ? 'en-GB' : 'et-EE').format(
+    favoriteCount,
+  );
+  const hasFavorites = favoriteCount > 0;
+  const favoritesToggleLabel = favoritesVisible
+    ? (locale === 'et' ? 'Peida' : 'Hide')
+    : (locale === 'et' ? 'Näita' : 'Show');
   const webPushConfigured = WEB_PUSH_VAPID_PUBLIC_KEY.trim().length > 0;
   const notificationsReady =
     notificationsSupported &&
@@ -924,6 +941,7 @@ export const PlacesBrowser = ({
       typeFilter,
       statusFilter,
       nearbySearchEnabled,
+      favoritesVisible,
     });
 
     const url = new URL(window.location.href);
@@ -944,7 +962,7 @@ export const PlacesBrowser = ({
     if (nextUrl !== currentUrl) {
       window.history.replaceState(window.history.state, '', nextUrl);
     }
-  }, [nearbySearchEnabled, statusFilter, typeFilter]);
+  }, [favoritesVisible, nearbySearchEnabled, statusFilter, typeFilter]);
 
   const toggleStatusNotifications = async () => {
     if (!webPushConfigured) {
@@ -1534,63 +1552,90 @@ export const PlacesBrowser = ({
       </section>
 
       {hasFavorites ? (
-        <section className="mt-8" aria-live="polite">
-          <div className="mb-3 flex items-center justify-between gap-2">
-            <h2 className="text-sm font-semibold uppercase tracking-[0.12em] text-accent">
-              {t('favorites', locale)}
-            </h2>
-            <span className="rounded-full border border-emerald-100 bg-white px-2 py-0.5 text-xs font-medium text-slate-600">
-              {favoritePlaces.length > 0 ? favoritePlaces.length : favoriteIds.length}
-            </span>
-          </div>
-          <p
-            className={`mb-3 text-xs text-slate-500 ${favoritesNoticeSingleLine ? 'whitespace-nowrap' : ''}`}
-          >
-            {!webPushConfigured
-              ? locale === 'et'
-                ? 'Brauseri tõuketeavitused pole veel seadistatud.'
-                : 'Browser push notifications are not configured yet.'
-              : notificationsSupported
-              ? notificationsActive
-                ? (locale === 'et'
-                    ? 'Tõuketeavitused sees: lemmikute muutused ka suletud lehel.'
-                    : 'Push alerts on: favorite changes are sent when closed.')
-                : (locale === 'et'
-                    ? 'Lülita tõuketeavitused sisse, et saada märguanne lemmikute staatuse muutustest.'
-                    : 'Enable push alerts to get notified when favorite statuses change.')
-              : (locale === 'et'
-                  ? 'Sinu brauser ei toeta tõuketeavitusi.'
-                  : 'Your browser does not support push notifications.')}
-          </p>
-          {!favoritesHydrated || (favoritesLoading && favoritePlaces.length === 0) ? (
-            <div role="status" className="grid min-h-[12rem] gap-4 md:grid-cols-2">
-              <div className="animate-pulse rounded-xl border border-emerald-100 bg-card p-4" />
-              <div className="hidden animate-pulse rounded-xl border border-emerald-100 bg-card p-4 md:block" />
-              <span className="sr-only">
-                {locale === 'et' ? 'Laadin lemmikuid...' : 'Loading favorites...'}
+        <section id="favorite-places" className="mt-8" aria-live="polite">
+          <div className="mb-3 flex">
+            <button
+              type="button"
+              onClick={() => setFavoritesVisible((value) => !value)}
+              aria-pressed={favoritesVisible}
+              aria-controls="favorite-places-content"
+              aria-expanded={favoritesVisible}
+              className={`inline-flex min-h-9 items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 ${
+                favoritesVisible
+                  ? 'border-emerald-700 bg-emerald-700 text-white'
+                  : 'border-emerald-100 bg-white text-emerald-800 hover:border-emerald-700'
+              }`}
+            >
+              <span aria-hidden="true" className="text-base leading-none">
+                ★
               </span>
-            </div>
-          ) : favoritePlaces.length === 0 ? (
-            <div className="flex min-h-[12rem] items-center rounded-xl border border-emerald-100 bg-card p-4 text-sm text-slate-600">
-              {locale === 'et'
-                ? 'Lemmikuid ei õnnestunud hetkel laadida.'
-                : 'Could not load favorites right now.'}
+              <span>{t('favorites', locale)}</span>
+              <span
+                aria-live="polite"
+                className={`rounded-full px-2 py-0.5 text-xs ${
+                  favoritesVisible ? 'bg-white/20 text-white' : 'bg-emerald-50 text-slate-700'
+                }`}
+              >
+                {formattedFavoriteCount}
+              </span>
+              <span className="text-xs">{favoritesToggleLabel}</span>
+            </button>
+          </div>
+
+          {favoritesVisible ? (
+            <div id="favorite-places-content">
+              <p
+                className={`mb-3 text-xs text-slate-500 ${favoritesNoticeSingleLine ? 'whitespace-nowrap' : ''}`}
+              >
+                {!webPushConfigured
+                  ? locale === 'et'
+                    ? 'Brauseri tõuketeavitused pole veel seadistatud.'
+                    : 'Browser push notifications are not configured yet.'
+                  : notificationsSupported
+                  ? notificationsActive
+                    ? (locale === 'et'
+                        ? 'Tõuketeavitused sees: lemmikute muutused ka suletud lehel.'
+                        : 'Push alerts on: favorite changes are sent when closed.')
+                    : (locale === 'et'
+                        ? 'Lülita tõuketeavitused sisse, et saada märguanne lemmikute staatuse muutustest.'
+                        : 'Enable push alerts to get notified when favorite statuses change.')
+                  : (locale === 'et'
+                      ? 'Sinu brauser ei toeta tõuketeavitusi.'
+                      : 'Your browser does not support push notifications.')}
+              </p>
+              {!favoritesHydrated || (favoritesLoading && favoritePlaces.length === 0) ? (
+                <div role="status" className="grid min-h-[12rem] gap-4 md:grid-cols-2">
+                  <div className="animate-pulse rounded-xl border border-emerald-100 bg-card p-4" />
+                  <div className="hidden animate-pulse rounded-xl border border-emerald-100 bg-card p-4 md:block" />
+                  <span className="sr-only">
+                    {locale === 'et' ? 'Laadin lemmikuid...' : 'Loading favorites...'}
+                  </span>
+                </div>
+              ) : favoritePlaces.length === 0 ? (
+                <div className="flex min-h-[12rem] items-center rounded-xl border border-emerald-100 bg-card p-4 text-sm text-slate-600">
+                  {locale === 'et'
+                    ? 'Lemmikuid ei õnnestunud hetkel laadida.'
+                    : 'Could not load favorites right now.'}
+                </div>
+              ) : (
+                <div className="grid gap-4 md:grid-cols-2">
+                  {favoritePlaces.map((place, index) => (
+                    <div className={`fade-up ${getCardFadeDelayClass(index)}`} key={`favorite-${place.id}`}>
+                      <PlaceCard
+                        place={place}
+                        locale={locale}
+                        referenceTimeIso={referenceTimeIso}
+                        isFavorite
+                        favoriteUpdating={favoriteActionPendingIds.has(place.id)}
+                        onToggleFavorite={toggleFavorite}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           ) : (
-            <div className="grid gap-4 md:grid-cols-2">
-              {favoritePlaces.map((place, index) => (
-                <div className={`fade-up ${getCardFadeDelayClass(index)}`} key={`favorite-${place.id}`}>
-                  <PlaceCard
-                    place={place}
-                    locale={locale}
-                    referenceTimeIso={referenceTimeIso}
-                    isFavorite
-                    favoriteUpdating={favoriteActionPendingIds.has(place.id)}
-                    onToggleFavorite={toggleFavorite}
-                  />
-                </div>
-              ))}
-            </div>
+            <div id="favorite-places-content" hidden />
           )}
         </section>
       ) : null}

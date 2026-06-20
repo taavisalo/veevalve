@@ -9,6 +9,7 @@ export interface PlacesBrowserPreferences {
   typeFilter: PlaceType | 'ALL';
   statusFilter: QualityStatus | 'ALL';
   nearbySearchEnabled: boolean;
+  favoritesVisible: boolean;
 }
 
 const METRICS_PREFERENCES_KEY = 'veevalve.metrics_ui.v1';
@@ -25,6 +26,7 @@ const DEFAULT_PLACES_BROWSER_PREFERENCES: PlacesBrowserPreferences = {
   typeFilter: 'ALL',
   statusFilter: 'ALL',
   nearbySearchEnabled: false,
+  favoritesVisible: true,
 };
 
 const normalizeTypeFilter = (value: unknown): PlaceType | 'ALL' => {
@@ -68,6 +70,10 @@ export const normalizePlacesBrowserPreferences = (value: unknown): PlacesBrowser
       typeof candidate.nearbySearchEnabled === 'boolean'
         ? candidate.nearbySearchEnabled
         : DEFAULT_PLACES_BROWSER_PREFERENCES.nearbySearchEnabled,
+    favoritesVisible:
+      typeof candidate.favoritesVisible === 'boolean'
+        ? candidate.favoritesVisible
+        : DEFAULT_PLACES_BROWSER_PREFERENCES.favoritesVisible,
   };
 };
 
