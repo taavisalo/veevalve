@@ -1,16 +1,43 @@
+import type { PlaceType, QualityStatus } from '@veevalve/core/client';
+
 export interface MetricsUiPreferences {
   metricsVisible: boolean;
   metricsExpanded: boolean;
 }
 
+export interface PlacesBrowserPreferences {
+  typeFilter: PlaceType | 'ALL';
+  statusFilter: QualityStatus | 'ALL';
+  nearbySearchEnabled: boolean;
+}
+
 const METRICS_PREFERENCES_KEY = 'veevalve.metrics_ui.v1';
+export const METRICS_PREFERENCES_COOKIE_NAME = '__Host-veevalve.metrics_ui.v1';
+const PLACES_BROWSER_PREFERENCES_KEY = 'veevalve.places_browser.v1';
+export const PLACES_BROWSER_PREFERENCES_COOKIE_NAME = '__Host-veevalve.places_browser.v1';
 
 const DEFAULT_METRICS_UI_PREFERENCES: MetricsUiPreferences = {
   metricsVisible: false,
   metricsExpanded: false,
 };
 
-const normalizeMetricsUiPreferences = (value: unknown): MetricsUiPreferences => {
+const DEFAULT_PLACES_BROWSER_PREFERENCES: PlacesBrowserPreferences = {
+  typeFilter: 'ALL',
+  statusFilter: 'ALL',
+  nearbySearchEnabled: false,
+};
+
+const normalizeTypeFilter = (value: unknown): PlaceType | 'ALL' => {
+  return value === 'BEACH' || value === 'POOL' || value === 'ALL' ? value : 'ALL';
+};
+
+const normalizeStatusFilter = (value: unknown): QualityStatus | 'ALL' => {
+  return value === 'GOOD' || value === 'BAD' || value === 'UNKNOWN' || value === 'ALL'
+    ? value
+    : 'ALL';
+};
+
+export const normalizeMetricsUiPreferences = (value: unknown): MetricsUiPreferences => {
   if (!value || typeof value !== 'object') {
     return DEFAULT_METRICS_UI_PREFERENCES;
   }
@@ -28,6 +55,79 @@ const normalizeMetricsUiPreferences = (value: unknown): MetricsUiPreferences => 
   };
 };
 
+export const normalizePlacesBrowserPreferences = (value: unknown): PlacesBrowserPreferences => {
+  if (!value || typeof value !== 'object') {
+    return DEFAULT_PLACES_BROWSER_PREFERENCES;
+  }
+
+  const candidate = value as Partial<PlacesBrowserPreferences>;
+  return {
+    typeFilter: normalizeTypeFilter(candidate.typeFilter),
+    statusFilter: normalizeStatusFilter(candidate.statusFilter),
+    nearbySearchEnabled:
+      typeof candidate.nearbySearchEnabled === 'boolean'
+        ? candidate.nearbySearchEnabled
+        : DEFAULT_PLACES_BROWSER_PREFERENCES.nearbySearchEnabled,
+  };
+};
+
+export const parseMetricsUiPreferences = (serialized?: string): MetricsUiPreferences => {
+  if (!serialized) {
+    return DEFAULT_METRICS_UI_PREFERENCES;
+  }
+
+  try {
+    return normalizeMetricsUiPreferences(JSON.parse(serialized));
+  } catch {
+    try {
+      return normalizeMetricsUiPreferences(JSON.parse(decodeURIComponent(serialized)));
+    } catch {
+      return DEFAULT_METRICS_UI_PREFERENCES;
+    }
+  }
+};
+
+export const parsePlacesBrowserPreferences = (serialized?: string): PlacesBrowserPreferences => {
+  if (!serialized) {
+    return DEFAULT_PLACES_BROWSER_PREFERENCES;
+  }
+
+  try {
+    return normalizePlacesBrowserPreferences(JSON.parse(serialized));
+  } catch {
+    try {
+      return normalizePlacesBrowserPreferences(JSON.parse(decodeURIComponent(serialized)));
+    } catch {
+      return DEFAULT_PLACES_BROWSER_PREFERENCES;
+    }
+  }
+};
+
+const writeBrowserPreferenceCookie = (payload: {
+  metricsUi?: MetricsUiPreferences;
+  placesBrowser?: PlacesBrowserPreferences;
+}): void => {
+  if (typeof window === 'undefined' || typeof fetch === 'undefined') {
+    return;
+  }
+
+  try {
+    void fetch('/api/preferences', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+      credentials: 'same-origin',
+      keepalive: true,
+    }).catch(() => {
+      // Ignore sync failures; the in-memory UI state has already updated.
+    });
+  } catch {
+    // Ignore storage failures (private mode / blocked requests).
+  }
+};
+
 export const readMetricsUiPreferences = (): MetricsUiPreferences => {
   if (typeof window === 'undefined') {
     return DEFAULT_METRICS_UI_PREFERENCES;
@@ -39,7 +139,7 @@ export const readMetricsUiPreferences = (): MetricsUiPreferences => {
       return DEFAULT_METRICS_UI_PREFERENCES;
     }
 
-    return normalizeMetricsUiPreferences(JSON.parse(raw));
+    return parseMetricsUiPreferences(raw);
   } catch {
     return DEFAULT_METRICS_UI_PREFERENCES;
   }
@@ -56,4 +156,38 @@ export const writeMetricsUiPreferences = (preferences: MetricsUiPreferences): vo
   } catch {
     // Ignore storage failures (private mode / quota).
   }
+
+  writeBrowserPreferenceCookie({ metricsUi: normalized });
+};
+
+export const readPlacesBrowserPreferences = (): PlacesBrowserPreferences => {
+  if (typeof window === 'undefined') {
+    return DEFAULT_PLACES_BROWSER_PREFERENCES;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(PLACES_BROWSER_PREFERENCES_KEY);
+    if (!raw) {
+      return DEFAULT_PLACES_BROWSER_PREFERENCES;
+    }
+
+    return parsePlacesBrowserPreferences(raw);
+  } catch {
+    return DEFAULT_PLACES_BROWSER_PREFERENCES;
+  }
+};
+
+export const writePlacesBrowserPreferences = (preferences: PlacesBrowserPreferences): void => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  const normalized = normalizePlacesBrowserPreferences(preferences);
+  try {
+    window.localStorage.setItem(PLACES_BROWSER_PREFERENCES_KEY, JSON.stringify(normalized));
+  } catch {
+    // Ignore storage failures (private mode / quota).
+  }
+
+  writeBrowserPreferenceCookie({ placesBrowser: normalized });
 };

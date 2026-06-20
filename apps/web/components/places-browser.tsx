@@ -29,7 +29,10 @@ import {
   getFavoritePlacesFetchPolicy,
   getPlaceMetricsFetchPolicy,
 } from '../lib/place-fetch-policy';
-import { readMetricsUiPreferences, writeMetricsUiPreferences } from '../lib/ui-preferences-storage';
+import {
+  writeMetricsUiPreferences,
+  writePlacesBrowserPreferences,
+} from '../lib/ui-preferences-storage';
 import type * as WebPushClientModule from '../lib/web-push-client';
 
 const LATEST_RESULTS_LIMIT = 10;
@@ -160,9 +163,12 @@ interface PlacesBrowserProps {
   initialType: PlaceType | 'ALL';
   initialStatus: QualityStatus | 'ALL';
   initialSearch?: string;
+  initialNearbySearchEnabled: boolean;
   initialPlaces: PlaceWithLatestReading[];
   initialNowIso: string;
   initialMetrics: PlaceMetrics;
+  initialMetricsVisible: boolean;
+  initialMetricsExpanded: boolean;
 }
 
 interface Suggestion {
@@ -346,9 +352,12 @@ export const PlacesBrowser = ({
   initialType,
   initialStatus,
   initialSearch,
+  initialNearbySearchEnabled,
   initialPlaces,
   initialNowIso,
   initialMetrics,
+  initialMetricsVisible,
+  initialMetricsExpanded,
 }: PlacesBrowserProps) => {
   const [locale, setLocale] = useState<AppLocale>(initialLocale);
   const [typeFilter, setTypeFilter] = useState<PlaceType | 'ALL'>(initialType);
@@ -363,7 +372,10 @@ export const PlacesBrowser = ({
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(-1);
   const [error, setError] = useState<string | null>(null);
-  const [nearbyStatus, setNearbyStatus] = useState<NearbySearchStatus>('idle');
+  const [nearbyStatus, setNearbyStatus] = useState<NearbySearchStatus>(
+    initialNearbySearchEnabled ? 'requesting' : 'idle',
+  );
+  const [nearbySearchEnabled, setNearbySearchEnabled] = useState(initialNearbySearchEnabled);
   const [nearbyOrigin, setNearbyOrigin] = useState<GeoPoint | null>(null);
   const [nearbyAccuracyMeters, setNearbyAccuracyMeters] = useState<number | null>(null);
   const [referenceTimeIso, setReferenceTimeIso] = useState(initialNowIso);
@@ -372,10 +384,9 @@ export const PlacesBrowser = ({
   const [metricsLoaded, setMetricsLoaded] = useState(
     initialMetrics.totalEntries > 0 || initialMetrics.latestSourceUpdatedAt !== null,
   );
-  const [metricsExpanded, setMetricsExpanded] = useState(false);
-  const [metricsVisible, setMetricsVisible] = useState(false);
+  const [metricsExpanded, setMetricsExpanded] = useState(initialMetricsExpanded);
+  const [metricsVisible, setMetricsVisible] = useState(initialMetricsVisible);
   const [aboutVisible, setAboutVisible] = useState(false);
-  const [metricsPreferencesHydrated, setMetricsPreferencesHydrated] = useState(false);
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
   const [favoriteActionPendingIds, setFavoriteActionPendingIds] = useState<Set<string>>(new Set());
   const [favoritesHydrated, setFavoritesHydrated] = useState(false);
@@ -534,22 +545,11 @@ export const PlacesBrowser = ({
   }, [metricsLoaded, metricsVisible]);
 
   useEffect(() => {
-    const preferences = readMetricsUiPreferences();
-    setMetricsVisible(preferences.metricsVisible);
-    setMetricsExpanded(preferences.metricsExpanded);
-    setMetricsPreferencesHydrated(true);
-  }, []);
-
-  useEffect(() => {
-    if (!metricsPreferencesHydrated) {
-      return;
-    }
-
     writeMetricsUiPreferences({
       metricsVisible,
       metricsExpanded,
     });
-  }, [metricsExpanded, metricsPreferencesHydrated, metricsVisible]);
+  }, [metricsExpanded, metricsVisible]);
 
   useEffect(() => {
     let cancelled = false;
@@ -864,13 +864,17 @@ export const PlacesBrowser = ({
   });
 
   const clearNearbySearch = useCallback(() => {
+    setNearbySearchEnabled(false);
     setNearbyOrigin(null);
     setNearbyAccuracyMeters(null);
     setNearbyStatus('idle');
   }, []);
 
   const requestNearbySearch = useCallback(async () => {
+    setNearbySearchEnabled(true);
+
     if (!hasBrowserGeolocation()) {
+      setNearbySearchEnabled(false);
       setNearbyOrigin(null);
       setNearbyAccuracyMeters(null);
       setNearbyStatus('unsupported');
@@ -896,6 +900,7 @@ export const PlacesBrowser = ({
       setNearbyStatus('ready');
     } catch (geolocationError) {
       const nextNearbyStatus = toNearbySearchStatus(geolocationError);
+      setNearbySearchEnabled(false);
       setNearbyOrigin(null);
       setNearbyAccuracyMeters(null);
       setNearbyStatus(nextNearbyStatus);
@@ -905,6 +910,41 @@ export const PlacesBrowser = ({
       }
     }
   }, []);
+
+  useEffect(() => {
+    if (!initialNearbySearchEnabled) {
+      return;
+    }
+
+    void requestNearbySearch();
+  }, [initialNearbySearchEnabled, requestNearbySearch]);
+
+  useEffect(() => {
+    writePlacesBrowserPreferences({
+      typeFilter,
+      statusFilter,
+      nearbySearchEnabled,
+    });
+
+    const url = new URL(window.location.href);
+    if (typeFilter === 'ALL') {
+      url.searchParams.delete('type');
+    } else {
+      url.searchParams.set('type', typeFilter);
+    }
+
+    if (statusFilter === 'ALL') {
+      url.searchParams.delete('status');
+    } else {
+      url.searchParams.set('status', statusFilter);
+    }
+
+    const nextUrl = `${url.pathname}${url.search}${url.hash}`;
+    const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    if (nextUrl !== currentUrl) {
+      window.history.replaceState(window.history.state, '', nextUrl);
+    }
+  }, [nearbySearchEnabled, statusFilter, typeFilter]);
 
   const toggleStatusNotifications = async () => {
     if (!webPushConfigured) {

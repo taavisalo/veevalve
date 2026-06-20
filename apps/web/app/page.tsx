@@ -1,13 +1,19 @@
 import type { Metadata } from 'next';
-import { headers } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 
 import type { AppLocale, PlaceType, QualityStatus } from '@veevalve/core/client';
 
 import { PlacesBrowser } from '../components/places-browser';
-import { EMPTY_PLACE_METRICS } from '../lib/fetch-place-metrics';
-import { getPlacesFetchPolicy } from '../lib/place-fetch-policy';
+import { EMPTY_PLACE_METRICS, fetchPlaceMetrics } from '../lib/fetch-place-metrics';
+import { getPlaceMetricsFetchPolicy, getPlacesFetchPolicy } from '../lib/place-fetch-policy';
 import { fetchPlaces } from '../lib/fetch-places';
 import { resolveSiteUrl } from '../lib/site-url';
+import {
+  METRICS_PREFERENCES_COOKIE_NAME,
+  parseMetricsUiPreferences,
+  parsePlacesBrowserPreferences,
+  PLACES_BROWSER_PREFERENCES_COOKIE_NAME,
+} from '../lib/ui-preferences-storage';
 
 interface HomePageProps {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
@@ -38,6 +44,9 @@ const readParam = (
   const raw = params[key];
   return Array.isArray(raw) ? raw[0] : raw;
 };
+
+const hasParam = (params: Record<string, string | string[] | undefined>, key: string): boolean =>
+  Object.prototype.hasOwnProperty.call(params, key);
 
 const getLocaleLandingPath = (locale: AppLocale): string => {
   return locale === 'en' ? '/?locale=en' : '/';
@@ -145,12 +154,26 @@ const HomePage = async ({ searchParams }: HomePageProps) => {
   const nonce = requestHeaders.get('x-nonce') ?? undefined;
 
   const locale = normalizeLocale(readParam(resolvedSearchParams, 'locale'));
-  const type = normalizeType(readParam(resolvedSearchParams, 'type'));
-  const status = normalizeStatus(readParam(resolvedSearchParams, 'status'));
   const search = readParam(resolvedSearchParams, 'q')?.trim();
+  const filterParamsExplicit =
+    hasParam(resolvedSearchParams, 'type') || hasParam(resolvedSearchParams, 'status');
+  const requestCookies = await cookies();
+  const placesBrowserPreferences = parsePlacesBrowserPreferences(
+    requestCookies.get(PLACES_BROWSER_PREFERENCES_COOKIE_NAME)?.value,
+  );
+  const metricsUiPreferences = parseMetricsUiPreferences(
+    requestCookies.get(METRICS_PREFERENCES_COOKIE_NAME)?.value,
+  );
+  const type = filterParamsExplicit
+    ? normalizeType(readParam(resolvedSearchParams, 'type'))
+    : placesBrowserPreferences.typeFilter;
+  const status = filterParamsExplicit
+    ? normalizeStatus(readParam(resolvedSearchParams, 'status'))
+    : placesBrowserPreferences.statusFilter;
   const initialLimit = search ? 20 : 10;
   const initialNowIso = new Date().toISOString();
   const initialPlacesFetchPolicy = getPlacesFetchPolicy();
+  const initialMetricsFetchPolicy = getPlaceMetricsFetchPolicy();
   const siteUrl = resolveSiteUrl();
   const websiteSchema = {
     '@context': 'https://schema.org',
@@ -186,16 +209,24 @@ const HomePage = async ({ searchParams }: HomePageProps) => {
     '@graph': [websiteSchema, organizationSchema, webApplicationSchema],
   };
 
-  const initialPlaces = await fetchPlaces({
-    locale,
-    type: type === 'ALL' ? undefined : type,
-    status: status === 'ALL' ? undefined : status,
-    search,
-    limit: initialLimit,
-    cacheMode: initialPlacesFetchPolicy.cacheMode,
-    revalidateSeconds: initialPlacesFetchPolicy.revalidateSeconds,
-    includeBadDetails: false,
-  });
+  const [initialPlaces, initialMetrics] = await Promise.all([
+    fetchPlaces({
+      locale,
+      type: type === 'ALL' ? undefined : type,
+      status: status === 'ALL' ? undefined : status,
+      search,
+      limit: initialLimit,
+      cacheMode: initialPlacesFetchPolicy.cacheMode,
+      revalidateSeconds: initialPlacesFetchPolicy.revalidateSeconds,
+      includeBadDetails: false,
+    }),
+    metricsUiPreferences.metricsVisible
+      ? fetchPlaceMetrics({
+          cacheMode: initialMetricsFetchPolicy.cacheMode,
+          revalidateSeconds: initialMetricsFetchPolicy.revalidateSeconds,
+        })
+      : Promise.resolve(EMPTY_PLACE_METRICS),
+  ]);
 
   return (
     <>
@@ -210,9 +241,12 @@ const HomePage = async ({ searchParams }: HomePageProps) => {
         initialType={type}
         initialStatus={status}
         initialSearch={search}
+        initialNearbySearchEnabled={placesBrowserPreferences.nearbySearchEnabled}
         initialPlaces={initialPlaces}
         initialNowIso={initialNowIso}
-        initialMetrics={EMPTY_PLACE_METRICS}
+        initialMetrics={initialMetrics}
+        initialMetricsVisible={metricsUiPreferences.metricsVisible}
+        initialMetricsExpanded={metricsUiPreferences.metricsExpanded}
       />
     </>
   );
