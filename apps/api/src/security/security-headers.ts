@@ -53,10 +53,7 @@ export const getApiSecurityHeaders = (isProduction: boolean): SecurityHeader[] =
   return headers;
 };
 
-export const applyApiSecurityHeaders = (
-  reply: FastifyReply,
-  isProduction: boolean,
-): void => {
+export const applyApiSecurityHeaders = (reply: FastifyReply, isProduction: boolean): void => {
   for (const header of getApiSecurityHeaders(isProduction)) {
     reply.header(header.key, header.value);
   }

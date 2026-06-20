@@ -127,7 +127,9 @@ const RootLayout = ({ children }: RootLayoutProps) => {
 
   return (
     <html lang="et">
-      <body className={`${bodyFont.variable} ${titleFont.variable} bg-surface text-ink antialiased`}>
+      <body
+        className={`${bodyFont.variable} ${titleFont.variable} bg-surface text-ink antialiased`}
+      >
         <div className="min-h-screen bg-grid-pattern">{children}</div>
         {isProduction ? <Analytics /> : null}
         {isProduction ? <SpeedInsights /> : null}

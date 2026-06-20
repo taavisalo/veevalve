@@ -26,30 +26,30 @@
     "push:setup": "node ./scripts/setup-web-push.mjs"
   },
   "dependencies": {
-    "@fastify/static": "^9.0.0",
-    "@nestjs/common": "^11.1.14",
-    "@nestjs/config": "^4.0.3",
-    "@nestjs/core": "^11.1.14",
-    "@nestjs/platform-fastify": "^11.1.14",
-    "@nestjs/schedule": "^6.1.1",
-    "@nestjs/swagger": "^11.2.6",
-    "@prisma/adapter-pg": "^7.4.0",
-    "@prisma/client": "^7.4.0",
+    "@fastify/static": "^9.1.3",
+    "@nestjs/common": "^11.1.27",
+    "@nestjs/config": "^4.0.4",
+    "@nestjs/core": "^11.1.27",
+    "@nestjs/platform-fastify": "^11.1.27",
+    "@nestjs/schedule": "^6.1.3",
+    "@nestjs/swagger": "^11.4.4",
+    "@prisma/adapter-pg": "^7.8.0",
+    "@prisma/client": "^7.8.0",
     "@veevalve/core": "workspace:*",
     "class-transformer": "^0.5.1",
-    "class-validator": "^0.14.3",
-    "fastify": "^5.7.4",
-    "pg": "^8.18.0",
+    "class-validator": "^0.15.1",
+    "fastify": "^5.8.5",
+    "pg": "^8.22.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
     "web-push": "^3.6.7"
   },
   "devDependencies": {
-    "@nestjs/cli": "^11.0.16",
-    "@types/node": "^25.3.0",
+    "@nestjs/cli": "^11.0.23",
+    "@types/node": "^26.0.0",
     "@types/web-push": "^3.6.4",
-    "prisma": "^7.4.0",
-    "tsx": "^4.21.0",
-    "vitest": "^4.0.18"
+    "prisma": "^7.8.0",
+    "tsx": "^4.22.4",
+    "vitest": "^4.1.9"
   }
 }

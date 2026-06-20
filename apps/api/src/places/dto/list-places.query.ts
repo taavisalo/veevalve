@@ -1,6 +1,16 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
-import { IsBoolean, IsIn, IsInt, IsNumber, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+import {
+  IsBoolean,
+  IsIn,
+  IsInt,
+  IsNumber,
+  IsOptional,
+  IsString,
+  Max,
+  MaxLength,
+  Min,
+} from 'class-validator';
 
 const parseBoolean = (value: unknown, fallback: boolean): boolean => {
   if (typeof value === 'boolean') {
@@ -89,8 +99,7 @@ export class ListPlacesQuery {
   nearLongitude?: number;
 
   @ApiPropertyOptional({
-    description:
-      'Result page size. Defaults to 10 for non-search, 20 when `search` is provided.',
+    description: 'Result page size. Defaults to 10 for non-search, 20 when `search` is provided.',
     minimum: 1,
     maximum: 100,
     example: 10,

@@ -37,10 +37,10 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "fast-xml-parser": "^5.3.6"
+    "fast-xml-parser": "^5.9.3"
   },
   "devDependencies": {
     "tsup": "^8.5.1",
-    "vitest": "^4.0.18"
+    "vitest": "^4.1.9"
   }
 }

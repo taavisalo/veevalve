@@ -1,0 +1,4 @@
+.expo
+dist
+ios/build
+android/build

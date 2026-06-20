@@ -21,19 +21,19 @@
     "@react-native-async-storage/async-storage": "^2.2.0",
     "@veevalve/core": "workspace:*",
     "@veevalve/ui": "workspace:*",
-    "expo": "~54.0.33",
-    "expo-constants": "~18.0.13",
-    "expo-dev-client": "~6.0.20",
-    "expo-status-bar": "~3.0.9",
-    "react": "19.1.0",
-    "react-dom": "19.1.0",
-    "react-native": "0.81.5",
-    "react-native-safe-area-context": "~5.6.2",
+    "expo": "~56.0.12",
+    "expo-constants": "~56.0.18",
+    "expo-dev-client": "~56.0.20",
+    "expo-status-bar": "~56.0.4",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "react-native": "0.85.3",
+    "react-native-safe-area-context": "~5.7.0",
     "react-native-web": "^0.21.2"
   },
   "devDependencies": {
-    "@types/react": "~19.1.10",
-    "babel-preset-expo": "~54.0.10",
-    "vitest": "^4.0.18"
+    "@types/react": "~19.2.17",
+    "babel-preset-expo": "~56.0.15",
+    "vitest": "^4.1.9"
   }
 }

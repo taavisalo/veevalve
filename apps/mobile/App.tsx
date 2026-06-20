@@ -451,16 +451,15 @@ const App = () => {
         const municipalityMatched = containsSearchTerm(place.municipality, normalizedSearch);
         const addressMatched = containsSearchTerm(address, normalizedSearch);
 
-        let matchedBy: Suggestion['matchedBy'] = 'name';
-        if (nameMatched) {
-          matchedBy = 'name';
-        } else if (addressMatched) {
-          matchedBy = 'address';
-        } else if (municipalityMatched) {
-          matchedBy = 'municipality';
-        } else {
-          matchedBy = addressScore > nameScore ? 'address' : 'name';
-        }
+        const matchedBy: Suggestion['matchedBy'] = nameMatched
+          ? 'name'
+          : addressMatched
+            ? 'address'
+            : municipalityMatched
+              ? 'municipality'
+              : addressScore > nameScore
+                ? 'address'
+                : 'name';
 
         return {
           place,

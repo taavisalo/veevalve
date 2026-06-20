@@ -8,9 +8,7 @@ interface LatestPlaceStatusCandidate {
   overallStatus: QualityStatus;
 }
 
-const compareLatestPlaceStatusCandidates = <
-  T extends LatestPlaceStatusCandidate,
->(
+const compareLatestPlaceStatusCandidates = <T extends LatestPlaceStatusCandidate>(
   left: T,
   right: T,
 ): number => {
@@ -28,9 +26,7 @@ const compareLatestPlaceStatusCandidates = <
   return left.id.localeCompare(right.id);
 };
 
-export const pickRepresentativeLatestSamples = <
-  T extends LatestPlaceStatusCandidate,
->(
+export const pickRepresentativeLatestSamples = <T extends LatestPlaceStatusCandidate>(
   samples: T[],
 ): T[] => {
   const latestByPlaceId = new Map<string, T>();

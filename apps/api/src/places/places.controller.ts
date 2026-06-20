@@ -42,8 +42,7 @@ export class PlacesController {
   @Header('Cache-Control', LIVE_PLACE_CACHE_CONTROL)
   @ApiOperation({
     summary: 'Fetch places by id list',
-    description:
-      'Fetch multiple places by ids. Supports `ids=a&ids=b` and `ids=a,b` formats.',
+    description: 'Fetch multiple places by ids. Supports `ids=a&ids=b` and `ids=a,b` formats.',
   })
   @ApiOkResponse({
     type: PlaceListResponseDto,

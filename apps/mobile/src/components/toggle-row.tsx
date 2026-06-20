@@ -15,12 +15,7 @@ export const ToggleRow = memo(({ label, value, onToggle }: ToggleRowProps) => {
     >
       <Text style={styles.label}>{label}</Text>
       <View style={[styles.track, value ? styles.trackActive : styles.trackInactive]}>
-        <View
-          style={[
-            styles.knob,
-            value ? styles.knobRight : styles.knobLeft,
-          ]}
-        />
+        <View style={[styles.knob, value ? styles.knobRight : styles.knobLeft]} />
       </View>
     </Pressable>
   );

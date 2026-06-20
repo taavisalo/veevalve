@@ -87,8 +87,7 @@ export const parseTerviseametXml = (xml: string): WaterQualityReading[] => {
 
   return rows.map((row, index) => {
     const placeName =
-      field(row, ['nimi', 'name', 'title', 'location']) ??
-      `Unknown location ${String(index + 1)}`;
+      field(row, ['nimi', 'name', 'title', 'location']) ?? `Unknown location ${String(index + 1)}`;
 
     const sampledAt =
       field(row, ['sampledAt', 'sample_date', 'proovivott', 'date', 'kuupaev']) ??
@@ -96,8 +95,7 @@ export const parseTerviseametXml = (xml: string): WaterQualityReading[] => {
 
     const qualityLabel = field(row, ['hinnang', 'quality', 'status']);
     const status = parseQualityStatus(qualityLabel);
-    const placeId =
-      field(row, ['placeId', 'id', 'uid']) ?? fallbackId(placeName, sampledAt);
+    const placeId = field(row, ['placeId', 'id', 'uid']) ?? fallbackId(placeName, sampledAt);
     const parsedDate = new Date(sampledAt);
     const sampledAtIso = Number.isNaN(parsedDate.getTime())
       ? new Date().toISOString()

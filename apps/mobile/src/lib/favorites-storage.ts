@@ -55,4 +55,3 @@ export const writeFavoritePlaceIds = async (ids: string[]): Promise<void> => {
     // Ignore storage failures.
   }
 };
-

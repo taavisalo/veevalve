@@ -13,52 +13,65 @@ export const AboutPanel = ({ locale }: AboutPanelProps) => {
         {locale === 'et' ? 'Abi: andmeallikas ja uuendused' : 'Help: data source and updates'}
       </p>
       <p className="mt-1">
-        {locale === 'et'
-          ? (
-              <>
-                VeeValve kasutab Terviseameti avalikke XML-andmeid (
-                <a
-                  href={TERVISEAMET_DATA_URL}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-accent underline decoration-dotted underline-offset-2"
-                >
-                  vtiav.sm.ee
-                </a>
-                ). Kuvatakse viimased teadaolevad tulemused.
-              </>
-            )
-          : (
-              <>
-                VeeValve uses public XML feeds by the Estonian Health Board (
-                <a
-                  href={TERVISEAMET_DATA_URL}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-accent underline decoration-dotted underline-offset-2"
-                >
-                  vtiav.sm.ee
-                </a>
-                ). The app shows the latest known sample status.
-              </>
-            )}
+        {locale === 'et' ? (
+          <>
+            VeeValve kasutab Terviseameti avalikke XML-andmeid (
+            <a
+              href={TERVISEAMET_DATA_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-accent underline decoration-dotted underline-offset-2"
+            >
+              vtiav.sm.ee
+            </a>
+            ). Kuvatakse viimased teadaolevad tulemused.
+          </>
+        ) : (
+          <>
+            VeeValve uses public XML feeds by the Estonian Health Board (
+            <a
+              href={TERVISEAMET_DATA_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-accent underline decoration-dotted underline-offset-2"
+            >
+              vtiav.sm.ee
+            </a>
+            ). The app shows the latest known sample status.
+          </>
+        )}
       </p>
       <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-slate-600">
         {locale === 'et' ? (
           <>
-            <li>Ujulate ja basseinide allikad: `ujulad.xml`, `basseinid.xml`, `basseini_veeproovid_{'{year}'}.xml`.</li>
-            <li>Supluskohtade allikad: `supluskohad.xml`, `supluskoha_veeproovid_{'{year}'}.xml`.</li>
+            <li>
+              Ujulate ja basseinide allikad: `ujulad.xml`, `basseinid.xml`, `basseini_veeproovid_
+              {'{year}'}.xml`.
+            </li>
+            <li>
+              Supluskohtade allikad: `supluskohad.xml`, `supluskoha_veeproovid_{'{year}'}.xml`.
+            </li>
             <li>Automaatne sünkroon käivitub iga tunni 15. minutil.</li>
             <li>Muutuseid kontrollitakse `ETag`/`Last-Modified` päistega ja sisuräsi abil.</li>
-            <li>Asukohafaile kontrollitakse umbes kord ööpäevas; proovifaile sagedamini (basseinid ~2 h, rannad hooajal ~2 h, väljaspool hooaega ~24 h).</li>
+            <li>
+              Asukohafaile kontrollitakse umbes kord ööpäevas; proovifaile sagedamini (basseinid ~2
+              h, rannad hooajal ~2 h, väljaspool hooaega ~24 h).
+            </li>
           </>
         ) : (
           <>
-            <li>Pool sources: `ujulad.xml`, `basseinid.xml`, `basseini_veeproovid_{'{year}'}.xml`.</li>
+            <li>
+              Pool sources: `ujulad.xml`, `basseinid.xml`, `basseini_veeproovid_{'{year}'}.xml`.
+            </li>
             <li>Beach sources: `supluskohad.xml`, `supluskoha_veeproovid_{'{year}'}.xml`.</li>
             <li>Automatic sync runs every hour at minute 15.</li>
-            <li>Changes are detected via `ETag`/`Last-Modified` headers and content hash checks.</li>
-            <li>Location feeds are checked about once per day; sample feeds more often (pools ~2h, beaches in season ~2h, off-season ~24h).</li>
+            <li>
+              Changes are detected via `ETag`/`Last-Modified` headers and content hash checks.
+            </li>
+            <li>
+              Location feeds are checked about once per day; sample feeds more often (pools ~2h,
+              beaches in season ~2h, off-season ~24h).
+            </li>
           </>
         )}
       </ul>
@@ -90,12 +103,24 @@ export const AboutPanel = ({ locale }: AboutPanelProps) => {
       <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-slate-600">
         {locale === 'et' ? (
           <>
-            <li>Teavitused on valikulised: esmalt lisa koht lemmikutesse, siis lülita teavitused sisse.</li>
+            <li>
+              Teavitused on valikulised: esmalt lisa koht lemmikutesse, siis lülita teavitused
+              sisse.
+            </li>
             <li>Teavitusi saadetakse ainult lemmikutes olevatele kohtadele.</li>
-            <li>Märguanne tuleb staatuse muutuse korral (`Hea` ↔ `Halb`), mitte iga uuenduse peale.</li>
+            <li>
+              Märguanne tuleb staatuse muutuse korral (`Hea` ↔ `Halb`), mitte iga uuenduse peale.
+            </li>
             <li>Teavitused töötavad ka siis, kui leht on suletud (service workeri kaudu).</li>
-            <li>iPhone'is ja iPadis on vaja iOS/iPadOS 16.4+ ning `Home Screen`ile lisatud veebirakendust: ava Safaris `Share`, vali `Add to Home Screen`, käivita VeeValve `Home Screen`i ikoonist ja vajuta teavituste loas `Luba`.</li>
-            <li>Tavalises Safari vahekaardis jääb teavitusnupp väljalülitatuks, sest iOS ei luba seal Push API-t kasutada.</li>
+            <li>
+              iPhone'is ja iPadis on vaja iOS/iPadOS 16.4+ ning `Home Screen`ile lisatud
+              veebirakendust: ava Safaris `Share`, vali `Add to Home Screen`, käivita VeeValve `Home
+              Screen`i ikoonist ja vajuta teavituste loas `Luba`.
+            </li>
+            <li>
+              Tavalises Safari vahekaardis jääb teavitusnupp väljalülitatuks, sest iOS ei luba seal
+              Push API-t kasutada.
+            </li>
             <li>Kui teavitused on blokeeritud, ava need brauseri saidi seadetes uuesti.</li>
           </>
         ) : (
@@ -104,8 +129,15 @@ export const AboutPanel = ({ locale }: AboutPanelProps) => {
             <li>Notifications are sent only for favorited places.</li>
             <li>An alert is sent on status transition (`Good` ↔ `Bad`), not on every sync run.</li>
             <li>Alerts can be delivered even when the page is closed (via service worker).</li>
-            <li>On iPhone and iPad, push requires iOS/iPadOS 16.4+ and the Home Screen web app: in Safari, open Share, choose `Add to Home Screen`, launch VeeValve from that icon, then enable alerts there.</li>
-            <li>In a normal Safari tab, the alerts button stays off because iOS does not expose the Push API there.</li>
+            <li>
+              On iPhone and iPad, push requires iOS/iPadOS 16.4+ and the Home Screen web app: in
+              Safari, open Share, choose `Add to Home Screen`, launch VeeValve from that icon, then
+              enable alerts there.
+            </li>
+            <li>
+              In a normal Safari tab, the alerts button stays off because iOS does not expose the
+              Push API there.
+            </li>
             <li>If notifications are blocked, re-enable them in browser site settings.</li>
           </>
         )}

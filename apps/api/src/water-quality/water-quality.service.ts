@@ -32,12 +32,9 @@ const DEFAULT_POOL_SAMPLES_URL_TEMPLATE =
   'https://vtiav.sm.ee/index.php/opendata/basseini_veeproovid_{year}.xml';
 const DEFAULT_BEACH_SAMPLES_URL_TEMPLATE =
   'https://vtiav.sm.ee/index.php/opendata/supluskoha_veeproovid_{year}.xml';
-const DEFAULT_POOL_LOCATIONS_URL =
-  'https://vtiav.sm.ee/index.php/opendata/basseinid.xml';
-const DEFAULT_POOL_FACILITIES_URL =
-  'https://vtiav.sm.ee/index.php/opendata/ujulad.xml';
-const DEFAULT_BEACH_LOCATIONS_URL =
-  'https://vtiav.sm.ee/index.php/opendata/supluskohad.xml';
+const DEFAULT_POOL_LOCATIONS_URL = 'https://vtiav.sm.ee/index.php/opendata/basseinid.xml';
+const DEFAULT_POOL_FACILITIES_URL = 'https://vtiav.sm.ee/index.php/opendata/ujulad.xml';
+const DEFAULT_BEACH_LOCATIONS_URL = 'https://vtiav.sm.ee/index.php/opendata/supluskohad.xml';
 const DEFAULT_SAMPLE_YEARS_BACK = 1;
 const DEFAULT_ALLOWED_FEED_HOSTS = ['vtiav.sm.ee'];
 const UNKNOWN_MUNICIPALITY = 'Teadmata';
@@ -129,10 +126,7 @@ export class WaterQualityService {
   );
   private readonly maxFeedBytes = Math.max(
     1,
-    this.readPositiveInteger(
-      process.env.TERVISEAMET_MAX_FEED_BYTES,
-      DEFAULT_MAX_FEED_BYTES,
-    ),
+    this.readPositiveInteger(process.env.TERVISEAMET_MAX_FEED_BYTES, DEFAULT_MAX_FEED_BYTES),
   );
   private readonly internalSyncCronEnabled = this.readBoolean(
     process.env.ENABLE_INTERNAL_SYNC_CRON,
@@ -151,7 +145,9 @@ export class WaterQualityService {
   async scheduledSync(): Promise<void> {
     if (!this.internalSyncCronEnabled) {
       if (!this.hasLoggedDisabledInternalCron) {
-        this.logger.log('Internal sync cron is disabled. Use an external scheduler to call POST /water-quality/sync.');
+        this.logger.log(
+          'Internal sync cron is disabled. Use an external scheduler to call POST /water-quality/sync.',
+        );
         this.hasLoggedDisabledInternalCron = true;
       }
       return;
@@ -160,11 +156,11 @@ export class WaterQualityService {
     await this.syncFromTerviseamet({ force: false });
   }
 
-  async syncFromTerviseamet(
-    options: { force?: boolean } = {},
-  ): Promise<SyncSummary> {
+  async syncFromTerviseamet(options: { force?: boolean } = {}): Promise<SyncSummary> {
     if (this.syncInFlight) {
-      this.logger.warn('Sync requested while a previous sync is still running. Reusing active run.');
+      this.logger.warn(
+        'Sync requested while a previous sync is still running. Reusing active run.',
+      );
       return this.syncInFlight;
     }
 
@@ -177,9 +173,7 @@ export class WaterQualityService {
     return runningSync;
   }
 
-  private async runSyncFromTerviseamet(
-    options: { force?: boolean } = {},
-  ): Promise<SyncSummary> {
+  private async runSyncFromTerviseamet(options: { force?: boolean } = {}): Promise<SyncSummary> {
     this.placeCache.clear();
 
     const force = options.force ?? true;
@@ -322,11 +316,9 @@ export class WaterQualityService {
     const beachLocationsUrl =
       process.env.TERVISEAMET_BEACH_LOCATIONS_URL ?? DEFAULT_BEACH_LOCATIONS_URL;
     const poolSampleTemplate =
-      process.env.TERVISEAMET_POOL_SAMPLES_URL_TEMPLATE ??
-      DEFAULT_POOL_SAMPLES_URL_TEMPLATE;
+      process.env.TERVISEAMET_POOL_SAMPLES_URL_TEMPLATE ?? DEFAULT_POOL_SAMPLES_URL_TEMPLATE;
     const beachSampleTemplate =
-      process.env.TERVISEAMET_BEACH_SAMPLES_URL_TEMPLATE ??
-      DEFAULT_BEACH_SAMPLES_URL_TEMPLATE;
+      process.env.TERVISEAMET_BEACH_SAMPLES_URL_TEMPLATE ?? DEFAULT_BEACH_SAMPLES_URL_TEMPLATE;
     const yearsBack = this.readPositiveInteger(
       process.env.TERVISEAMET_SAMPLE_YEARS_BACK,
       DEFAULT_SAMPLE_YEARS_BACK,
@@ -463,8 +455,7 @@ export class WaterQualityService {
       });
       response = this.assertFetchLikeResponse(fetchedResponse);
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : 'Unknown network error';
+      const message = error instanceof Error ? error.message : 'Unknown network error';
       await this.recordFeedState({
         descriptor,
         statusCode: null,
@@ -623,11 +614,9 @@ export class WaterQualityService {
     const hasStatus = typeof candidate.status === 'number';
     const hasOk = typeof candidate.ok === 'boolean';
     const hasText = typeof candidate.text === 'function';
-    const hasHeadersObject =
-      !!candidate.headers && typeof candidate.headers === 'object';
+    const hasHeadersObject = !!candidate.headers && typeof candidate.headers === 'object';
     const hasHeadersGetter =
-      hasHeadersObject &&
-      typeof (candidate.headers as { get?: unknown }).get === 'function';
+      hasHeadersObject && typeof (candidate.headers as { get?: unknown }).get === 'function';
     const body = candidate.body as { getReader?: unknown } | null | undefined;
     const hasValidBody = body == null || typeof body.getReader === 'function';
 
@@ -663,14 +652,8 @@ export class WaterQualityService {
         lastCheckedAt: now,
         lastChangedAt: args.markChanged ? now : undefined,
         lastError: args.error,
-        etag:
-          args.etag === undefined
-            ? undefined
-            : (args.etag ?? null),
-        lastModified:
-          args.lastModified === undefined
-            ? undefined
-            : (args.lastModified ?? null),
+        etag: args.etag === undefined ? undefined : (args.etag ?? null),
+        lastModified: args.lastModified === undefined ? undefined : (args.lastModified ?? null),
         contentHash: args.contentHash ?? undefined,
         contentLength: args.contentLength ?? undefined,
       },
@@ -765,9 +748,7 @@ export class WaterQualityService {
     return facilities.length;
   }
 
-  private async importPoolLocations(
-    pools: ParsedPoolLocation[],
-  ): Promise<number> {
+  private async importPoolLocations(pools: ParsedPoolLocation[]): Promise<number> {
     for (const pool of pools) {
       const facility = pool.facilityExternalId
         ? await this.prisma.poolFacility.findUnique({
@@ -779,10 +760,10 @@ export class WaterQualityService {
       const primaryPoint = this.pickPrimarySamplingPoint(pool.samplingPoints);
       const coordinate: ParsedCoordinate | undefined = primaryPoint?.coordinate
         ? primaryPoint.coordinate
-        : (facility?.coordinateX !== null &&
-             facility?.coordinateX !== undefined &&
-             facility?.coordinateY !== null &&
-             facility?.coordinateY !== undefined)
+        : facility?.coordinateX !== null &&
+            facility?.coordinateX !== undefined &&
+            facility?.coordinateY !== null &&
+            facility?.coordinateY !== undefined
           ? {
               x: facility.coordinateX,
               y: facility.coordinateY,
@@ -917,9 +898,7 @@ export class WaterQualityService {
     return beaches.length;
   }
 
-  private async importSamples(
-    rows: ParsedWaterQualitySample[],
-  ): Promise<SampleImportSummary> {
+  private async importSamples(rows: ParsedWaterQualitySample[]): Promise<SampleImportSummary> {
     let inserted = 0;
     const affectedPlaceIds = new Set<string>();
 
@@ -933,8 +912,7 @@ export class WaterQualityService {
 
       let samplingPointId: string | undefined;
       const samplingPointExternalId =
-        row.samplingPointExternalId ??
-        this.fallbackSamplingPointExternalId(row.samplingPointName);
+        row.samplingPointExternalId ?? this.fallbackSamplingPointExternalId(row.samplingPointName);
 
       if (samplingPointExternalId && row.samplingPointName) {
         const point = await this.upsertSamplingPoint(place.id, {
@@ -1049,8 +1027,9 @@ export class WaterQualityService {
       return 0;
     }
 
-    const [latestSampleCandidates, places, previousLatestStatuses] = await this.prisma.$transaction([
-      this.prisma.$queryRaw<LatestSampleRow[]>(Prisma.sql`
+    const [latestSampleCandidates, places, previousLatestStatuses] = await this.prisma.$transaction(
+      [
+        this.prisma.$queryRaw<LatestSampleRow[]>(Prisma.sql`
         WITH "latestSampledAt" AS (
           SELECT
             sample."placeId",
@@ -1072,29 +1051,32 @@ export class WaterQualityService {
          AND latest."sampledAt" = sample."sampledAt"
         ORDER BY sample."placeId" ASC, sample."sampledAt" DESC, sample.id DESC
       `),
-      this.prisma.place.findMany({
-        where: { id: { in: normalizedPlaceIds } },
-        select: { id: true, nameEt: true },
-      }),
-      this.prisma.placeLatestStatus.findMany({
-        where: { placeId: { in: normalizedPlaceIds } },
-        select: {
-          placeId: true,
-          sampleId: true,
-          sampledAt: true,
-          status: true,
-          statusRaw: true,
-          statusReasonEt: true,
-          statusReasonEn: true,
-          sourceUrl: true,
-        },
-      }),
-    ]);
+        this.prisma.place.findMany({
+          where: { id: { in: normalizedPlaceIds } },
+          select: { id: true, nameEt: true },
+        }),
+        this.prisma.placeLatestStatus.findMany({
+          where: { placeId: { in: normalizedPlaceIds } },
+          select: {
+            placeId: true,
+            sampleId: true,
+            sampledAt: true,
+            status: true,
+            statusRaw: true,
+            statusReasonEt: true,
+            statusReasonEn: true,
+            sourceUrl: true,
+          },
+        }),
+      ],
+    );
 
     const placeById = new Map(places.map((place) => [place.id, place] as const));
     const latestSamples = pickRepresentativeLatestSamples(latestSampleCandidates);
     const previousLatestByPlaceId = new Map(
-      previousLatestStatuses.map((status) => [status.placeId, status as ExistingLatestStatusRow] as const),
+      previousLatestStatuses.map(
+        (status) => [status.placeId, status as ExistingLatestStatusRow] as const,
+      ),
     );
 
     let statusChanges = 0;
@@ -1233,9 +1215,7 @@ export class WaterQualityService {
     });
   }
 
-  private pickPrimarySamplingPoint(
-    points: ParsedSamplingPoint[],
-  ): ParsedSamplingPoint | undefined {
+  private pickPrimarySamplingPoint(points: ParsedSamplingPoint[]): ParsedSamplingPoint | undefined {
     return points.find((point) => point.coordinate || point.address) ?? points[0];
   }
 
@@ -1305,9 +1285,7 @@ export class WaterQualityService {
       return cached;
     }
 
-    const municipality =
-      input.municipality ??
-      this.resolveMunicipality(input.addressEt);
+    const municipality = input.municipality ?? this.resolveMunicipality(input.addressEt);
     const geoPoint = this.coordinateToGeoPoint(input.coordinate);
 
     const place = await this.prisma.place.upsert({
@@ -1346,10 +1324,7 @@ export class WaterQualityService {
     return place;
   }
 
-  private async upsertSamplingPoint(
-    placeId: string,
-    point: ParsedSamplingPoint,
-  ) {
+  private async upsertSamplingPoint(placeId: string, point: ParsedSamplingPoint) {
     const geoPoint = this.coordinateToGeoPoint(point.coordinate);
 
     return this.prisma.samplingPoint.upsert({
@@ -1387,5 +1362,4 @@ export class WaterQualityService {
       },
     });
   }
-
 }

@@ -50,10 +50,7 @@ const readConnectTimeoutFromDatabaseUrl = (databaseUrl: string): number | undefi
 };
 
 @Injectable()
-export class PrismaService
-  extends PrismaClient
-  implements OnModuleInit, OnModuleDestroy
-{
+export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
   constructor() {
     const databaseUrl = resolveDatabaseUrl();
     const connectionLimit = readConnectionLimitFromDatabaseUrl(databaseUrl);

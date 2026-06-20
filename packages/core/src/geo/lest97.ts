@@ -27,8 +27,7 @@ const meridianRadiusFactor = (latitude: number): number =>
 
 const isometricLatitudeFactor = (latitude: number): number =>
   Math.tan(Math.PI / 4 - latitude / 2) /
-  ((1 - eccentricity * Math.sin(latitude)) /
-    (1 + eccentricity * Math.sin(latitude))) **
+  ((1 - eccentricity * Math.sin(latitude)) / (1 + eccentricity * Math.sin(latitude))) **
     (eccentricity / 2);
 
 const firstMeridianFactor = meridianRadiusFactor(firstStandardParallel);
@@ -59,8 +58,7 @@ const latitudeFromIsometricFactor = (factor: number): number => {
       2 *
         Math.atan(
           factor *
-            ((1 - eccentricity * Math.sin(latitude)) /
-              (1 + eccentricity * Math.sin(latitude))) **
+            ((1 - eccentricity * Math.sin(latitude)) / (1 + eccentricity * Math.sin(latitude))) **
               (eccentricity / 2),
         );
   }
@@ -78,9 +76,7 @@ export const lest97ToWgs84 = (coordinate: Lest97Coordinate): GeoPoint | undefine
   const easting = coordinate.y;
   const adjustedEasting = easting - LEST97_FALSE_EASTING;
   const adjustedNorthing = originRadius - (northing - LEST97_FALSE_NORTHING);
-  const radius =
-    Math.sign(coneConstant) *
-    Math.sqrt(adjustedEasting ** 2 + adjustedNorthing ** 2);
+  const radius = Math.sign(coneConstant) * Math.sqrt(adjustedEasting ** 2 + adjustedNorthing ** 2);
   const theta = Math.atan2(adjustedEasting, adjustedNorthing);
   const isometricFactor =
     (radius / (GRS80_SEMI_MAJOR_AXIS * projectionConstant)) ** (1 / coneConstant);

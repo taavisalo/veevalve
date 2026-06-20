@@ -5,9 +5,10 @@ type NextFetchRequestInit = RequestInit & {
 };
 
 export const resolveApiBaseUrl = (): string => {
-  const rawBaseUrl = typeof window === 'undefined'
-    ? (process.env.API_BASE_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL)
-    : process.env.NEXT_PUBLIC_API_BASE_URL;
+  const rawBaseUrl =
+    typeof window === 'undefined'
+      ? (process.env.API_BASE_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL)
+      : process.env.NEXT_PUBLIC_API_BASE_URL;
 
   if (!rawBaseUrl?.trim()) {
     return 'http://localhost:3001';

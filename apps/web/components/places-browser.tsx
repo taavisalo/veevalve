@@ -103,9 +103,10 @@ const requestCurrentPosition = (): Promise<GeolocationPosition> => {
 };
 
 const toNearbySearchStatus = (error: unknown): NearbySearchStatus => {
-  const code = typeof (error as { code?: unknown }).code === 'number'
-    ? (error as { code: number }).code
-    : undefined;
+  const code =
+    typeof (error as { code?: unknown }).code === 'number'
+      ? (error as { code: number }).code
+      : undefined;
 
   if (code === 1) {
     return 'denied';
@@ -150,13 +151,9 @@ const loadWebPushClientModule = (): Promise<typeof WebPushClientModule> => {
   return webPushClientModulePromise;
 };
 
-const AboutPanel = dynamic(() =>
-  import('./about-panel').then((module) => module.AboutPanel),
-);
+const AboutPanel = dynamic(() => import('./about-panel').then((module) => module.AboutPanel));
 
-const MetricsPanel = dynamic(() =>
-  import('./metrics-panel').then((module) => module.MetricsPanel),
-);
+const MetricsPanel = dynamic(() => import('./metrics-panel').then((module) => module.MetricsPanel));
 
 interface PlacesBrowserProps {
   initialLocale: AppLocale;
@@ -398,7 +395,8 @@ export const PlacesBrowser = ({
   const [favoritesLoading, setFavoritesLoading] = useState(false);
   const [favoritePlaces, setFavoritePlaces] = useState<PlaceWithLatestReading[]>([]);
   const [notificationsSupported, setNotificationsSupported] = useState(false);
-  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
+  const [notificationPermission, setNotificationPermission] =
+    useState<NotificationPermission>('default');
   const [statusNotificationsEnabled, setStatusNotificationsEnabled] = useState(false);
   const [notificationsPreferencesHydrated, setNotificationsPreferencesHydrated] = useState(false);
   const [notificationsSyncing, setNotificationsSyncing] = useState(false);
@@ -507,7 +505,9 @@ export const PlacesBrowser = ({
 
   useEffect(() => {
     setMetrics(initialMetrics);
-    setMetricsLoaded(initialMetrics.totalEntries > 0 || initialMetrics.latestSourceUpdatedAt !== null);
+    setMetricsLoaded(
+      initialMetrics.totalEntries > 0 || initialMetrics.latestSourceUpdatedAt !== null,
+    );
   }, [initialMetrics]);
 
   useEffect(() => {
@@ -731,7 +731,8 @@ export const PlacesBrowser = ({
           throw new Error('Missing NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY');
         }
 
-        const subscription = await webPushClient.ensureWebPushSubscription(WEB_PUSH_VAPID_PUBLIC_KEY);
+        const subscription =
+          await webPushClient.ensureWebPushSubscription(WEB_PUSH_VAPID_PUBLIC_KEY);
         await webPushClient.syncWebPushSubscription({
           subscription,
           favoritePlaceIds: favoriteIds,
@@ -761,7 +762,13 @@ export const PlacesBrowser = ({
       cancelled = true;
       cancelIdle();
     };
-  }, [favoriteIds, locale, notificationsPreferencesHydrated, notificationsSupported, statusNotificationsEnabled]);
+  }, [
+    favoriteIds,
+    locale,
+    notificationsPreferencesHydrated,
+    notificationsSupported,
+    statusNotificationsEnabled,
+  ]);
 
   useEffect(() => {
     const onPointerDown = (event: MouseEvent) => {
@@ -828,13 +835,16 @@ export const PlacesBrowser = ({
 
     return new Map(
       places
-        .map((place) => [
-          place.id,
-          calculateDistanceMeters(nearbyOrigin, {
-            latitude: place.latitude,
-            longitude: place.longitude,
-          }),
-        ] as const)
+        .map(
+          (place) =>
+            [
+              place.id,
+              calculateDistanceMeters(nearbyOrigin, {
+                latitude: place.latitude,
+                longitude: place.longitude,
+              }),
+            ] as const,
+        )
         .filter(([, distanceMeters]) => Number.isFinite(distanceMeters)),
     );
   }, [isNearbySearchActive, nearbyOrigin, places]);
@@ -846,13 +856,15 @@ export const PlacesBrowser = ({
   );
   const hasFavorites = favoriteCount > 0;
   const favoritesToggleLabel = favoritesVisible
-    ? (locale === 'et' ? 'Peida' : 'Hide')
-    : (locale === 'et' ? 'Näita' : 'Show');
+    ? locale === 'et'
+      ? 'Peida'
+      : 'Hide'
+    : locale === 'et'
+      ? 'Näita'
+      : 'Show';
   const webPushConfigured = WEB_PUSH_VAPID_PUBLIC_KEY.trim().length > 0;
   const notificationsReady =
-    notificationsSupported &&
-    webPushConfigured &&
-    notificationPermission === 'granted';
+    notificationsSupported && webPushConfigured && notificationPermission === 'granted';
   const notificationsActive = notificationsReady && statusNotificationsEnabled;
   const notificationsButtonDisabled =
     !notificationsSupported ||
@@ -861,10 +873,16 @@ export const PlacesBrowser = ({
     notificationsSyncing;
   const favoritesNoticeSingleLine = notificationsSupported && notificationsActive;
   const notificationsButtonLabel = notificationsSyncing
-    ? (locale === 'et' ? 'Uuendan…' : 'Updating…')
+    ? locale === 'et'
+      ? 'Uuendan…'
+      : 'Updating…'
     : notificationsActive
-      ? (locale === 'et' ? 'Teavitused sees' : 'Alerts on')
-      : (locale === 'et' ? 'Teavitused väljas' : 'Alerts off');
+      ? locale === 'et'
+        ? 'Teavitused sees'
+        : 'Alerts on'
+      : locale === 'et'
+        ? 'Teavitused väljas'
+        : 'Alerts off';
   const nearbyAccuracyLabel =
     typeof nearbyAccuracyMeters === 'number' && Number.isFinite(nearbyAccuracyMeters)
       ? formatCompactDistance(nearbyAccuracyMeters, locale)
@@ -1059,11 +1077,7 @@ export const PlacesBrowser = ({
     for (const placeId of favoriteActionPendingIds) {
       clearFavoriteActionPending(placeId);
     }
-  }, [
-    clearFavoriteActionPending,
-    favoriteActionPendingIds,
-    favoritesLoading,
-  ]);
+  }, [clearFavoriteActionPending, favoriteActionPendingIds, favoritesLoading]);
 
   const suggestions = useMemo<Suggestion[]>(() => {
     if (!searchQuery) {
@@ -1079,9 +1093,10 @@ export const PlacesBrowser = ({
     const rankedPlaces = places
       .map((place) => {
         const name = locale === 'en' ? place.nameEn : place.nameEt;
-        const address = locale === 'en'
-          ? (place.addressEn ?? place.addressEt)
-          : (place.addressEt ?? place.addressEn);
+        const address =
+          locale === 'en'
+            ? (place.addressEn ?? place.addressEt)
+            : (place.addressEt ?? place.addressEn);
         const nameScore = scoreFuzzyMatch({
           query: normalizedSearch,
           primary: name,
@@ -1097,16 +1112,15 @@ export const PlacesBrowser = ({
         const municipalityMatched = containsSearchTerm(place.municipality, normalizedSearch);
         const addressMatched = containsSearchTerm(address, normalizedSearch);
 
-        let matchedBy: Suggestion['matchedBy'] = 'name';
-        if (nameMatched) {
-          matchedBy = 'name';
-        } else if (addressMatched) {
-          matchedBy = 'address';
-        } else if (municipalityMatched) {
-          matchedBy = 'municipality';
-        } else {
-          matchedBy = addressScore > nameScore ? 'address' : 'name';
-        }
+        const matchedBy: Suggestion['matchedBy'] = nameMatched
+          ? 'name'
+          : addressMatched
+            ? 'address'
+            : municipalityMatched
+              ? 'municipality'
+              : addressScore > nameScore
+                ? 'address'
+                : 'name';
 
         return {
           place,
@@ -1171,133 +1185,139 @@ export const PlacesBrowser = ({
           </p>
           <div className="relative z-10 ml-auto min-w-0 max-w-[76%]" ref={languageContainerRef}>
             <div className="flex flex-nowrap items-center justify-end gap-1 whitespace-nowrap sm:gap-1.5">
-          <button
-            type="button"
-            aria-pressed={aboutVisible}
-            onClick={() => setAboutVisible((value) => !value)}
-            className={`inline-flex h-6 w-6 items-center justify-center rounded-full border text-xs font-semibold leading-none transition sm:h-7 sm:w-7 sm:text-sm ${
-              aboutVisible
-                ? 'border-emerald-700 bg-emerald-700 text-white'
-                : 'border-emerald-100 bg-white text-emerald-800 hover:border-emerald-700'
-            }`}
-            aria-label={locale === 'et' ? 'Ava info andmete kohta' : 'Open data info'}
-            title={locale === 'et' ? 'Info' : 'About'}
-          >
-            ?
-          </button>
-          <button
-            type="button"
-            aria-pressed={metricsVisible}
-            onClick={() => setMetricsVisible((value) => !value)}
-            className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold transition sm:px-3 sm:py-1 sm:text-xs ${
-              metricsVisible
-                ? 'border-emerald-700 bg-emerald-700 text-white'
-                : 'border-emerald-100 bg-white text-emerald-800 hover:border-emerald-700'
-            }`}
-          >
-            {locale === 'et' ? 'Mõõdikud' : 'Metrics'}
-          </button>
-          <button
-            type="button"
-            aria-pressed={notificationsActive}
-            aria-busy={notificationsSyncing}
-            onClick={() => {
-              void toggleStatusNotifications();
-            }}
-            disabled={notificationsButtonDisabled}
-            title={
-              !notificationsSupported
-                ? (locale === 'et' ? 'Brauser ei toeta teavitusi' : 'This browser does not support notifications')
-                : !webPushConfigured
-                  ? (locale === 'et'
-                      ? 'Teavituste võti puudub seadistusest'
-                      : 'Push key is missing from configuration')
-                : notificationPermission === 'denied'
-                  ? (locale === 'et'
-                      ? 'Teavitused on brauseris blokeeritud'
-                      : 'Notifications are blocked in browser settings')
-                  : (locale === 'et'
-                      ? 'Teavita lemmikute staatuse muutusest'
-                      : 'Notify when favorite statuses change')
-            }
-            className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold transition sm:gap-1.5 sm:px-3 sm:py-1 sm:text-xs ${
-              notificationsActive
-                ? 'border-emerald-700 bg-emerald-700 text-white'
-                : 'border-emerald-100 bg-white text-emerald-800 hover:border-emerald-700'
-            } disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400`}
-          >
-            {notificationsSyncing ? (
-              <span
-                aria-hidden="true"
-                className="h-3 w-3 animate-spin rounded-full border-2 border-current border-r-transparent"
-              />
-            ) : null}
-            <span className="sm:hidden">
-              {notificationsActive
-                ? (locale === 'et' ? 'Sees' : 'On')
-                : (locale === 'et' ? 'Väljas' : 'Off')}
-            </span>
-            <span className="hidden sm:inline">{notificationsButtonLabel}</span>
-          </button>
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setLanguageMenuOpen((value) => !value)}
-              aria-haspopup="menu"
-              aria-expanded={languageMenuOpen}
-              aria-controls="language-menu"
-              className="rounded-full border border-emerald-100 bg-white px-2 py-0.5 text-[11px] font-semibold text-emerald-800 transition hover:border-emerald-700 sm:px-3 sm:py-1 sm:text-xs"
-            >
-              <span className="sm:hidden">{locale === 'et' ? 'ET' : 'EN'}</span>
-              <span className="hidden sm:inline">{locale === 'et' ? 'Keel: Eesti' : 'Language: English'}</span>
-            </button>
-            {languageMenuOpen ? (
-              <div
-                id="language-menu"
-                role="menu"
-                aria-label={locale === 'et' ? 'Keele valik' : 'Language selection'}
-                className="absolute right-0 z-10 mt-2 w-40 overflow-hidden rounded-xl border border-emerald-100 bg-white shadow-card"
+              <button
+                type="button"
+                aria-pressed={aboutVisible}
+                onClick={() => setAboutVisible((value) => !value)}
+                className={`inline-flex h-6 w-6 items-center justify-center rounded-full border text-xs font-semibold leading-none transition sm:h-7 sm:w-7 sm:text-sm ${
+                  aboutVisible
+                    ? 'border-emerald-700 bg-emerald-700 text-white'
+                    : 'border-emerald-100 bg-white text-emerald-800 hover:border-emerald-700'
+                }`}
+                aria-label={locale === 'et' ? 'Ava info andmete kohta' : 'Open data info'}
+                title={locale === 'et' ? 'Info' : 'About'}
               >
+                ?
+              </button>
+              <button
+                type="button"
+                aria-pressed={metricsVisible}
+                onClick={() => setMetricsVisible((value) => !value)}
+                className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold transition sm:px-3 sm:py-1 sm:text-xs ${
+                  metricsVisible
+                    ? 'border-emerald-700 bg-emerald-700 text-white'
+                    : 'border-emerald-100 bg-white text-emerald-800 hover:border-emerald-700'
+                }`}
+              >
+                {locale === 'et' ? 'Mõõdikud' : 'Metrics'}
+              </button>
+              <button
+                type="button"
+                aria-pressed={notificationsActive}
+                aria-busy={notificationsSyncing}
+                onClick={() => {
+                  void toggleStatusNotifications();
+                }}
+                disabled={notificationsButtonDisabled}
+                title={
+                  !notificationsSupported
+                    ? locale === 'et'
+                      ? 'Brauser ei toeta teavitusi'
+                      : 'This browser does not support notifications'
+                    : !webPushConfigured
+                      ? locale === 'et'
+                        ? 'Teavituste võti puudub seadistusest'
+                        : 'Push key is missing from configuration'
+                      : notificationPermission === 'denied'
+                        ? locale === 'et'
+                          ? 'Teavitused on brauseris blokeeritud'
+                          : 'Notifications are blocked in browser settings'
+                        : locale === 'et'
+                          ? 'Teavita lemmikute staatuse muutusest'
+                          : 'Notify when favorite statuses change'
+                }
+                className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold transition sm:gap-1.5 sm:px-3 sm:py-1 sm:text-xs ${
+                  notificationsActive
+                    ? 'border-emerald-700 bg-emerald-700 text-white'
+                    : 'border-emerald-100 bg-white text-emerald-800 hover:border-emerald-700'
+                } disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400`}
+              >
+                {notificationsSyncing ? (
+                  <span
+                    aria-hidden="true"
+                    className="h-3 w-3 animate-spin rounded-full border-2 border-current border-r-transparent"
+                  />
+                ) : null}
+                <span className="sm:hidden">
+                  {notificationsActive
+                    ? locale === 'et'
+                      ? 'Sees'
+                      : 'On'
+                    : locale === 'et'
+                      ? 'Väljas'
+                      : 'Off'}
+                </span>
+                <span className="hidden sm:inline">{notificationsButtonLabel}</span>
+              </button>
+              <div className="relative">
                 <button
                   type="button"
-                  role="menuitemradio"
-                  aria-checked={locale === 'et'}
-                  onClick={() => {
-                    setLocale('et');
-                    setLanguageMenuOpen(false);
-                  }}
-                  className={`block w-full px-3 py-2 text-left text-sm transition ${
-                    locale === 'et'
-                      ? 'bg-emerald-50 font-semibold text-emerald-900'
-                      : 'text-ink hover:bg-emerald-50'
-                  }`}
+                  onClick={() => setLanguageMenuOpen((value) => !value)}
+                  aria-haspopup="menu"
+                  aria-expanded={languageMenuOpen}
+                  aria-controls="language-menu"
+                  className="rounded-full border border-emerald-100 bg-white px-2 py-0.5 text-[11px] font-semibold text-emerald-800 transition hover:border-emerald-700 sm:px-3 sm:py-1 sm:text-xs"
                 >
-                  Eesti
+                  <span className="sm:hidden">{locale === 'et' ? 'ET' : 'EN'}</span>
+                  <span className="hidden sm:inline">
+                    {locale === 'et' ? 'Keel: Eesti' : 'Language: English'}
+                  </span>
                 </button>
-                <button
-                  type="button"
-                  role="menuitemradio"
-                  aria-checked={locale === 'en'}
-                  onClick={() => {
-                    setLocale('en');
-                    setLanguageMenuOpen(false);
-                  }}
-                  className={`block w-full px-3 py-2 text-left text-sm transition ${
-                    locale === 'en'
-                      ? 'bg-emerald-50 font-semibold text-emerald-900'
-                      : 'text-ink hover:bg-emerald-50'
-                  }`}
-                >
-                  English
-                </button>
+                {languageMenuOpen ? (
+                  <div
+                    id="language-menu"
+                    role="menu"
+                    aria-label={locale === 'et' ? 'Keele valik' : 'Language selection'}
+                    className="absolute right-0 z-10 mt-2 w-40 overflow-hidden rounded-xl border border-emerald-100 bg-white shadow-card"
+                  >
+                    <button
+                      type="button"
+                      role="menuitemradio"
+                      aria-checked={locale === 'et'}
+                      onClick={() => {
+                        setLocale('et');
+                        setLanguageMenuOpen(false);
+                      }}
+                      className={`block w-full px-3 py-2 text-left text-sm transition ${
+                        locale === 'et'
+                          ? 'bg-emerald-50 font-semibold text-emerald-900'
+                          : 'text-ink hover:bg-emerald-50'
+                      }`}
+                    >
+                      Eesti
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitemradio"
+                      aria-checked={locale === 'en'}
+                      onClick={() => {
+                        setLocale('en');
+                        setLanguageMenuOpen(false);
+                      }}
+                      className={`block w-full px-3 py-2 text-left text-sm transition ${
+                        locale === 'en'
+                          ? 'bg-emerald-50 font-semibold text-emerald-900'
+                          : 'text-ink hover:bg-emerald-50'
+                      }`}
+                    >
+                      English
+                    </button>
+                  </div>
+                ) : null}
               </div>
-            ) : null}
-          </div>
             </div>
             {notificationsError ? (
-              <p className="mt-1 text-right text-[11px] text-rose-600">
-                {notificationsError}
-              </p>
+              <p className="mt-1 text-right text-[11px] text-rose-600">{notificationsError}</p>
             ) : null}
           </div>
         </div>
@@ -1366,7 +1386,11 @@ export const PlacesBrowser = ({
                   return;
                 }
 
-                if (event.key === 'Enter' && activeSuggestionIndex >= 0 && activeSuggestionIndex < suggestions.length) {
+                if (
+                  event.key === 'Enter' &&
+                  activeSuggestionIndex >= 0 &&
+                  activeSuggestionIndex < suggestions.length
+                ) {
                   event.preventDefault();
                   const selectedSuggestion = suggestions[activeSuggestionIndex];
                   if (selectedSuggestion) {
@@ -1493,8 +1517,12 @@ export const PlacesBrowser = ({
                     {suggestion.matchedBy !== 'name' ? (
                       <p className="mt-1 text-[11px] uppercase tracking-[0.08em] text-slate-400">
                         {suggestion.matchedBy === 'address'
-                          ? (locale === 'et' ? 'Aadressi vaste' : 'Address match')
-                          : (locale === 'et' ? 'Omavalitsuse vaste' : 'Municipality match')}
+                          ? locale === 'et'
+                            ? 'Aadressi vaste'
+                            : 'Address match'
+                          : locale === 'et'
+                            ? 'Omavalitsuse vaste'
+                            : 'Municipality match'}
                       </p>
                     ) : null}
                   </button>
@@ -1503,7 +1531,10 @@ export const PlacesBrowser = ({
             </ul>
           ) : null}
 
-          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500" aria-live="polite">
+          <div
+            className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500"
+            aria-live="polite"
+          >
             <p>{nearbyStatusMessage}</p>
             {nearbyStatus !== 'idle' ? (
               <button
@@ -1592,16 +1623,16 @@ export const PlacesBrowser = ({
                     ? 'Brauseri tõuketeavitused pole veel seadistatud.'
                     : 'Browser push notifications are not configured yet.'
                   : notificationsSupported
-                  ? notificationsActive
-                    ? (locale === 'et'
+                    ? notificationsActive
+                      ? locale === 'et'
                         ? 'Tõuketeavitused sees: lemmikute muutused ka suletud lehel.'
-                        : 'Push alerts on: favorite changes are sent when closed.')
-                    : (locale === 'et'
+                        : 'Push alerts on: favorite changes are sent when closed.'
+                      : locale === 'et'
                         ? 'Lülita tõuketeavitused sisse, et saada märguanne lemmikute staatuse muutustest.'
-                        : 'Enable push alerts to get notified when favorite statuses change.')
-                  : (locale === 'et'
+                        : 'Enable push alerts to get notified when favorite statuses change.'
+                    : locale === 'et'
                       ? 'Sinu brauser ei toeta tõuketeavitusi.'
-                      : 'Your browser does not support push notifications.')}
+                      : 'Your browser does not support push notifications.'}
               </p>
               {!favoritesHydrated || (favoritesLoading && favoritePlaces.length === 0) ? (
                 <div role="status" className="grid min-h-[12rem] gap-4 md:grid-cols-2">
@@ -1620,7 +1651,10 @@ export const PlacesBrowser = ({
               ) : (
                 <div className="grid gap-4 md:grid-cols-2">
                   {favoritePlaces.map((place, index) => (
-                    <div className={`fade-up ${getCardFadeDelayClass(index)}`} key={`favorite-${place.id}`}>
+                    <div
+                      className={`fade-up ${getCardFadeDelayClass(index)}`}
+                      key={`favorite-${place.id}`}
+                    >
                       <PlaceCard
                         place={place}
                         locale={locale}
@@ -1649,12 +1683,12 @@ export const PlacesBrowser = ({
                 ? `Kuvan ${shownResultsCount} lähimat kohta seadme asukoha järgi.`
                 : `Showing ${shownResultsCount} closest places near your device location.`
               : searchQuery
-              ? locale === 'et'
-                ? `Otsing: "${searchQuery}". Näitan ${shownResultsCount} tulemust (maksimaalselt ${visibleResultsLimit}).`
-                : `Search: "${searchQuery}". Showing ${shownResultsCount} of up to ${visibleResultsLimit} results.`
-              : locale === 'et'
-                ? `Kuvan ${shownResultsCount} viimati uuendatud kohta.`
-                : `Showing ${shownResultsCount} most recently updated places.`}
+                ? locale === 'et'
+                  ? `Otsing: "${searchQuery}". Näitan ${shownResultsCount} tulemust (maksimaalselt ${visibleResultsLimit}).`
+                  : `Search: "${searchQuery}". Showing ${shownResultsCount} of up to ${visibleResultsLimit} results.`
+                : locale === 'et'
+                  ? `Kuvan ${shownResultsCount} viimati uuendatud kohta.`
+                  : `Showing ${shownResultsCount} most recently updated places.`}
           </p>
           {loading ? (
             <div
@@ -1675,7 +1709,9 @@ export const PlacesBrowser = ({
         </div>
 
         {error ? (
-          <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{error}</div>
+          <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
+            {error}
+          </div>
         ) : null}
 
         {places.length === 0 && !loading ? (

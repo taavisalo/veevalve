@@ -1,4 +1,8 @@
-import { mapPlaceApiRows, type PlaceApiRow, type PlaceWithLatestReading } from '@veevalve/core/client';
+import {
+  mapPlaceApiRows,
+  type PlaceApiRow,
+  type PlaceWithLatestReading,
+} from '@veevalve/core/client';
 
 import { buildRequestInit, resolveApiBaseUrl } from './api-request';
 
@@ -19,7 +23,10 @@ export const fetchPlacesByIds = async ({
   revalidateSeconds,
   includeBadDetails = true,
 }: FetchPlacesByIdsOptions): Promise<PlaceWithLatestReading[]> => {
-  const uniqueIds = [...new Set(ids.map((id) => id.trim()).filter((id) => id.length > 0))].slice(0, 50);
+  const uniqueIds = [...new Set(ids.map((id) => id.trim()).filter((id) => id.length > 0))].slice(
+    0,
+    50,
+  );
   if (uniqueIds.length === 0) {
     return [];
   }

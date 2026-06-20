@@ -6,17 +6,17 @@ import { cn } from './cn';
 const styles = cva(
   'inline-flex items-center gap-1 rounded-full px-3.5 py-1.5 text-sm font-semibold ring-1 ring-inset',
   {
-  variants: {
-    status: {
-      GOOD: 'bg-emerald-100 text-emerald-800 ring-emerald-200',
-      BAD: 'bg-rose-100 text-rose-800 ring-rose-200',
-      UNKNOWN: 'bg-slate-100 text-slate-700 ring-slate-200',
+    variants: {
+      status: {
+        GOOD: 'bg-emerald-100 text-emerald-800 ring-emerald-200',
+        BAD: 'bg-rose-100 text-rose-800 ring-rose-200',
+        UNKNOWN: 'bg-slate-100 text-slate-700 ring-slate-200',
+      },
+    },
+    defaultVariants: {
+      status: 'UNKNOWN',
     },
   },
-  defaultVariants: {
-    status: 'UNKNOWN',
-  },
-},
 );
 
 const labelKeys: Record<QualityStatus, 'qualityGood' | 'qualityBad' | 'qualityUnknown'> = {
@@ -32,7 +32,12 @@ export interface QualityBadgeProps {
   trailingSymbol?: string;
 }
 
-export const QualityBadge = ({ status, locale = 'et', className, trailingSymbol }: QualityBadgeProps) => {
+export const QualityBadge = ({
+  status,
+  locale = 'et',
+  className,
+  trailingSymbol,
+}: QualityBadgeProps) => {
   return (
     <span className={cn(styles({ status }), className)}>
       <span>{t(labelKeys[status], locale)}</span>

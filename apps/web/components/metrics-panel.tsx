@@ -49,9 +49,7 @@ export const MetricsPanel = ({
           <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500">
             {locale === 'et' ? 'Viimane uuendus' : 'Last update'}
           </p>
-          <p className="mt-1 text-sm font-semibold text-ink">
-            {formattedLatestUpdate}
-          </p>
+          <p className="mt-1 text-sm font-semibold text-ink">{formattedLatestUpdate}</p>
         </div>
         <div className="rounded-2xl border border-emerald-100 bg-white/80 px-3 py-2">
           <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500">
@@ -82,13 +80,17 @@ export const MetricsPanel = ({
             <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500">
               {locale === 'et' ? 'Hea kvaliteet' : 'Good quality'}
             </p>
-            <p className="mt-1 text-sm font-semibold text-emerald-700">{metrics.goodQualityEntries}</p>
+            <p className="mt-1 text-sm font-semibold text-emerald-700">
+              {metrics.goodQualityEntries}
+            </p>
           </div>
           <div className="rounded-xl border border-emerald-100 bg-white/80 px-3 py-2">
             <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500">
               {locale === 'et' ? 'Teadmata kvaliteet' : 'Unknown quality'}
             </p>
-            <p className="mt-1 text-sm font-semibold text-slate-700">{metrics.unknownQualityEntries}</p>
+            <p className="mt-1 text-sm font-semibold text-slate-700">
+              {metrics.unknownQualityEntries}
+            </p>
           </div>
           <div className="rounded-xl border border-emerald-100 bg-white/80 px-3 py-2">
             <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500">
@@ -110,7 +112,9 @@ export const MetricsPanel = ({
           </div>
           <div className="rounded-xl border border-emerald-100 bg-white/80 px-3 py-2">
             <p className="text-[11px] uppercase tracking-[0.08em] text-slate-500">
-              {locale === 'et' ? 'Viimane proov üle 7 päeva tagasi' : 'Latest sample older than 7 days'}
+              {locale === 'et'
+                ? 'Viimane proov üle 7 päeva tagasi'
+                : 'Latest sample older than 7 days'}
             </p>
             <p className="mt-1 text-sm font-semibold text-ink">{metrics.staleOver7dEntries}</p>
           </div>

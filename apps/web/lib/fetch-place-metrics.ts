@@ -63,7 +63,8 @@ const normalizePlaceMetrics = (raw: Partial<PlaceMetrics>): PlaceMetrics => {
         ? raw.badBeachEntries
         : EMPTY_PLACE_METRICS.badBeachEntries,
     updatedWithin24hEntries:
-      typeof raw.updatedWithin24hEntries === 'number' && Number.isFinite(raw.updatedWithin24hEntries)
+      typeof raw.updatedWithin24hEntries === 'number' &&
+      Number.isFinite(raw.updatedWithin24hEntries)
         ? raw.updatedWithin24hEntries
         : EMPTY_PLACE_METRICS.updatedWithin24hEntries,
     staleOver7dEntries:

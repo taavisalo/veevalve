@@ -13,7 +13,6 @@
     "allowSyntheticDefaultImports": true,
     "outDir": "./dist",
     "types": ["node"],
-    "baseUrl": ".",
     "paths": {}
   },
   "include": ["src", "test"]

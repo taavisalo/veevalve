@@ -499,9 +499,7 @@ export const parseBeachLocationsXml = (xml: string): ParsedBeachLocation[] => {
         waterBodyType: pickText(row, ['veekogu_tyyp']),
         visitorCount: parseInteger(row.kylastajate_arv),
         shorelineLengthM: parseNumber(row.rannajoone_pikkus),
-        monitoringCalendarDate: parseTerviseametDate(
-          row.seirekalendri_kooskolastamise_kuupaev,
-        ),
+        monitoringCalendarDate: parseTerviseametDate(row.seirekalendri_kooskolastamise_kuupaev),
         lastInspectionAt: parseTerviseametDate(row.viimane_inspekteerimine),
         inspector: pickText(row, ['inspekteerija']),
         latestSampleAt: parseTerviseametDate(row.viimane_proovivott),
@@ -572,9 +570,7 @@ const parseProtocols = (value: unknown): ParsedWaterQualityProtocol[] => {
     );
     const fromProtocol = parseQualityStatus(assessmentRaw);
     const assessmentStatus =
-      fromProtocol === 'UNKNOWN' && indicators.length > 0
-        ? normalizedFromIndicators
-        : fromProtocol;
+      fromProtocol === 'UNKNOWN' && indicators.length > 0 ? normalizedFromIndicators : fromProtocol;
 
     return [
       {

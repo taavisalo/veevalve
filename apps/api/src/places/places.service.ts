@@ -253,9 +253,8 @@ export class PlacesService {
           .filter((place): place is PlaceRow => Boolean(place));
 
         const strictlyFilteredPlaces = this.filterStrictSearchMatches(orderedPlaces, search);
-        const responsePlaces = strictlyFilteredPlaces.length > 0
-          ? strictlyFilteredPlaces
-          : orderedPlaces;
+        const responsePlaces =
+          strictlyFilteredPlaces.length > 0 ? strictlyFilteredPlaces : orderedPlaces;
 
         return this.toListResponsesWithBadDetails(responsePlaces, locale, query.includeBadDetails);
       }
@@ -333,7 +332,11 @@ export class PlacesService {
       orderBy,
     });
 
-    return this.toListResponsesWithBadDetails(places as PlaceRow[], locale, query.includeBadDetails);
+    return this.toListResponsesWithBadDetails(
+      places as PlaceRow[],
+      locale,
+      query.includeBadDetails,
+    );
   }
 
   private async listPlacesByDistance(input: {
@@ -449,7 +452,9 @@ export class PlacesService {
     locale: 'et' | 'en' = 'et',
     includeBadDetails = true,
   ): Promise<PlaceListResponse[]> {
-    const normalizedIds = [...new Set(ids.map((id) => id.trim()).filter((id) => id.length > 0))].slice(0, 50);
+    const normalizedIds = [
+      ...new Set(ids.map((id) => id.trim()).filter((id) => id.length > 0)),
+    ].slice(0, 50);
     if (normalizedIds.length === 0) {
       return [];
     }
@@ -479,9 +484,7 @@ export class PlacesService {
     offset: number;
   }): Promise<string[] | null> {
     const { search, type, status, limit, offset } = input;
-    const threshold = search.length <= 3
-      ? SHORT_QUERY_FUZZY_THRESHOLD
-      : DEFAULT_FUZZY_THRESHOLD;
+    const threshold = search.length <= 3 ? SHORT_QUERY_FUZZY_THRESHOLD : DEFAULT_FUZZY_THRESHOLD;
     const strictTokens = this.extractStrictSearchTokens(search);
     const shouldRunStrictSearch = search.includes(' ') || strictTokens.length >= 2;
     const compactAliasRules = this.extractCompactAliasRules(search);
@@ -636,8 +639,9 @@ export class PlacesService {
       return [];
     }
 
-    const aliasClauses = rules.map((rule) =>
-      Prisma.sql`(
+    const aliasClauses = rules.map(
+      (rule) =>
+        Prisma.sql`(
         (
           lower(p."nameEt") LIKE '%' || ${rule.textPart} || '%'
           OR lower(p."nameEn") LIKE '%' || ${rule.textPart} || '%'
@@ -727,11 +731,7 @@ export class PlacesService {
     }
 
     const rules = new Map<string, CompactAliasRule>();
-    for (
-      let splitIndex = 2;
-      splitIndex <= normalizedSearch.length - 2;
-      splitIndex += 1
-    ) {
+    for (let splitIndex = 2; splitIndex <= normalizedSearch.length - 2; splitIndex += 1) {
       const left = normalizedSearch.slice(0, splitIndex);
       const right = normalizedSearch.slice(splitIndex);
 
@@ -777,8 +777,8 @@ export class PlacesService {
         || coalesce(spx."searchBlob", '')
       )
     `;
-    const tokenContainsClauses = strictTokens.map((token) =>
-      Prisma.sql`${searchableTextExpression} LIKE '%' || ${token} || '%'`,
+    const tokenContainsClauses = strictTokens.map(
+      (token) => Prisma.sql`${searchableTextExpression} LIKE '%' || ${token} || '%'`,
     );
     const allStrictTokensMatch = tokenContainsClauses.length
       ? Prisma.sql`(${Prisma.join(tokenContainsClauses, ' AND ')})`
@@ -955,9 +955,7 @@ export class PlacesService {
     };
   }
 
-  private async toListResponsesWithBadDetails<
-    T extends PlaceRow,
-  >(
+  private async toListResponsesWithBadDetails<T extends PlaceRow>(
     places: T[],
     locale: 'et' | 'en',
     includeBadDetails = true,
@@ -992,7 +990,9 @@ export class PlacesService {
     sampleIds: string[],
     locale: 'et' | 'en',
   ): Promise<Map<string, string[]>> {
-    const normalizedSampleIds = [...new Set(sampleIds.filter((sampleId) => sampleId.trim().length > 0))];
+    const normalizedSampleIds = [
+      ...new Set(sampleIds.filter((sampleId) => sampleId.trim().length > 0)),
+    ];
     if (normalizedSampleIds.length === 0) {
       return new Map();
     }

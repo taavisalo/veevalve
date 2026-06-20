@@ -9,7 +9,7 @@ export const QUALITY_LABEL_TO_STATUS: Record<string, QualityStatus> = {
   vastab: 'GOOD',
   'vastab nouetele': 'GOOD',
   'vastab n\u00f5uetele': 'GOOD',
-  'compliant': 'GOOD',
+  compliant: 'GOOD',
   mittevastav: 'BAD',
   'ei vasta': 'BAD',
   'ei vasta nouetele': 'BAD',

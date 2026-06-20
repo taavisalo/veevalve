@@ -2,10 +2,7 @@ import { NextRequest } from 'next/server';
 import { describe, expect, it } from 'vitest';
 
 import { PUT } from '../app/api/preferences/route';
-import {
-  FAVORITE_PLACE_IDS_COOKIE_NAME,
-  parseFavoritePlaceIds,
-} from '../lib/favorites-storage';
+import { FAVORITE_PLACE_IDS_COOKIE_NAME, parseFavoritePlaceIds } from '../lib/favorites-storage';
 import {
   parsePlacesBrowserPreferences,
   PLACES_BROWSER_PREFERENCES_COOKIE_NAME,
@@ -68,9 +65,7 @@ describe('preferences route', () => {
     );
 
     const setCookie = response.headers.get('set-cookie') ?? '';
-    const cookieValue = setCookie
-      .split(';')[0]
-      ?.slice(`${FAVORITE_PLACE_IDS_COOKIE_NAME}=`.length);
+    const cookieValue = setCookie.split(';')[0]?.slice(`${FAVORITE_PLACE_IDS_COOKIE_NAME}=`.length);
 
     expect(response.status).toBe(200);
     expect(setCookie).toContain(`${FAVORITE_PLACE_IDS_COOKIE_NAME}=`);

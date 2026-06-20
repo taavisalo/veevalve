@@ -84,7 +84,9 @@ export class WebPushService {
     return this.isVapidConfigured;
   }
 
-  async upsertSubscription(input: UpsertWebPushSubscriptionInput): Promise<{ favoriteCount: number }> {
+  async upsertSubscription(
+    input: UpsertWebPushSubscriptionInput,
+  ): Promise<{ favoriteCount: number }> {
     this.assertConfigured();
 
     const normalized = this.normalizeSubscription(input.subscription);
@@ -197,7 +199,10 @@ export class WebPushService {
         this.assertAllowedEndpoint(subscription.endpoint);
 
         const locale: 'et' | 'en' = subscription.locale === 'en' ? 'en' : 'et';
-        const placeName = locale === 'en' ? (place?.nameEn ?? place?.nameEt ?? 'VeeValve') : (place?.nameEt ?? place?.nameEn ?? 'VeeValve');
+        const placeName =
+          locale === 'en'
+            ? (place?.nameEn ?? place?.nameEt ?? 'VeeValve')
+            : (place?.nameEt ?? place?.nameEn ?? 'VeeValve');
         const body =
           locale === 'et'
             ? `Vee kvaliteet muutus: ${STATUS_LABELS.et[input.previousStatus]} -> ${STATUS_LABELS.et[input.currentStatus]}`
@@ -277,7 +282,9 @@ export class WebPushService {
     throw new ServiceUnavailableException('Web push is not configured.');
   }
 
-  private normalizeSubscription(input: UpsertWebPushSubscriptionInput['subscription']): NormalizedWebPushSubscription {
+  private normalizeSubscription(
+    input: UpsertWebPushSubscriptionInput['subscription'],
+  ): NormalizedWebPushSubscription {
     const endpoint = input.endpoint.trim();
     const p256dh = input.keys.p256dh.trim();
     const auth = input.keys.auth.trim();
@@ -300,8 +307,7 @@ export class WebPushService {
       };
     }
 
-    const expirationNumber =
-      typeof expirationTimeRaw === 'number' ? expirationTimeRaw : Number.NaN;
+    const expirationNumber = typeof expirationTimeRaw === 'number' ? expirationTimeRaw : Number.NaN;
     if (!Number.isFinite(expirationNumber) || expirationNumber < 0) {
       throw new BadRequestException('Subscription expirationTime is invalid.');
     }
@@ -358,9 +364,7 @@ export class WebPushService {
       .filter((value) => value.length > 0);
 
     return new Set(
-      configuredHosts.length > 0
-        ? configuredHosts
-        : DEFAULT_WEB_PUSH_ALLOWED_ENDPOINT_HOSTS,
+      configuredHosts.length > 0 ? configuredHosts : DEFAULT_WEB_PUSH_ALLOWED_ENDPOINT_HOSTS,
     );
   }
 
@@ -377,8 +381,8 @@ export class WebPushService {
     }
 
     const host = url.hostname.toLowerCase().replace(/\.$/, '');
-    const isAllowed = [...this.allowedEndpointHosts].some((allowedHost) =>
-      host === allowedHost || host.endsWith(`.${allowedHost}`),
+    const isAllowed = [...this.allowedEndpointHosts].some(
+      (allowedHost) => host === allowedHost || host.endsWith(`.${allowedHost}`),
     );
     if (!isAllowed) {
       throw new BadRequestException('Subscription endpoint host is not allowed.');

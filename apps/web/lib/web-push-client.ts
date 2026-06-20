@@ -192,9 +192,7 @@ export const syncWebPushSubscription = async (input: {
   }
 };
 
-export const removeWebPushSubscription = async (
-  subscription: PushSubscription,
-): Promise<void> => {
+export const removeWebPushSubscription = async (subscription: PushSubscription): Promise<void> => {
   const endpoint = subscription.endpoint?.trim();
   if (!endpoint) {
     return;

@@ -23,9 +23,9 @@ export interface StatusChipProps {
 
 export const StatusChip = memo(
   ({ status, locale = 'et', prominent = false, trailingSymbol }: StatusChipProps) => {
-  const style = styles[status];
+    const style = styles[status];
 
-  return (
+    return (
       <View
         style={[
           chipStyles.container,
@@ -43,10 +43,12 @@ export const StatusChip = memo(
           {t(labelKeys[status], locale)}
         </Text>
         {trailingSymbol ? (
-          <Text style={[chipStyles.trailingSymbol, { color: style.textColor }]}>{trailingSymbol}</Text>
+          <Text style={[chipStyles.trailingSymbol, { color: style.textColor }]}>
+            {trailingSymbol}
+          </Text>
         ) : null}
       </View>
-  );
+    );
   },
 );
 

@@ -111,9 +111,7 @@ export class WaterQualityController {
     }
 
     const providedSyncToken =
-      typeof syncTokenHeader === 'string'
-        ? syncTokenHeader.trim()
-        : undefined;
+      typeof syncTokenHeader === 'string' ? syncTokenHeader.trim() : undefined;
     if (!expectedSyncToken || !providedSyncToken) {
       throw new UnauthorizedException('Missing sync token');
     }

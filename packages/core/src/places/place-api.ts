@@ -1,4 +1,9 @@
-import type { PlaceType, PlaceWithLatestReading, QualityStatus, WaterQualityReading } from '../types';
+import type {
+  PlaceType,
+  PlaceWithLatestReading,
+  QualityStatus,
+  WaterQualityReading,
+} from '../types';
 
 export interface PlaceApiRow {
   id: string;
@@ -28,7 +33,9 @@ const toLatestReading = (
   }
 
   const badDetails = [
-    ...new Set((row.badDetails ?? []).map((detail) => detail.trim()).filter((detail) => detail.length > 0)),
+    ...new Set(
+      (row.badDetails ?? []).map((detail) => detail.trim()).filter((detail) => detail.length > 0),
+    ),
   ];
 
   return {

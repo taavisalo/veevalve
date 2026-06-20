@@ -4,10 +4,7 @@ import { cookies, headers } from 'next/headers';
 import type { AppLocale, PlaceType, QualityStatus } from '@veevalve/core/client';
 
 import { PlacesBrowser } from '../components/places-browser';
-import {
-  FAVORITE_PLACE_IDS_COOKIE_NAME,
-  parseFavoritePlaceIds,
-} from '../lib/favorites-storage';
+import { FAVORITE_PLACE_IDS_COOKIE_NAME, parseFavoritePlaceIds } from '../lib/favorites-storage';
 import { EMPTY_PLACE_METRICS, fetchPlaceMetrics } from '../lib/fetch-place-metrics';
 import { getPlaceMetricsFetchPolicy, getPlacesFetchPolicy } from '../lib/place-fetch-policy';
 import { fetchPlaces } from '../lib/fetch-places';
