@@ -3,13 +3,17 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   parseMetricsUiPreferences,
   parsePlacesBrowserPreferences,
+  parseThemeUiPreferences,
   writeMetricsUiPreferences,
   readPlacesBrowserPreferences,
+  readThemeUiPreferences,
   writePlacesBrowserPreferences,
+  writeThemeUiPreferences,
 } from '../lib/ui-preferences-storage';
 
 const PLACES_BROWSER_LOCAL_STORAGE_KEY = 'veevalve.places_browser.v1';
 const METRICS_LOCAL_STORAGE_KEY = 'veevalve.metrics_ui.v1';
+const THEME_LOCAL_STORAGE_KEY = 'veevalve.theme_ui.v1';
 
 const createMemoryStorage = (initialValues: Map<string, string> = new Map()): Storage => {
   const values = new Map(initialValues);
@@ -43,6 +47,9 @@ describe('places browser preferences storage', () => {
       statusFilter: 'ALL',
       nearbySearchEnabled: false,
       favoritesVisible: true,
+    });
+    expect(readThemeUiPreferences()).toEqual({
+      theme: 'system',
     });
   });
 
@@ -130,6 +137,32 @@ describe('places browser preferences storage', () => {
     });
   });
 
+  it('parses encoded theme cookie preferences', () => {
+    expect(
+      parseThemeUiPreferences(
+        encodeURIComponent(
+          JSON.stringify({
+            theme: 'dark',
+          }),
+        ),
+      ),
+    ).toEqual({
+      theme: 'dark',
+    });
+  });
+
+  it('parses system theme preferences', () => {
+    expect(parseThemeUiPreferences(JSON.stringify({ theme: 'system' }))).toEqual({
+      theme: 'system',
+    });
+  });
+
+  it('normalizes invalid theme preferences to system', () => {
+    expect(parseThemeUiPreferences(JSON.stringify({ theme: 'neon' }))).toEqual({
+      theme: 'system',
+    });
+  });
+
   it('writes normalized browser preferences to local storage and the preferences endpoint', () => {
     const storage = createMemoryStorage();
     const fetchMock = vi.fn(() => Promise.resolve(new Response(null, { status: 204 })));
@@ -187,6 +220,31 @@ describe('places browser preferences storage', () => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ metricsUi: expectedPreferences }),
+      credentials: 'same-origin',
+      keepalive: true,
+    });
+  });
+
+  it('writes theme preferences to local storage and the preferences endpoint', () => {
+    const storage = createMemoryStorage();
+    const fetchMock = vi.fn(() => Promise.resolve(new Response(null, { status: 204 })));
+    vi.stubGlobal('window', { localStorage: storage });
+    vi.stubGlobal('fetch', fetchMock);
+
+    writeThemeUiPreferences({
+      theme: 'dark',
+    });
+
+    const expectedPreferences = {
+      theme: 'dark',
+    };
+    expect(JSON.parse(storage.getItem(THEME_LOCAL_STORAGE_KEY) ?? '')).toEqual(expectedPreferences);
+    expect(fetchMock).toHaveBeenCalledWith('/api/preferences', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ themeUi: expectedPreferences }),
       credentials: 'same-origin',
       keepalive: true,
     });

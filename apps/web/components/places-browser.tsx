@@ -30,8 +30,10 @@ import {
   getPlaceMetricsFetchPolicy,
 } from '../lib/place-fetch-policy';
 import {
+  type AppTheme,
   writeMetricsUiPreferences,
   writePlacesBrowserPreferences,
+  writeThemeUiPreferences,
 } from '../lib/ui-preferences-storage';
 import type * as WebPushClientModule from '../lib/web-push-client';
 
@@ -168,6 +170,7 @@ interface PlacesBrowserProps {
   initialMetrics: PlaceMetrics;
   initialMetricsVisible: boolean;
   initialMetricsExpanded: boolean;
+  initialTheme: AppTheme;
 }
 
 interface Suggestion {
@@ -202,8 +205,8 @@ const FilterButton = ({ label, active, onClick }: FilterButtonProps) => {
       aria-pressed={active}
       className={`inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-xs font-medium transition sm:px-3 sm:py-1 sm:text-sm ${
         active
-          ? 'border-emerald-700 bg-emerald-700 text-white'
-          : 'border-emerald-100 bg-white text-ink hover:border-emerald-700 hover:text-emerald-800'
+          ? 'border-emerald-700 bg-emerald-700 text-white dark:border-teal-300 dark:bg-teal-300 dark:text-slate-950'
+          : 'border-emerald-100 bg-white text-ink hover:border-emerald-700 hover:text-emerald-800 dark:border-teal-400/25 dark:bg-slate-900 dark:hover:border-teal-300 dark:hover:text-teal-100'
       }`}
     >
       {label}
@@ -359,8 +362,11 @@ export const PlacesBrowser = ({
   initialMetrics,
   initialMetricsVisible,
   initialMetricsExpanded,
+  initialTheme,
 }: PlacesBrowserProps) => {
   const [locale, setLocale] = useState<AppLocale>(initialLocale);
+  const [theme, setTheme] = useState<AppTheme>(initialTheme);
+  const [systemPrefersDark, setSystemPrefersDark] = useState(false);
   const [typeFilter, setTypeFilter] = useState<PlaceType | 'ALL'>(initialType);
   const [statusFilter, setStatusFilter] = useState<QualityStatus | 'ALL'>(initialStatus);
   const [searchInput, setSearchInput] = useState(initialSearch ?? '');
@@ -403,6 +409,10 @@ export const PlacesBrowser = ({
   const [notificationsError, setNotificationsError] = useState<string | null>(null);
 
   const isInitialRender = useRef(true);
+  const didRunMetricsPreferenceSyncRef = useRef(false);
+  const didRunThemePreferenceSyncRef = useRef(false);
+  const didRunPlacesBrowserPreferenceSyncRef = useRef(false);
+  const didRunFavoriteIdsSyncRef = useRef(false);
   const searchContainerRef = useRef<HTMLDivElement | null>(null);
   const languageContainerRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -550,11 +560,39 @@ export const PlacesBrowser = ({
   }, [metricsLoaded, metricsVisible]);
 
   useEffect(() => {
+    if (!didRunMetricsPreferenceSyncRef.current) {
+      didRunMetricsPreferenceSyncRef.current = true;
+      return;
+    }
+
     writeMetricsUiPreferences({
       metricsVisible,
       metricsExpanded,
     });
   }, [metricsExpanded, metricsVisible]);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', theme === 'dark');
+    document.documentElement.classList.toggle('light', theme === 'light');
+
+    if (!didRunThemePreferenceSyncRef.current) {
+      didRunThemePreferenceSyncRef.current = true;
+      return;
+    }
+
+    writeThemeUiPreferences({ theme });
+  }, [theme]);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const syncSystemTheme = () => {
+      setSystemPrefersDark(mediaQuery.matches);
+    };
+
+    syncSystemTheme();
+    mediaQuery.addEventListener('change', syncSystemTheme);
+    return () => mediaQuery.removeEventListener('change', syncSystemTheme);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -639,8 +677,19 @@ export const PlacesBrowser = ({
       return;
     }
 
+    const favoriteIdsMatchInitial =
+      favoriteIds.length === initialFavoriteIds.length &&
+      favoriteIds.every((favoriteId, index) => favoriteId === initialFavoriteIds[index]);
+
+    if (!didRunFavoriteIdsSyncRef.current) {
+      didRunFavoriteIdsSyncRef.current = true;
+      if (favoriteIdsMatchInitial) {
+        return;
+      }
+    }
+
     writeFavoritePlaceIds(favoriteIds);
-  }, [favoriteIds, favoritesHydrated]);
+  }, [favoriteIds, favoritesHydrated, initialFavoriteIds]);
 
   useEffect(() => {
     if (favoriteIds.length === 0) {
@@ -883,6 +932,14 @@ export const PlacesBrowser = ({
       : locale === 'et'
         ? 'Teavitused väljas'
         : 'Alerts off';
+  const isDarkTheme = theme === 'dark' || (theme === 'system' && systemPrefersDark);
+  const themeToggleLabel = isDarkTheme
+    ? locale === 'et'
+      ? 'Lülita hele teema sisse'
+      : 'Switch to light theme'
+    : locale === 'et'
+      ? 'Lülita tume teema sisse'
+      : 'Switch to dark theme';
   const nearbyAccuracyLabel =
     typeof nearbyAccuracyMeters === 'number' && Number.isFinite(nearbyAccuracyMeters)
       ? formatCompactDistance(nearbyAccuracyMeters, locale)
@@ -955,12 +1012,16 @@ export const PlacesBrowser = ({
   }, [initialNearbySearchEnabled, requestNearbySearch]);
 
   useEffect(() => {
-    writePlacesBrowserPreferences({
-      typeFilter,
-      statusFilter,
-      nearbySearchEnabled,
-      favoritesVisible,
-    });
+    if (!didRunPlacesBrowserPreferenceSyncRef.current) {
+      didRunPlacesBrowserPreferenceSyncRef.current = true;
+    } else {
+      writePlacesBrowserPreferences({
+        typeFilter,
+        statusFilter,
+        nearbySearchEnabled,
+        favoritesVisible,
+      });
+    }
 
     const url = new URL(window.location.href);
     if (typeFilter === 'ALL') {
@@ -1178,7 +1239,7 @@ export const PlacesBrowser = ({
 
   return (
     <main className="mx-auto max-w-6xl px-3 pb-16 pt-6 sm:px-4 sm:pt-8 md:px-8 md:pt-14">
-      <section className="fade-up relative overflow-hidden rounded-3xl border border-emerald-200/70 bg-white/75 p-4 shadow-card backdrop-blur sm:p-6 md:p-8">
+      <section className="fade-up relative overflow-hidden rounded-3xl border border-emerald-200/70 bg-white/75 p-4 shadow-card backdrop-blur dark:border-teal-400/20 dark:bg-slate-950/60 sm:p-6 md:p-8">
         <div className="flex items-start justify-between gap-2">
           <p className="shrink-0 text-xs uppercase tracking-[0.08em] text-accent sm:text-sm sm:tracking-[0.14em]">
             {t('appName', locale)}
@@ -1191,8 +1252,8 @@ export const PlacesBrowser = ({
                 onClick={() => setAboutVisible((value) => !value)}
                 className={`inline-flex h-6 w-6 items-center justify-center rounded-full border text-xs font-semibold leading-none transition sm:h-7 sm:w-7 sm:text-sm ${
                   aboutVisible
-                    ? 'border-emerald-700 bg-emerald-700 text-white'
-                    : 'border-emerald-100 bg-white text-emerald-800 hover:border-emerald-700'
+                    ? 'border-emerald-700 bg-emerald-700 text-white dark:border-teal-300 dark:bg-teal-300 dark:text-slate-950'
+                    : 'border-emerald-100 bg-white text-emerald-800 hover:border-emerald-700 dark:border-teal-400/30 dark:bg-slate-900 dark:text-teal-100 dark:hover:border-teal-300'
                 }`}
                 aria-label={locale === 'et' ? 'Ava info andmete kohta' : 'Open data info'}
                 title={locale === 'et' ? 'Info' : 'About'}
@@ -1201,12 +1262,49 @@ export const PlacesBrowser = ({
               </button>
               <button
                 type="button"
+                aria-pressed={isDarkTheme}
+                onClick={() => setTheme(isDarkTheme ? 'light' : 'dark')}
+                className={`inline-flex h-6 w-11 shrink-0 items-center rounded-full border p-0.5 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-teal-300 dark:focus-visible:ring-offset-slate-950 sm:h-7 sm:w-12 ${
+                  isDarkTheme
+                    ? 'border-teal-300 bg-teal-300/20 text-teal-50'
+                    : 'border-emerald-100 bg-white text-emerald-800 hover:border-emerald-700 dark:border-teal-400/30 dark:bg-slate-900 dark:text-teal-100 dark:hover:border-teal-300'
+                }`}
+                aria-label={themeToggleLabel}
+                title={themeToggleLabel}
+              >
+                <span
+                  aria-hidden="true"
+                  className={`inline-flex h-4 w-4 items-center justify-center rounded-full shadow-sm transition sm:h-5 sm:w-5 ${
+                    isDarkTheme
+                      ? 'translate-x-5 bg-teal-200 text-slate-950 sm:translate-x-5'
+                      : 'translate-x-0 bg-emerald-50 text-emerald-800 dark:bg-slate-800 dark:text-teal-100'
+                  }`}
+                >
+                  {isDarkTheme ? (
+                    <svg viewBox="0 0 20 20" className="h-3 w-3" focusable="false">
+                      <path
+                        d="M10 3.25a.75.75 0 0 1 .75.75v1.25a.75.75 0 0 1-1.5 0V4A.75.75 0 0 1 10 3.25Zm0 10a3.25 3.25 0 1 0 0-6.5 3.25 3.25 0 0 0 0 6.5Zm0 1.5a.75.75 0 0 1 .75.75V17a.75.75 0 0 1-1.5 0v-1.5a.75.75 0 0 1 .75-.75ZM4 9.25h1.25a.75.75 0 0 1 0 1.5H4a.75.75 0 0 1 0-1.5Zm10.75.75a.75.75 0 0 1 .75-.75H17a.75.75 0 0 1 0 1.5h-1.5a.75.75 0 0 1-.75-.75Zm-9.28-4.53a.75.75 0 0 1 1.06 0l.88.88a.75.75 0 1 1-1.06 1.06l-.88-.88a.75.75 0 0 1 0-1.06Zm7.12 7.12a.75.75 0 0 1 1.06 0l.88.88a.75.75 0 0 1-1.06 1.06l-.88-.88a.75.75 0 0 1 0-1.06Zm1.94-7.12a.75.75 0 0 1 0 1.06l-.88.88a.75.75 0 1 1-1.06-1.06l.88-.88a.75.75 0 0 1 1.06 0ZM7.41 12.59a.75.75 0 0 1 0 1.06l-.88.88a.75.75 0 0 1-1.06-1.06l.88-.88a.75.75 0 0 1 1.06 0Z"
+                        fill="currentColor"
+                      />
+                    </svg>
+                  ) : (
+                    <svg viewBox="0 0 20 20" className="h-3 w-3" focusable="false">
+                      <path
+                        d="M14.72 13.86A6.6 6.6 0 0 1 6.14 5.28 5.6 5.6 0 1 0 14.72 13.86Z"
+                        fill="currentColor"
+                      />
+                    </svg>
+                  )}
+                </span>
+              </button>
+              <button
+                type="button"
                 aria-pressed={metricsVisible}
                 onClick={() => setMetricsVisible((value) => !value)}
                 className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold transition sm:px-3 sm:py-1 sm:text-xs ${
                   metricsVisible
-                    ? 'border-emerald-700 bg-emerald-700 text-white'
-                    : 'border-emerald-100 bg-white text-emerald-800 hover:border-emerald-700'
+                    ? 'border-emerald-700 bg-emerald-700 text-white dark:border-teal-300 dark:bg-teal-300 dark:text-slate-950'
+                    : 'border-emerald-100 bg-white text-emerald-800 hover:border-emerald-700 dark:border-teal-400/30 dark:bg-slate-900 dark:text-teal-100 dark:hover:border-teal-300'
                 }`}
               >
                 {locale === 'et' ? 'Mõõdikud' : 'Metrics'}
@@ -1238,9 +1336,9 @@ export const PlacesBrowser = ({
                 }
                 className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold transition sm:gap-1.5 sm:px-3 sm:py-1 sm:text-xs ${
                   notificationsActive
-                    ? 'border-emerald-700 bg-emerald-700 text-white'
-                    : 'border-emerald-100 bg-white text-emerald-800 hover:border-emerald-700'
-                } disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400`}
+                    ? 'border-emerald-700 bg-emerald-700 text-white dark:border-teal-300 dark:bg-teal-300 dark:text-slate-950'
+                    : 'border-emerald-100 bg-white text-emerald-800 hover:border-emerald-700 dark:border-teal-400/30 dark:bg-slate-900 dark:text-teal-100 dark:hover:border-teal-300'
+                } disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 dark:disabled:border-slate-700 dark:disabled:bg-slate-900/70 dark:disabled:text-slate-500`}
               >
                 {notificationsSyncing ? (
                   <span
@@ -1266,7 +1364,7 @@ export const PlacesBrowser = ({
                   aria-haspopup="menu"
                   aria-expanded={languageMenuOpen}
                   aria-controls="language-menu"
-                  className="rounded-full border border-emerald-100 bg-white px-2 py-0.5 text-[11px] font-semibold text-emerald-800 transition hover:border-emerald-700 sm:px-3 sm:py-1 sm:text-xs"
+                  className="rounded-full border border-emerald-100 bg-white px-2 py-0.5 text-[11px] font-semibold text-emerald-800 transition hover:border-emerald-700 dark:border-teal-400/30 dark:bg-slate-900 dark:text-teal-100 dark:hover:border-teal-300 sm:px-3 sm:py-1 sm:text-xs"
                 >
                   <span className="sm:hidden">{locale === 'et' ? 'ET' : 'EN'}</span>
                   <span className="hidden sm:inline">
@@ -1278,7 +1376,7 @@ export const PlacesBrowser = ({
                     id="language-menu"
                     role="menu"
                     aria-label={locale === 'et' ? 'Keele valik' : 'Language selection'}
-                    className="absolute right-0 z-10 mt-2 w-40 overflow-hidden rounded-xl border border-emerald-100 bg-white shadow-card"
+                    className="absolute right-0 z-10 mt-2 w-40 overflow-hidden rounded-xl border border-emerald-100 bg-white shadow-card dark:border-teal-400/20 dark:bg-slate-900"
                   >
                     <button
                       type="button"
@@ -1290,8 +1388,8 @@ export const PlacesBrowser = ({
                       }}
                       className={`block w-full px-3 py-2 text-left text-sm transition ${
                         locale === 'et'
-                          ? 'bg-emerald-50 font-semibold text-emerald-900'
-                          : 'text-ink hover:bg-emerald-50'
+                          ? 'bg-emerald-50 font-semibold text-emerald-900 dark:bg-teal-300/15 dark:text-teal-50'
+                          : 'text-ink hover:bg-emerald-50 dark:hover:bg-teal-300/10'
                       }`}
                     >
                       Eesti
@@ -1306,8 +1404,8 @@ export const PlacesBrowser = ({
                       }}
                       className={`block w-full px-3 py-2 text-left text-sm transition ${
                         locale === 'en'
-                          ? 'bg-emerald-50 font-semibold text-emerald-900'
-                          : 'text-ink hover:bg-emerald-50'
+                          ? 'bg-emerald-50 font-semibold text-emerald-900 dark:bg-teal-300/15 dark:text-teal-50'
+                          : 'text-ink hover:bg-emerald-50 dark:hover:bg-teal-300/10'
                       }`}
                     >
                       English
@@ -1348,7 +1446,7 @@ export const PlacesBrowser = ({
             <svg
               aria-hidden="true"
               viewBox="0 0 20 20"
-              className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400"
+              className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400 dark:text-slate-500"
             >
               <path
                 d="M13.442 12.032l4.263 4.263-1.41 1.41-4.264-4.263a7 7 0 1 1 1.41-1.41zM8.5 13A4.5 4.5 0 1 0 8.5 4a4.5 4.5 0 0 0 0 9z"
@@ -1425,7 +1523,7 @@ export const PlacesBrowser = ({
                   ? `${suggestionsListId}-${activeSuggestionIndex}`
                   : undefined
               }
-              className="h-14 w-full rounded-2xl border border-emerald-200 bg-white pl-12 pr-24 text-base text-ink shadow-card outline-none transition placeholder:text-slate-400 focus:border-accent focus:ring-2 focus:ring-emerald-200 sm:pr-28"
+              className="h-14 w-full rounded-2xl border border-emerald-200 bg-white pl-12 pr-24 text-base text-ink shadow-card outline-none transition placeholder:text-slate-400 focus:border-accent focus:ring-2 focus:ring-emerald-200 dark:border-teal-400/25 dark:bg-slate-950/80 dark:placeholder:text-slate-500 dark:focus:ring-teal-300/30 sm:pr-28"
             />
             <div className="absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-1">
               {searchInput ? (
@@ -1441,12 +1539,12 @@ export const PlacesBrowser = ({
                   }}
                   aria-label={locale === 'et' ? 'Puhasta otsing' : 'Clear search'}
                   title={locale === 'et' ? 'Puhasta otsing' : 'Clear search'}
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-emerald-200 bg-emerald-50/80 text-sm font-semibold leading-none text-accent shadow-sm transition hover:border-accent hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-emerald-200 bg-emerald-50/80 text-sm font-semibold leading-none text-accent shadow-sm transition hover:border-accent hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 dark:border-teal-400/25 dark:bg-slate-900 dark:hover:border-teal-300 dark:hover:bg-slate-800 dark:focus-visible:ring-teal-300 dark:focus-visible:ring-offset-slate-950"
                 >
                   <span aria-hidden="true">×</span>
                 </button>
               ) : (
-                <kbd className="rounded border border-emerald-100 bg-emerald-50 px-1.5 py-0.5 text-[11px] text-slate-500 sm:px-2">
+                <kbd className="rounded border border-emerald-100 bg-emerald-50 px-1.5 py-0.5 text-[11px] text-slate-500 dark:border-teal-400/20 dark:bg-slate-900 dark:text-slate-400 sm:px-2">
                   /
                 </kbd>
               )}
@@ -1460,12 +1558,12 @@ export const PlacesBrowser = ({
                 aria-pressed={isNearbySearchActive}
                 aria-busy={nearbyStatus === 'requesting'}
                 title={nearbyButtonTitle}
-                className={`inline-flex h-8 w-8 items-center justify-center rounded border text-emerald-700 transition duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 ${
+                className={`inline-flex h-8 w-8 items-center justify-center rounded border text-emerald-700 transition duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 dark:focus-visible:ring-teal-300 dark:focus-visible:ring-offset-slate-950 ${
                   nearbyStatus === 'requesting'
-                    ? 'cursor-wait border-emerald-200 bg-emerald-50 text-accent'
+                    ? 'cursor-wait border-emerald-200 bg-emerald-50 text-accent dark:border-teal-400/25 dark:bg-slate-900'
                     : isNearbySearchActive
-                      ? 'border-emerald-500 bg-emerald-100 text-emerald-900 shadow-inner hover:border-emerald-600 hover:bg-emerald-100 active:bg-emerald-200'
-                      : 'border-emerald-100 bg-emerald-50 text-slate-500 hover:border-emerald-300 hover:bg-emerald-100 hover:text-emerald-800 active:bg-emerald-200'
+                      ? 'border-emerald-500 bg-emerald-100 text-emerald-900 shadow-inner hover:border-emerald-600 hover:bg-emerald-100 active:bg-emerald-200 dark:border-teal-300 dark:bg-teal-300/20 dark:text-teal-50 dark:hover:bg-teal-300/25'
+                      : 'border-emerald-100 bg-emerald-50 text-slate-500 hover:border-emerald-300 hover:bg-emerald-100 hover:text-emerald-800 active:bg-emerald-200 dark:border-teal-400/20 dark:bg-slate-900 dark:text-slate-400 dark:hover:border-teal-300 dark:hover:bg-slate-800 dark:hover:text-teal-100'
                 }`}
               >
                 {nearbyStatus === 'requesting' ? (
@@ -1489,7 +1587,7 @@ export const PlacesBrowser = ({
             <ul
               id={suggestionsListId}
               role="listbox"
-              className="mt-2 overflow-hidden rounded-2xl border border-emerald-100 bg-white shadow-card"
+              className="mt-2 overflow-hidden rounded-2xl border border-emerald-100 bg-white shadow-card dark:border-teal-400/20 dark:bg-slate-900"
             >
               {suggestions.map((suggestion, index) => (
                 <li
@@ -1503,19 +1601,21 @@ export const PlacesBrowser = ({
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={() => applySuggestion(suggestion)}
                     className={`block w-full px-4 py-3 text-left transition ${
-                      index === activeSuggestionIndex ? 'bg-emerald-50' : 'hover:bg-emerald-50'
+                      index === activeSuggestionIndex
+                        ? 'bg-emerald-50 dark:bg-teal-300/15'
+                        : 'hover:bg-emerald-50 dark:hover:bg-teal-300/10'
                     }`}
                   >
                     <p className="text-sm text-ink">
                       {highlightMatch(suggestion.name, searchQuery)}
                     </p>
-                    <p className="mt-0.5 text-xs text-slate-500">
+                    <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
                       {suggestion.matchedBy === 'address' && suggestion.address
                         ? highlightMatch(suggestion.address, searchQuery)
                         : highlightMatch(suggestion.municipality, searchQuery)}
                     </p>
                     {suggestion.matchedBy !== 'name' ? (
-                      <p className="mt-1 text-[11px] uppercase tracking-[0.08em] text-slate-400">
+                      <p className="mt-1 text-[11px] uppercase tracking-[0.08em] text-slate-400 dark:text-slate-500">
                         {suggestion.matchedBy === 'address'
                           ? locale === 'et'
                             ? 'Aadressi vaste'
@@ -1532,7 +1632,7 @@ export const PlacesBrowser = ({
           ) : null}
 
           <div
-            className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500"
+            className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400"
             aria-live="polite"
           >
             <p>{nearbyStatusMessage}</p>
@@ -1540,7 +1640,7 @@ export const PlacesBrowser = ({
               <button
                 type="button"
                 onClick={clearNearbySearch}
-                className="font-semibold text-accent underline decoration-dotted underline-offset-2 hover:text-emerald-700"
+                className="font-semibold text-accent underline decoration-dotted underline-offset-2 hover:text-emerald-700 dark:hover:text-teal-200"
               >
                 {locale === 'et' ? 'Lõpeta' : 'Clear'}
               </button>
@@ -1591,10 +1691,10 @@ export const PlacesBrowser = ({
               aria-pressed={favoritesVisible}
               aria-controls="favorite-places-content"
               aria-expanded={favoritesVisible}
-              className={`inline-flex min-h-9 items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 ${
+              className={`inline-flex min-h-9 items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 dark:focus-visible:ring-teal-300 dark:focus-visible:ring-offset-slate-950 ${
                 favoritesVisible
-                  ? 'border-emerald-700 bg-emerald-700 text-white'
-                  : 'border-emerald-100 bg-white text-emerald-800 hover:border-emerald-700'
+                  ? 'border-emerald-700 bg-emerald-700 text-white dark:border-teal-300 dark:bg-teal-300 dark:text-slate-950'
+                  : 'border-emerald-100 bg-white text-emerald-800 hover:border-emerald-700 dark:border-teal-400/25 dark:bg-slate-900 dark:text-teal-100 dark:hover:border-teal-300'
               }`}
             >
               <span aria-hidden="true" className="text-base leading-none">
@@ -1604,7 +1704,9 @@ export const PlacesBrowser = ({
               <span
                 aria-live="polite"
                 className={`rounded-full px-2 py-0.5 text-xs ${
-                  favoritesVisible ? 'bg-white/20 text-white' : 'bg-emerald-50 text-slate-700'
+                  favoritesVisible
+                    ? 'bg-white/20 text-white dark:bg-slate-950/20 dark:text-slate-950'
+                    : 'bg-emerald-50 text-slate-700 dark:bg-teal-300/10 dark:text-slate-200'
                 }`}
               >
                 {formattedFavoriteCount}
@@ -1616,7 +1718,7 @@ export const PlacesBrowser = ({
           {favoritesVisible ? (
             <div id="favorite-places-content">
               <p
-                className={`mb-3 text-xs text-slate-500 ${favoritesNoticeSingleLine ? 'whitespace-nowrap' : ''}`}
+                className={`mb-3 text-xs text-slate-500 dark:text-slate-400 ${favoritesNoticeSingleLine ? 'whitespace-nowrap' : ''}`}
               >
                 {!webPushConfigured
                   ? locale === 'et'
@@ -1636,14 +1738,14 @@ export const PlacesBrowser = ({
               </p>
               {!favoritesHydrated || (favoritesLoading && favoritePlaces.length === 0) ? (
                 <div role="status" className="grid min-h-[12rem] gap-4 md:grid-cols-2">
-                  <div className="animate-pulse rounded-xl border border-emerald-100 bg-card p-4" />
-                  <div className="hidden animate-pulse rounded-xl border border-emerald-100 bg-card p-4 md:block" />
+                  <div className="animate-pulse rounded-xl border border-emerald-100 bg-card p-4 dark:border-teal-400/20" />
+                  <div className="hidden animate-pulse rounded-xl border border-emerald-100 bg-card p-4 dark:border-teal-400/20 md:block" />
                   <span className="sr-only">
                     {locale === 'et' ? 'Laadin lemmikuid...' : 'Loading favorites...'}
                   </span>
                 </div>
               ) : favoritePlaces.length === 0 ? (
-                <div className="flex min-h-[12rem] items-center rounded-xl border border-emerald-100 bg-card p-4 text-sm text-slate-600">
+                <div className="flex min-h-[12rem] items-center rounded-xl border border-emerald-100 bg-card p-4 text-sm text-slate-600 dark:border-teal-400/20 dark:text-slate-300">
                   {locale === 'et'
                     ? 'Lemmikuid ei õnnestunud hetkel laadida.'
                     : 'Could not load favorites right now.'}
@@ -1676,7 +1778,7 @@ export const PlacesBrowser = ({
 
       <section className="mt-8">
         <h2 className="sr-only">{locale === 'et' ? 'Tulemused' : 'Results'}</h2>
-        <div className="relative mb-3 pr-10 text-xs text-slate-500">
+        <div className="relative mb-3 pr-10 text-xs text-slate-500 dark:text-slate-400">
           <p>
             {isNearbySearchActive
               ? locale === 'et'
@@ -1694,10 +1796,10 @@ export const PlacesBrowser = ({
             <div
               role="status"
               aria-live="polite"
-              className="pointer-events-none absolute right-0 top-1/2 inline-flex -translate-y-1/2 items-center rounded-full border border-emerald-200 bg-white/85 px-2 py-1 shadow-sm"
+              className="pointer-events-none absolute right-0 top-1/2 inline-flex -translate-y-1/2 items-center rounded-full border border-emerald-200 bg-white/85 px-2 py-1 shadow-sm dark:border-teal-400/20 dark:bg-slate-900/85"
             >
               <span className="relative inline-flex h-4 w-4" aria-hidden="true">
-                <span className="absolute inset-0 rounded-full border-2 border-emerald-100" />
+                <span className="absolute inset-0 rounded-full border-2 border-emerald-100 dark:border-teal-300/20" />
                 <span className="absolute inset-0 animate-spin rounded-full border-2 border-accent border-r-transparent" />
                 <span className="absolute left-1/2 top-1/2 h-1 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent/70" />
               </span>
@@ -1709,13 +1811,13 @@ export const PlacesBrowser = ({
         </div>
 
         {error ? (
-          <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
+          <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 dark:border-rose-400/30 dark:bg-rose-950/30 dark:text-rose-200">
             {error}
           </div>
         ) : null}
 
         {places.length === 0 && !loading ? (
-          <div className="rounded-xl border border-emerald-100 bg-card p-4 text-sm text-slate-600">
+          <div className="rounded-xl border border-emerald-100 bg-card p-4 text-sm text-slate-600 dark:border-teal-400/20 dark:text-slate-300">
             {locale === 'et'
               ? 'Sobivaid kohti ei leitud valitud filtritega.'
               : 'No places found with the selected filters.'}

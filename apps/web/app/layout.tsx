@@ -1,9 +1,14 @@
 import type { Metadata, Viewport } from 'next';
+import { cookies } from 'next/headers';
 import { Manrope, Newsreader } from 'next/font/google';
 import { Analytics } from '@vercel/analytics/next';
 import { SpeedInsights } from '@vercel/speed-insights/next';
 
 import { resolveSiteUrl } from '../lib/site-url';
+import {
+  parseThemeUiPreferences,
+  THEME_PREFERENCES_COOKIE_NAME,
+} from '../lib/ui-preferences-storage';
 import './globals.css';
 
 const bodyFont = Manrope({
@@ -114,7 +119,7 @@ export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',
-  colorScheme: 'light',
+  colorScheme: 'light dark',
   themeColor: '#0a8f78',
 };
 
@@ -122,11 +127,16 @@ interface RootLayoutProps {
   children: React.ReactNode;
 }
 
-const RootLayout = ({ children }: RootLayoutProps) => {
+const RootLayout = async ({ children }: RootLayoutProps) => {
   const isProduction = process.env.NODE_ENV === 'production';
+  const requestCookies = await cookies();
+  const themePreferences = parseThemeUiPreferences(
+    requestCookies.get(THEME_PREFERENCES_COOKIE_NAME)?.value,
+  );
+  const themeClassName = themePreferences.theme === 'system' ? undefined : themePreferences.theme;
 
   return (
-    <html lang="et">
+    <html lang="et" className={themeClassName}>
       <body
         className={`${bodyFont.variable} ${titleFont.variable} bg-surface text-ink antialiased`}
       >

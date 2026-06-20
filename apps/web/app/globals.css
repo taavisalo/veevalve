@@ -1,9 +1,66 @@
 @import 'tailwindcss';
 @config '../tailwind.config.mjs';
 @source '../../../packages/ui/src/web/place-card.tsx';
+@custom-variant dark {
+  &:where(.dark, .dark *) {
+    @slot;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    &:where(:root:not(.light), :root:not(.light) *) {
+      @slot;
+    }
+  }
+}
+
+:root {
+  color-scheme: light;
+  --color-surface: 242 247 245;
+  --color-card: 255 255 255;
+  --color-ink: 21 50 51;
+  --color-accent: 10 143 120;
+  --color-accent-dark: 6 104 90;
+  --color-quality-good: 30 138 74;
+  --color-quality-bad: 195 59 49;
+  --color-quality-unknown: 123 135 148;
+  --shadow-card: 0 8px 30px -14px rgba(6, 104, 90, 0.25);
+}
+
+:root.dark {
+  color-scheme: dark;
+  --color-surface: 7 24 24;
+  --color-card: 13 36 36;
+  --color-ink: 224 244 240;
+  --color-accent: 78 216 187;
+  --color-accent-dark: 35 171 146;
+  --color-quality-good: 68 201 120;
+  --color-quality-bad: 248 113 113;
+  --color-quality-unknown: 148 163 184;
+  --shadow-card: 0 20px 46px -28px rgba(0, 0, 0, 0.8);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) {
+    color-scheme: dark;
+    --color-surface: 7 24 24;
+    --color-card: 13 36 36;
+    --color-ink: 224 244 240;
+    --color-accent: 78 216 187;
+    --color-accent-dark: 35 171 146;
+    --color-quality-good: 68 201 120;
+    --color-quality-bad: 248 113 113;
+    --color-quality-unknown: 148 163 184;
+    --shadow-card: 0 20px 46px -28px rgba(0, 0, 0, 0.8);
+  }
+}
+
+html {
+  background: rgb(var(--color-surface));
+}
 
 body {
   font-family: var(--font-body), 'Avenir Next', 'Segoe UI', sans-serif;
+  background: rgb(var(--color-surface));
 }
 
 a[href],
@@ -29,6 +86,22 @@ h4 {
     radial-gradient(circle at 0% 0%, rgba(10, 143, 120, 0.18), transparent 44%),
     radial-gradient(circle at 100% 0%, rgba(30, 138, 74, 0.12), transparent 40%),
     linear-gradient(180deg, #f2f7f5 0%, #f6fbfa 45%, #f9fcfb 100%);
+}
+
+.dark .bg-grid-pattern {
+  background:
+    radial-gradient(circle at 0% 0%, rgba(78, 216, 187, 0.13), transparent 42%),
+    radial-gradient(circle at 100% 0%, rgba(45, 212, 191, 0.08), transparent 38%),
+    linear-gradient(180deg, #061817 0%, #09201f 48%, #071818 100%);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) .bg-grid-pattern {
+    background:
+      radial-gradient(circle at 0% 0%, rgba(78, 216, 187, 0.13), transparent 42%),
+      radial-gradient(circle at 100% 0%, rgba(45, 212, 191, 0.08), transparent 38%),
+      linear-gradient(180deg, #061817 0%, #09201f 48%, #071818 100%);
+  }
 }
 
 @keyframes fade-up {

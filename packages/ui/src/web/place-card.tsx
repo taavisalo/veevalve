@@ -138,66 +138,66 @@ type StatusTone = QualityStatus | 'STALE';
 
 const getStatusCardBorderClass = (tone: StatusTone): string => {
   if (tone === 'STALE') {
-    return 'border-amber-300';
+    return 'border-amber-300 dark:border-amber-300/60';
   }
 
   if (tone === 'BAD') {
-    return 'border-rose-200';
+    return 'border-rose-200 dark:border-rose-400/40';
   }
 
   if (tone === 'GOOD') {
-    return 'border-emerald-200';
+    return 'border-emerald-200 dark:border-teal-400/30';
   }
 
-  return 'border-slate-200';
+  return 'border-slate-200 dark:border-slate-600';
 };
 
 const getStatusPanelClass = (tone: StatusTone): string => {
   if (tone === 'STALE') {
-    return 'border-amber-300 bg-gradient-to-r from-amber-100 to-amber-50';
+    return 'border-amber-300 bg-gradient-to-r from-amber-100 to-amber-50 dark:border-amber-300/50 dark:from-amber-500/20 dark:to-amber-400/10';
   }
 
   if (tone === 'BAD') {
-    return 'border-rose-300 bg-gradient-to-r from-rose-100 to-rose-50';
+    return 'border-rose-300 bg-gradient-to-r from-rose-100 to-rose-50 dark:border-rose-400/50 dark:from-rose-500/20 dark:to-rose-400/10';
   }
 
   if (tone === 'GOOD') {
-    return 'border-emerald-300 bg-gradient-to-r from-emerald-100 to-emerald-50';
+    return 'border-emerald-300 bg-gradient-to-r from-emerald-100 to-emerald-50 dark:border-teal-300/50 dark:from-teal-400/20 dark:to-emerald-400/10';
   }
 
-  return 'border-slate-300 bg-gradient-to-r from-slate-100 to-slate-50';
+  return 'border-slate-300 bg-gradient-to-r from-slate-100 to-slate-50 dark:border-slate-500 dark:from-slate-700/50 dark:to-slate-800/60';
 };
 
 const getStatusPanelTextClass = (tone: StatusTone): string => {
   if (tone === 'STALE') {
-    return 'text-amber-950';
+    return 'text-amber-950 dark:text-amber-100';
   }
 
   if (tone === 'BAD') {
-    return 'text-rose-900';
+    return 'text-rose-900 dark:text-rose-100';
   }
 
   if (tone === 'GOOD') {
-    return 'text-emerald-900';
+    return 'text-emerald-900 dark:text-teal-50';
   }
 
-  return 'text-slate-800';
+  return 'text-slate-800 dark:text-slate-100';
 };
 
 const getStatusIconWrapClass = (tone: StatusTone): string => {
   if (tone === 'STALE') {
-    return 'bg-amber-200 text-amber-900';
+    return 'bg-amber-200 text-amber-900 dark:bg-amber-300/25 dark:text-amber-100';
   }
 
   if (tone === 'BAD') {
-    return 'bg-rose-200 text-rose-800';
+    return 'bg-rose-200 text-rose-800 dark:bg-rose-300/25 dark:text-rose-100';
   }
 
   if (tone === 'GOOD') {
-    return 'bg-emerald-200 text-emerald-800';
+    return 'bg-emerald-200 text-emerald-800 dark:bg-teal-300/25 dark:text-teal-50';
   }
 
-  return 'bg-slate-200 text-slate-700';
+  return 'bg-slate-200 text-slate-700 dark:bg-slate-600 dark:text-slate-100';
 };
 
 const getStatusSymbol = (tone: StatusTone): string => {
@@ -350,10 +350,10 @@ export const PlaceCard = ({
       referrerPolicy="no-referrer"
       className={`mt-2 inline-flex items-center gap-1 text-xs font-medium underline decoration-dotted underline-offset-2 ${
         isLatestReadingStale
-          ? 'text-amber-800 hover:text-amber-900'
+          ? 'text-amber-800 hover:text-amber-900 dark:text-amber-200 dark:hover:text-amber-100'
           : status === 'GOOD'
-            ? 'text-emerald-700 hover:text-emerald-800'
-            : 'text-rose-700 hover:text-rose-800'
+            ? 'text-emerald-700 hover:text-emerald-800 dark:text-teal-200 dark:hover:text-teal-100'
+            : 'text-rose-700 hover:text-rose-800 dark:text-rose-200 dark:hover:text-rose-100'
       }`}
     >
       <span>{fullReportLabel}</span>
@@ -370,15 +370,15 @@ export const PlaceCard = ({
       <header className="flex items-start justify-between gap-2">
         <div>
           <h3 className="text-base font-semibold text-ink">{placeName}</h3>
-          <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-600">
+          <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-600 dark:text-slate-400">
             <span>{place.municipality}</span>
             {formattedDistance ? (
               <>
-                <span aria-hidden className="text-slate-300">
+                <span aria-hidden className="text-slate-300 dark:text-slate-600">
                   •
                 </span>
                 <span
-                  className="inline-flex items-center gap-1 rounded-full border border-emerald-100 bg-emerald-50 px-1.5 py-0.5 text-xs font-semibold leading-none text-emerald-800"
+                  className="inline-flex items-center gap-1 rounded-full border border-emerald-100 bg-emerald-50 px-1.5 py-0.5 text-xs font-semibold leading-none text-emerald-800 dark:border-teal-400/25 dark:bg-teal-300/10 dark:text-teal-100"
                   aria-label={distanceLabel}
                 >
                   <svg aria-hidden="true" viewBox="0 0 20 20" className="h-3 w-3">
@@ -405,10 +405,10 @@ export const PlaceCard = ({
               disabled={favoriteUpdating}
               className={`inline-flex h-8 w-8 items-center justify-center rounded-full border text-base leading-none transition ${
                 favoriteUpdating
-                  ? 'cursor-wait border-accent/40 bg-emerald-50 text-accent'
+                  ? 'cursor-wait border-accent/40 bg-emerald-50 text-accent dark:bg-teal-300/10'
                   : isFavorite
-                    ? 'border-amber-300 bg-amber-50 text-amber-600'
-                    : 'border-emerald-100 bg-white text-slate-500 hover:border-amber-300 hover:text-amber-600'
+                    ? 'border-amber-300 bg-amber-50 text-amber-600 dark:border-amber-300/50 dark:bg-amber-300/10 dark:text-amber-200'
+                    : 'border-emerald-100 bg-white text-slate-500 hover:border-amber-300 hover:text-amber-600 dark:border-teal-400/20 dark:bg-slate-900 dark:text-slate-400 dark:hover:border-amber-300/60 dark:hover:text-amber-200'
               }`}
             >
               {favoriteUpdating ? (
@@ -432,7 +432,7 @@ export const PlaceCard = ({
             onClick={() => setShowBadDetails((value) => !value)}
             aria-expanded={showBadDetails}
             title={badDetailsToggleLabel}
-            className={`w-full text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ${
+            className={`w-full text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900 ${
               isLatestReadingStale ? 'focus-visible:ring-amber-400' : 'focus-visible:ring-rose-400'
             }`}
           >
@@ -474,11 +474,13 @@ export const PlaceCard = ({
           {showBadDetails ? (
             <div
               className={`mt-2 border-t pt-2 ${
-                isLatestReadingStale ? 'border-amber-200/80' : 'border-rose-200/80'
+                isLatestReadingStale
+                  ? 'border-amber-200/80 dark:border-amber-300/30'
+                  : 'border-rose-200/80 dark:border-rose-300/30'
               }`}
             >
               {badDetails.length > 0 ? (
-                <ul className="list-disc space-y-1 pl-4 text-xs text-rose-900">
+                <ul className="list-disc space-y-1 pl-4 text-xs text-rose-900 dark:text-rose-100">
                   {badDetails.map((detail) => (
                     <li key={`${place.id}-bad-detail-${detail}`} className="leading-5">
                       {detail}
@@ -486,7 +488,7 @@ export const PlaceCard = ({
                   ))}
                 </ul>
               ) : (
-                <p className="text-xs text-rose-800">{badDetailsFallbackText}</p>
+                <p className="text-xs text-rose-800 dark:text-rose-100">{badDetailsFallbackText}</p>
               )}
               {fullReportLink}
             </div>
@@ -500,7 +502,7 @@ export const PlaceCard = ({
               onClick={() => setShowGoodReport((value) => !value)}
               aria-expanded={showGoodReport}
               title={goodReportToggleLabel}
-              className={`w-full text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ${
+              className={`w-full text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900 ${
                 isLatestReadingStale
                   ? 'focus-visible:ring-amber-400'
                   : 'focus-visible:ring-emerald-400'
@@ -572,7 +574,9 @@ export const PlaceCard = ({
           {status === 'GOOD' && showGoodReport ? (
             <div
               className={`mt-2 border-t pt-2 ${
-                isLatestReadingStale ? 'border-amber-200/80' : 'border-emerald-200/80'
+                isLatestReadingStale
+                  ? 'border-amber-200/80 dark:border-amber-300/30'
+                  : 'border-emerald-200/80 dark:border-teal-300/30'
               }`}
             >
               {fullReportLink}
@@ -587,9 +591,9 @@ export const PlaceCard = ({
           rel="noopener noreferrer nofollow external"
           referrerPolicy="no-referrer"
           aria-label={openAddressLabel}
-          className="mt-3 inline-flex max-w-full items-start gap-1.5 text-sm text-accent underline decoration-dotted underline-offset-2 hover:text-emerald-700"
+          className="mt-3 inline-flex max-w-full items-start gap-1.5 text-sm text-accent underline decoration-dotted underline-offset-2 hover:text-emerald-700 dark:hover:text-teal-200"
         >
-          <span className="text-left text-slate-700">{placeAddress}</span>
+          <span className="text-left text-slate-700 dark:text-slate-300">{placeAddress}</span>
           <svg
             aria-hidden="true"
             viewBox="0 0 20 20"
@@ -599,9 +603,9 @@ export const PlaceCard = ({
           </svg>
         </a>
       ) : (
-        <p className="mt-3 text-sm text-slate-700">{missingAddressText}</p>
+        <p className="mt-3 text-sm text-slate-700 dark:text-slate-300">{missingAddressText}</p>
       )}
-      <p className="mt-3 text-xs text-slate-500">
+      <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
         {latestSampleLabel}{' '}
         {place.latestReading && exactSampledAtIso && relativeSampledAt ? (
           <span className="relative inline-flex items-center">
@@ -609,12 +613,12 @@ export const PlaceCard = ({
               type="button"
               title={exactSampledAtIso}
               onClick={() => setShowExactSampledAt((value) => !value)}
-              className="underline decoration-dotted underline-offset-2 hover:text-accent"
+              className="underline decoration-dotted underline-offset-2 hover:text-accent dark:hover:text-teal-200"
             >
               <time dateTime={exactSampledAtIso}>{relativeSampledAt}</time>
             </button>
             {showExactSampledAt ? (
-              <span className="pointer-events-none absolute left-0 top-full z-30 mt-1 whitespace-nowrap rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] text-slate-700 shadow-sm">
+              <span className="pointer-events-none absolute left-0 top-full z-30 mt-1 whitespace-nowrap rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] text-slate-700 shadow-sm dark:bg-slate-800 dark:text-slate-200">
                 {exactSampledAtIso}
               </span>
             ) : null}

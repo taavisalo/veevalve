@@ -12,10 +12,18 @@ export interface PlacesBrowserPreferences {
   favoritesVisible: boolean;
 }
 
+export type AppTheme = 'system' | 'light' | 'dark';
+
+export interface ThemeUiPreferences {
+  theme: AppTheme;
+}
+
 const METRICS_PREFERENCES_KEY = 'veevalve.metrics_ui.v1';
 export const METRICS_PREFERENCES_COOKIE_NAME = '__Host-veevalve.metrics_ui.v1';
 const PLACES_BROWSER_PREFERENCES_KEY = 'veevalve.places_browser.v1';
 export const PLACES_BROWSER_PREFERENCES_COOKIE_NAME = '__Host-veevalve.places_browser.v1';
+const THEME_PREFERENCES_KEY = 'veevalve.theme_ui.v1';
+export const THEME_PREFERENCES_COOKIE_NAME = '__Host-veevalve.theme_ui.v1';
 
 const DEFAULT_METRICS_UI_PREFERENCES: MetricsUiPreferences = {
   metricsVisible: false,
@@ -27,6 +35,10 @@ const DEFAULT_PLACES_BROWSER_PREFERENCES: PlacesBrowserPreferences = {
   statusFilter: 'ALL',
   nearbySearchEnabled: false,
   favoritesVisible: true,
+};
+
+const DEFAULT_THEME_UI_PREFERENCES: ThemeUiPreferences = {
+  theme: 'system',
 };
 
 const normalizeTypeFilter = (value: unknown): PlaceType | 'ALL' => {
@@ -77,6 +89,22 @@ export const normalizePlacesBrowserPreferences = (value: unknown): PlacesBrowser
   };
 };
 
+export const normalizeThemeUiPreferences = (value: unknown): ThemeUiPreferences => {
+  if (!value || typeof value !== 'object') {
+    return DEFAULT_THEME_UI_PREFERENCES;
+  }
+
+  const candidate = value as Partial<ThemeUiPreferences>;
+  const theme =
+    candidate.theme === 'system' || candidate.theme === 'light' || candidate.theme === 'dark'
+      ? candidate.theme
+      : DEFAULT_THEME_UI_PREFERENCES.theme;
+
+  return {
+    theme,
+  };
+};
+
 export const parseMetricsUiPreferences = (serialized?: string): MetricsUiPreferences => {
   if (!serialized) {
     return DEFAULT_METRICS_UI_PREFERENCES;
@@ -109,9 +137,26 @@ export const parsePlacesBrowserPreferences = (serialized?: string): PlacesBrowse
   }
 };
 
+export const parseThemeUiPreferences = (serialized?: string): ThemeUiPreferences => {
+  if (!serialized) {
+    return DEFAULT_THEME_UI_PREFERENCES;
+  }
+
+  try {
+    return normalizeThemeUiPreferences(JSON.parse(serialized));
+  } catch {
+    try {
+      return normalizeThemeUiPreferences(JSON.parse(decodeURIComponent(serialized)));
+    } catch {
+      return DEFAULT_THEME_UI_PREFERENCES;
+    }
+  }
+};
+
 const writeBrowserPreferenceCookie = (payload: {
   metricsUi?: MetricsUiPreferences;
   placesBrowser?: PlacesBrowserPreferences;
+  themeUi?: ThemeUiPreferences;
 }): void => {
   if (typeof window === 'undefined' || typeof fetch === 'undefined') {
     return;
@@ -132,6 +177,38 @@ const writeBrowserPreferenceCookie = (payload: {
   } catch {
     // Ignore storage failures (private mode / blocked requests).
   }
+};
+
+export const readThemeUiPreferences = (): ThemeUiPreferences => {
+  if (typeof window === 'undefined') {
+    return DEFAULT_THEME_UI_PREFERENCES;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(THEME_PREFERENCES_KEY);
+    if (!raw) {
+      return DEFAULT_THEME_UI_PREFERENCES;
+    }
+
+    return parseThemeUiPreferences(raw);
+  } catch {
+    return DEFAULT_THEME_UI_PREFERENCES;
+  }
+};
+
+export const writeThemeUiPreferences = (preferences: ThemeUiPreferences): void => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  const normalized = normalizeThemeUiPreferences(preferences);
+  try {
+    window.localStorage.setItem(THEME_PREFERENCES_KEY, JSON.stringify(normalized));
+  } catch {
+    // Ignore storage failures (private mode / quota).
+  }
+
+  writeBrowserPreferenceCookie({ themeUi: normalized });
 };
 
 export const readMetricsUiPreferences = (): MetricsUiPreferences => {

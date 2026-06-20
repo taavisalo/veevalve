@@ -5,7 +5,9 @@ import { PUT } from '../app/api/preferences/route';
 import { FAVORITE_PLACE_IDS_COOKIE_NAME, parseFavoritePlaceIds } from '../lib/favorites-storage';
 import {
   parsePlacesBrowserPreferences,
+  parseThemeUiPreferences,
   PLACES_BROWSER_PREFERENCES_COOKIE_NAME,
+  THEME_PREFERENCES_COOKIE_NAME,
 } from '../lib/ui-preferences-storage';
 
 const createPreferencesRequest = ({ payload }: { payload: unknown }): NextRequest =>
@@ -77,5 +79,31 @@ describe('preferences route', () => {
     expect(setCookie).toContain('Max-Age=31536000');
     expect(setCookie).not.toContain('Domain=');
     expect(parseFavoritePlaceIds(cookieValue)).toEqual(['place-1', 'place-2']);
+  });
+
+  it('sets secure __Host prefixed theme cookies', async () => {
+    const response = await PUT(
+      createPreferencesRequest({
+        payload: {
+          themeUi: {
+            theme: 'dark',
+          },
+        },
+      }),
+    );
+
+    const setCookie = response.headers.get('set-cookie') ?? '';
+    const cookieValue = setCookie.split(';')[0]?.slice(`${THEME_PREFERENCES_COOKIE_NAME}=`.length);
+
+    expect(response.status).toBe(200);
+    expect(setCookie).toContain(`${THEME_PREFERENCES_COOKIE_NAME}=`);
+    expect(THEME_PREFERENCES_COOKIE_NAME).toMatch(/^__Host-/);
+    expect(setCookie).toContain('Secure');
+    expect(setCookie).toContain('HttpOnly');
+    expect(setCookie).toContain('SameSite=lax');
+    expect(setCookie).toContain('Path=/');
+    expect(setCookie).toContain('Max-Age=31536000');
+    expect(setCookie).not.toContain('Domain=');
+    expect(parseThemeUiPreferences(cookieValue)).toEqual({ theme: 'dark' });
   });
 });

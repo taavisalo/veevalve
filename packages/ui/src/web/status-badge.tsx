@@ -8,9 +8,10 @@ const styles = cva(
   {
     variants: {
       status: {
-        GOOD: 'bg-emerald-100 text-emerald-800 ring-emerald-200',
-        BAD: 'bg-rose-100 text-rose-800 ring-rose-200',
-        UNKNOWN: 'bg-slate-100 text-slate-700 ring-slate-200',
+        GOOD: 'bg-emerald-100 text-emerald-800 ring-emerald-200 dark:bg-teal-300/15 dark:text-teal-100 dark:ring-teal-300/30',
+        BAD: 'bg-rose-100 text-rose-800 ring-rose-200 dark:bg-rose-400/15 dark:text-rose-100 dark:ring-rose-300/30',
+        UNKNOWN:
+          'bg-slate-100 text-slate-700 ring-slate-200 dark:bg-slate-700/70 dark:text-slate-100 dark:ring-slate-500',
       },
     },
     defaultVariants: {

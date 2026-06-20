@@ -13,7 +13,9 @@ import {
   METRICS_PREFERENCES_COOKIE_NAME,
   parseMetricsUiPreferences,
   parsePlacesBrowserPreferences,
+  parseThemeUiPreferences,
   PLACES_BROWSER_PREFERENCES_COOKIE_NAME,
+  THEME_PREFERENCES_COOKIE_NAME,
 } from '../lib/ui-preferences-storage';
 
 interface HomePageProps {
@@ -168,6 +170,9 @@ const HomePage = async ({ searchParams }: HomePageProps) => {
   const metricsUiPreferences = parseMetricsUiPreferences(
     requestCookies.get(METRICS_PREFERENCES_COOKIE_NAME)?.value,
   );
+  const themeUiPreferences = parseThemeUiPreferences(
+    requestCookies.get(THEME_PREFERENCES_COOKIE_NAME)?.value,
+  );
   const type = filterParamsExplicit
     ? normalizeType(readParam(resolvedSearchParams, 'type'))
     : placesBrowserPreferences.typeFilter;
@@ -253,6 +258,7 @@ const HomePage = async ({ searchParams }: HomePageProps) => {
         initialMetrics={initialMetrics}
         initialMetricsVisible={metricsUiPreferences.metricsVisible}
         initialMetricsExpanded={metricsUiPreferences.metricsExpanded}
+        initialTheme={themeUiPreferences.theme}
       />
     </>
   );

@@ -5,17 +5,17 @@ export const tailwindPreset: Config = {
   theme: {
     extend: {
       colors: {
-        surface: '#F2F7F5',
-        card: '#FFFFFF',
-        ink: '#153233',
-        accent: '#0A8F78',
-        accentDark: '#06685A',
-        qualityGood: '#1E8A4A',
-        qualityBad: '#C33B31',
-        qualityUnknown: '#7B8794',
+        surface: 'rgb(var(--color-surface) / <alpha-value>)',
+        card: 'rgb(var(--color-card) / <alpha-value>)',
+        ink: 'rgb(var(--color-ink) / <alpha-value>)',
+        accent: 'rgb(var(--color-accent) / <alpha-value>)',
+        accentDark: 'rgb(var(--color-accent-dark) / <alpha-value>)',
+        qualityGood: 'rgb(var(--color-quality-good) / <alpha-value>)',
+        qualityBad: 'rgb(var(--color-quality-bad) / <alpha-value>)',
+        qualityUnknown: 'rgb(var(--color-quality-unknown) / <alpha-value>)',
       },
       boxShadow: {
-        card: '0 8px 30px -14px rgba(6, 104, 90, 0.25)',
+        card: 'var(--shadow-card)',
       },
       borderRadius: {
         xl: '1rem',

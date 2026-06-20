@@ -8,7 +8,7 @@ interface AboutPanelProps {
 
 export const AboutPanel = ({ locale }: AboutPanelProps) => {
   return (
-    <div className="mt-4 rounded-2xl border border-emerald-100 bg-white/85 p-4 text-sm text-slate-700">
+    <div className="mt-4 rounded-2xl border border-emerald-100 bg-white/85 p-4 text-sm text-slate-700 dark:border-teal-400/20 dark:bg-slate-900/75 dark:text-slate-300">
       <p className="font-semibold text-ink">
         {locale === 'et' ? 'Abi: andmeallikas ja uuendused' : 'Help: data source and updates'}
       </p>
@@ -20,7 +20,7 @@ export const AboutPanel = ({ locale }: AboutPanelProps) => {
               href={TERVISEAMET_DATA_URL}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-accent underline decoration-dotted underline-offset-2"
+              className="text-accent underline decoration-dotted underline-offset-2 dark:hover:text-teal-200"
             >
               vtiav.sm.ee
             </a>
@@ -33,7 +33,7 @@ export const AboutPanel = ({ locale }: AboutPanelProps) => {
               href={TERVISEAMET_DATA_URL}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-accent underline decoration-dotted underline-offset-2"
+              className="text-accent underline decoration-dotted underline-offset-2 dark:hover:text-teal-200"
             >
               vtiav.sm.ee
             </a>
@@ -41,7 +41,7 @@ export const AboutPanel = ({ locale }: AboutPanelProps) => {
           </>
         )}
       </p>
-      <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-slate-600">
+      <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-slate-600 dark:text-slate-400">
         {locale === 'et' ? (
           <>
             <li>
@@ -79,7 +79,7 @@ export const AboutPanel = ({ locale }: AboutPanelProps) => {
       <p className="mt-3 font-semibold text-ink">
         {locale === 'et' ? 'Mida tähendavad staatused?' : 'What do statuses mean?'}
       </p>
-      <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-slate-600">
+      <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-slate-600 dark:text-slate-400">
         {locale === 'et' ? (
           <>
             <li>`Hea`: viimane proov vastab nõuetele.</li>
@@ -100,7 +100,7 @@ export const AboutPanel = ({ locale }: AboutPanelProps) => {
           ? 'Kuidas brauseri tõuketeavitused töötavad?'
           : 'How do browser push notifications work?'}
       </p>
-      <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-slate-600">
+      <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-slate-600 dark:text-slate-400">
         {locale === 'et' ? (
           <>
             <li>
