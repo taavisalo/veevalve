@@ -245,6 +245,7 @@ export const generateMetadata = async ({ searchParams }: HomePageProps): Promise
     },
     openGraph: {
       type: 'website',
+      siteName: 'VeeValve',
       title,
       description,
       url: landingPath,
@@ -252,7 +253,7 @@ export const generateMetadata = async ({ searchParams }: HomePageProps): Promise
       alternateLocale,
       images: [
         {
-          url: '/opengraph-image',
+          url: '/opengraph-image.png',
           width: 1200,
           height: 630,
           alt: title,
@@ -263,7 +264,7 @@ export const generateMetadata = async ({ searchParams }: HomePageProps): Promise
       card: 'summary_large_image',
       title,
       description,
-      images: ['/twitter-image'],
+      images: ['/twitter-image.png'],
     },
     robots: noIndexVariant
       ? {

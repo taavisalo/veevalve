@@ -77,7 +77,7 @@ export const metadata: Metadata = {
     url: '/',
     images: [
       {
-        url: '/opengraph-image',
+        url: '/opengraph-image.png',
         width: 1200,
         height: 630,
         alt: `${siteName} — vee kvaliteet randades ja basseinides`,
@@ -88,7 +88,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: siteName,
     description: siteDescription,
-    images: ['/twitter-image'],
+    images: ['/twitter-image.png'],
   },
   robots: {
     index: true,
