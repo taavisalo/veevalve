@@ -14,7 +14,7 @@ import {
 } from '@veevalve/core/client';
 import dynamic from 'next/dynamic';
 import { PlaceCard } from '@veevalve/ui/web';
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 
 import { fetchPlaces } from '../lib/fetch-places';
 import type { PlaceMetrics } from '../lib/fetch-place-metrics';
@@ -156,6 +156,40 @@ const loadWebPushClientModule = (): Promise<typeof WebPushClientModule> => {
 const AboutPanel = dynamic(() => import('./about-panel').then((module) => module.AboutPanel));
 
 const MetricsPanel = dynamic(() => import('./metrics-panel').then((module) => module.MetricsPanel));
+
+const AboutPanelPlaceholder = ({ locale }: { locale: AppLocale }) => {
+  return (
+    <div
+      className="mt-4 rounded-2xl border border-emerald-100 bg-white/85 p-4 text-sm text-slate-700 dark:border-teal-400/20 dark:bg-slate-900/75 dark:text-slate-300"
+      role="status"
+      aria-live="polite"
+    >
+      <p className="font-semibold text-ink">
+        {locale === 'et' ? 'Laadin infot...' : 'Loading info...'}
+      </p>
+      <div className="mt-3 space-y-2">
+        <div className="h-3 w-11/12 rounded bg-emerald-100/80 dark:bg-teal-300/15" />
+        <div className="h-3 w-10/12 rounded bg-emerald-100/80 dark:bg-teal-300/15" />
+        <div className="h-3 w-8/12 rounded bg-emerald-100/80 dark:bg-teal-300/15" />
+      </div>
+    </div>
+  );
+};
+
+const MetricsPanelPlaceholder = ({ locale }: { locale: AppLocale }) => {
+  return (
+    <div id="metrics-panel" className="mt-4" role="status" aria-live="polite">
+      <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">
+        {locale === 'et' ? 'Laadin mõõdikuid...' : 'Loading metrics...'}
+      </p>
+      <div className="grid gap-2 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)]">
+        <div className="h-24 rounded-2xl border border-rose-200 bg-rose-50/80 dark:border-rose-400/30 dark:bg-rose-950/30" />
+        <div className="h-24 rounded-2xl border border-emerald-100 bg-white/80 dark:border-teal-400/20 dark:bg-slate-900/75" />
+        <div className="h-24 rounded-2xl border border-emerald-100 bg-white/80 dark:border-teal-400/20 dark:bg-slate-900/75" />
+      </div>
+    </div>
+  );
+};
 
 interface PlacesBrowserProps {
   initialLocale: AppLocale;
@@ -1425,18 +1459,24 @@ export const PlacesBrowser = ({
             : 'Water quality for beaches and pools'}
         </h1>
 
-        {aboutVisible ? <AboutPanel locale={locale} /> : null}
+        {aboutVisible ? (
+          <Suspense fallback={<AboutPanelPlaceholder locale={locale} />}>
+            <AboutPanel locale={locale} />
+          </Suspense>
+        ) : null}
 
         {metricsVisible ? (
-          <MetricsPanel
-            locale={locale}
-            metrics={metrics}
-            metricsLoading={metricsLoading}
-            metricsExpanded={metricsExpanded}
-            badShare={badShare}
-            formattedLatestUpdate={formatMetricsDate(metrics.latestSourceUpdatedAt, locale)}
-            onToggleExpanded={() => setMetricsExpanded((value) => !value)}
-          />
+          <Suspense fallback={<MetricsPanelPlaceholder locale={locale} />}>
+            <MetricsPanel
+              locale={locale}
+              metrics={metrics}
+              metricsLoading={metricsLoading}
+              metricsExpanded={metricsExpanded}
+              badShare={badShare}
+              formattedLatestUpdate={formatMetricsDate(metrics.latestSourceUpdatedAt, locale)}
+              onToggleExpanded={() => setMetricsExpanded((value) => !value)}
+            />
+          </Suspense>
         ) : null}
         <div className="mt-5 max-w-3xl" ref={searchContainerRef}>
           <label htmlFor="place-search" className="sr-only">
