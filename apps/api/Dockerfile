@@ -15,7 +15,11 @@ COPY . .
 RUN pnpm --filter @veevalve/core build
 RUN pnpm --filter @veevalve/api prisma:generate
 RUN pnpm --filter @veevalve/api build
-RUN pnpm --filter @veevalve/api deploy --prod --no-optional /app/deploy/api
+RUN pnpm --filter @veevalve/api deploy --legacy --prod --no-optional /app/deploy/api
+RUN set -eux; \
+    generated_prisma_dir="$(find /app/node_modules/.pnpm -path '*/node_modules/.prisma' -type d | head -n 1)"; \
+    deployed_client_dir="$(cd /app/deploy/api && node -p "require('path').dirname(require.resolve('@prisma/client/package.json'))")"; \
+    cp -R "$generated_prisma_dir" "$(dirname "$(dirname "$deployed_client_dir")")/.prisma"
 
 FROM node:24-bookworm-slim AS runtime
 WORKDIR /app
@@ -26,4 +30,4 @@ COPY --from=build /app/apps/api/dist ./dist
 COPY --from=build /app/apps/api/prisma ./prisma
 USER node
 EXPOSE 3001
-CMD ["node", "dist/main.js"]
+CMD ["node", "dist/src/main.js"]

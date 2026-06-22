@@ -3,17 +3,20 @@ interface PlaceFetchPolicy {
   revalidateSeconds?: number;
 }
 
+export const LIVE_PLACE_REVALIDATE_SECONDS = 30;
 const PLACE_METRICS_REVALIDATE_SECONDS = 60;
 
 export const getPlacesFetchPolicy = (): PlaceFetchPolicy => {
   return {
-    cacheMode: 'no-store',
+    cacheMode: 'force-cache',
+    revalidateSeconds: LIVE_PLACE_REVALIDATE_SECONDS,
   };
 };
 
 export const getFavoritePlacesFetchPolicy = (): PlaceFetchPolicy => {
   return {
-    cacheMode: 'no-store',
+    cacheMode: 'force-cache',
+    revalidateSeconds: LIVE_PLACE_REVALIDATE_SECONDS,
   };
 };
 

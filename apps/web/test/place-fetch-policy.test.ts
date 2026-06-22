@@ -7,15 +7,17 @@ import {
 } from '../lib/place-fetch-policy';
 
 describe('place fetch policy', () => {
-  it('disables caching for place lists', () => {
+  it('keeps place lists in a short-lived cache', () => {
     expect(getPlacesFetchPolicy()).toEqual({
-      cacheMode: 'no-store',
+      cacheMode: 'force-cache',
+      revalidateSeconds: 30,
     });
   });
 
-  it('disables caching for favorite place requests', () => {
+  it('keeps favorite place requests in a short-lived cache', () => {
     expect(getFavoritePlacesFetchPolicy()).toEqual({
-      cacheMode: 'no-store',
+      cacheMode: 'force-cache',
+      revalidateSeconds: 30,
     });
   });
 

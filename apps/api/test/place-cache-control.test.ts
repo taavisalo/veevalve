@@ -6,8 +6,10 @@ import {
 } from '../src/places/place-cache-control';
 
 describe('place cache control', () => {
-  it('disables storage for live place status responses', () => {
-    expect(LIVE_PLACE_CACHE_CONTROL).toBe('no-store');
+  it('keeps live place status responses cacheable for a short window', () => {
+    expect(LIVE_PLACE_CACHE_CONTROL).toBe(
+      'public, max-age=0, s-maxage=30, stale-while-revalidate=120',
+    );
   });
 
   it('keeps aggregate metrics cacheable for a short window', () => {
