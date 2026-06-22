@@ -57,6 +57,19 @@ When making changes:
 3. Update `.env.example` if new environment variables are introduced.
 4. Keep Docker and CI workflows aligned with app scripts.
 
+## Vercel, Performance, and CSP Guardrails
+
+- Production runs as two Vercel projects:
+  - `veevalve-web` with root directory `apps/web`
+  - `veevalve-api` with root directory `apps/api`
+  - Both projects include files outside the root directory during build.
+- The web project targets the Vercel Hobby plan. Keep homepage Edge Function bundles under the 1 MB gzip limit. Avoid importing heavy server-only renderers or WASM-backed packages into Edge-rendered pages.
+- Do not use dynamic `next/og` `ImageResponse` routes for app-level social images while the homepage is Edge-rendered. Prefer static metadata files such as `apps/web/app/opengraph-image.png`, `apps/web/app/twitter-image.png`, and matching `.alt.txt` files.
+- The homepage intentionally exports `runtime = 'edge'` and `preferredRegion = 'home'`. Next.js currently warns that Edge runtime disables static generation for that page; this warning is expected unless the runtime choice changes.
+- Production web CSP is strict and nonce-based. Do not add inline `style` attributes, React `style={{ ... }}` props, `element.style` mutations, or `setAttribute('style', ...)` in app/UI code. Use CSS classes, Tailwind utilities, CSS variables defined in stylesheets, or nonced `<style>` tags only when a stylesheet cannot cover the case.
+- Keep pnpm-specific install settings out of `.npmrc` so Vercel/npm does not warn about unknown npm project config. Put pnpm workspace settings in `pnpm-workspace.yaml`.
+- Before shipping web changes that affect the homepage shell, run a production build and check for CSP-sensitive inline style usage with `rg "style=\\{\\{|style=\\\"|setAttribute\\(['\\\"]style|\\.style\\." apps/web/app apps/web/components apps/web/lib packages/ui/src`.
+
 ## Useful Commands
 
 ```bash
