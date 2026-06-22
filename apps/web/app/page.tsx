@@ -84,6 +84,8 @@ const shouldNoIndexVariant = (params: {
   return Boolean(params.search) || params.type !== 'ALL' || params.status !== 'ALL';
 };
 
+const fallbackFilterPillWidthClasses = ['w-[90px]', 'w-[72px]', 'w-[72px]', 'w-[84px]', 'w-[76px]'];
+
 interface PlacesBrowserDataProps {
   locale: AppLocale;
   type: PlaceType | 'ALL';
@@ -128,11 +130,10 @@ const PlacesBrowserFallback = ({ locale }: { locale: AppLocale }) => {
 
         <div className="-mx-0.5 mt-5 overflow-hidden pb-1">
           <div className="flex min-w-max items-center gap-1 px-0.5">
-            {[90, 72, 72, 84, 76].map((width, index) => (
+            {fallbackFilterPillWidthClasses.map((widthClass, index) => (
               <span
-                key={`${width}-${index}`}
-                className="h-7 rounded-full border border-emerald-100 bg-white dark:border-teal-400/25 dark:bg-slate-900"
-                style={{ width }}
+                key={`${widthClass}-${index}`}
+                className={`h-7 ${widthClass} rounded-full border border-emerald-100 bg-white dark:border-teal-400/25 dark:bg-slate-900`}
               />
             ))}
           </div>
