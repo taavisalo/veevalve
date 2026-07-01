@@ -335,8 +335,8 @@ Observed from source data and headers on **February 16, 2026**:
 
 Default polling optimization implemented:
 - metadata feeds: every 24h
-- pool sample feeds: every 2h
-- beach sample feeds: every 2h in May-October, otherwise every 24h
+- pool sample feeds: every 30 minutes
+- beach sample feeds: every 30 minutes in May-October, otherwise every 24h
 
 ## Production Scheduling (Vercel-Friendly)
 
@@ -348,7 +348,7 @@ Recommended setup:
 - Add repository secrets:
   - `SYNC_API_URL` (for example `https://api.example.com/water-quality/sync`)
   - `SYNC_API_TOKEN` (must match API `SYNC_API_TOKEN`)
-- Schedule currently runs every 2 hours (`17 */2 * * *`) and can also be run manually with `workflow_dispatch`
+- Schedule currently runs every 30 minutes (`17,47 * * * *`) and can also be run manually with `workflow_dispatch`
 
 Suggested secure setup flow:
 1. Generate a token: `pnpm --filter @veevalve/api sync:token`

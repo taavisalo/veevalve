@@ -3,7 +3,7 @@ name: Sync API Data
 on:
   workflow_dispatch:
   schedule:
-    - cron: '17 */2 * * *'
+    - cron: '17,47 * * * *'
 
 permissions:
   contents: read

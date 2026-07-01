@@ -141,7 +141,7 @@ export class WaterQualityService {
     private readonly webPushService: WebPushService,
   ) {}
 
-  @Cron('15 * * * *')
+  @Cron('17,47 * * * *')
   async scheduledSync(): Promise<void> {
     if (!this.internalSyncCronEnabled) {
       if (!this.hasLoggedDisabledInternalCron) {
@@ -390,6 +390,7 @@ export class WaterQualityService {
   }
 
   private feedIntervalMs(fileKind: SourceFileKind): number {
+    const minute = 60 * 1000;
     const hour = 60 * 60 * 1000;
     if (
       fileKind === SourceFileKind.POOL_LOCATIONS ||
@@ -400,12 +401,12 @@ export class WaterQualityService {
     }
 
     if (fileKind === SourceFileKind.POOL_SAMPLES) {
-      return 2 * hour;
+      return 30 * minute;
     }
 
     const month = new Date().getUTCMonth() + 1;
     const isBeachSeason = month >= 5 && month <= 10;
-    return isBeachSeason ? 2 * hour : 24 * hour;
+    return isBeachSeason ? 30 * minute : 24 * hour;
   }
 
   private async fetchFeedIfChanged(
