@@ -26,6 +26,31 @@ const titleFont = Newsreader({
 
 const siteName = 'VeeValve';
 const siteDescription = 'Avalike randade ja basseinide vee kvaliteedi teavitused Eestis.';
+const appleStartupImages = [
+  { url: '/apple-startup/veevalve-640x1136.png', width: 320, height: 568, ratio: 2 },
+  { url: '/apple-startup/veevalve-750x1334.png', width: 375, height: 667, ratio: 2 },
+  { url: '/apple-startup/veevalve-828x1792.png', width: 414, height: 896, ratio: 2 },
+  { url: '/apple-startup/veevalve-1125x2436.png', width: 375, height: 812, ratio: 3 },
+  { url: '/apple-startup/veevalve-1170x2532.png', width: 390, height: 844, ratio: 3 },
+  { url: '/apple-startup/veevalve-1179x2556.png', width: 393, height: 852, ratio: 3 },
+  { url: '/apple-startup/veevalve-1206x2622.png', width: 402, height: 874, ratio: 3 },
+  { url: '/apple-startup/veevalve-1242x2208.png', width: 414, height: 736, ratio: 3 },
+  { url: '/apple-startup/veevalve-1242x2688.png', width: 414, height: 896, ratio: 3 },
+  { url: '/apple-startup/veevalve-1284x2778.png', width: 428, height: 926, ratio: 3 },
+  { url: '/apple-startup/veevalve-1290x2796.png', width: 430, height: 932, ratio: 3 },
+  { url: '/apple-startup/veevalve-1320x2868.png', width: 440, height: 956, ratio: 3 },
+  { url: '/apple-startup/veevalve-1536x2048.png', width: 768, height: 1024, ratio: 2 },
+  { url: '/apple-startup/veevalve-1620x2160.png', width: 810, height: 1080, ratio: 2 },
+  { url: '/apple-startup/veevalve-1640x2360.png', width: 820, height: 1180, ratio: 2 },
+  { url: '/apple-startup/veevalve-1668x2224.png', width: 834, height: 1112, ratio: 2 },
+  { url: '/apple-startup/veevalve-1668x2388.png', width: 834, height: 1194, ratio: 2 },
+  { url: '/apple-startup/veevalve-2048x2732.png', width: 1024, height: 1366, ratio: 2 },
+].map(({ url, width, height, ratio }) => ({
+  url,
+  media: `(device-width: ${String(width)}px) and (device-height: ${String(
+    height,
+  )}px) and (-webkit-device-pixel-ratio: ${String(ratio)}) and (orientation: portrait)`,
+}));
 
 export const metadata: Metadata = {
   metadataBase: new URL(resolveSiteUrl()),
@@ -48,6 +73,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     title: siteName,
+    startupImage: appleStartupImages,
     statusBarStyle: 'default',
   },
   keywords: [

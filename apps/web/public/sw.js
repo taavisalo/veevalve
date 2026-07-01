@@ -1,7 +1,7 @@
-const CACHE_VERSION = 'v2';
+const CACHE_VERSION = 'v3';
 const APP_SHELL_CACHE = `veevalve-app-shell-${CACHE_VERSION}`;
 const STATIC_CACHE = `veevalve-static-${CACHE_VERSION}`;
-const NAVIGATION_NETWORK_TIMEOUT_MS = 1_200;
+const NAVIGATION_NETWORK_TIMEOUT_MS = 450;
 const APP_SHELL_URLS = [
   '/',
   '/manifest.webmanifest',
@@ -9,6 +9,24 @@ const APP_SHELL_URLS = [
   '/icon-192.png',
   '/icon-512.png',
   '/apple-touch-icon.png',
+  '/apple-startup/veevalve-640x1136.png',
+  '/apple-startup/veevalve-750x1334.png',
+  '/apple-startup/veevalve-828x1792.png',
+  '/apple-startup/veevalve-1125x2436.png',
+  '/apple-startup/veevalve-1170x2532.png',
+  '/apple-startup/veevalve-1179x2556.png',
+  '/apple-startup/veevalve-1206x2622.png',
+  '/apple-startup/veevalve-1242x2208.png',
+  '/apple-startup/veevalve-1242x2688.png',
+  '/apple-startup/veevalve-1284x2778.png',
+  '/apple-startup/veevalve-1290x2796.png',
+  '/apple-startup/veevalve-1320x2868.png',
+  '/apple-startup/veevalve-1536x2048.png',
+  '/apple-startup/veevalve-1620x2160.png',
+  '/apple-startup/veevalve-1640x2360.png',
+  '/apple-startup/veevalve-1668x2224.png',
+  '/apple-startup/veevalve-1668x2388.png',
+  '/apple-startup/veevalve-2048x2732.png',
 ];
 const STATIC_PATHS = new Set(APP_SHELL_URLS.filter((url) => url !== '/'));
 
