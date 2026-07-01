@@ -4,3 +4,28 @@ packages:
 
 strictPeerDependencies: false
 autoInstallPeers: false
+
+onlyBuiltDependencies:
+  - "@scarf/scarf"
+  - "@nestjs/core"
+  - "@prisma/engines"
+  - esbuild
+  - prisma
+  - sharp
+
+allowedDeprecatedVersions:
+  glob: "*"
+  inflight: "*"
+  rimraf: "*"
+
+peerDependencyRules:
+  ignoreMissing:
+    - react-native
+    - react-dom
+
+allowBuilds:
+  '@prisma/engines': true
+  '@scarf/scarf': true
+  esbuild: true
+  prisma: true
+  sharp: true

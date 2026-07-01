@@ -7,6 +7,7 @@ import {
   parseThemeUiPreferences,
   THEME_PREFERENCES_COOKIE_NAME,
 } from '../lib/ui-preferences-storage';
+import { ServiceWorkerRegistration } from '../components/service-worker-registration';
 import './globals.css';
 
 const bodyFont = Manrope({
@@ -137,6 +138,7 @@ const RootLayout = async ({ children }: RootLayoutProps) => {
       <body
         className={`${bodyFont.variable} ${titleFont.variable} bg-surface text-ink antialiased`}
       >
+        <ServiceWorkerRegistration />
         <div className="min-h-screen bg-grid-pattern">{children}</div>
       </body>
     </html>

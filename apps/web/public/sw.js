@@ -1,9 +1,163 @@
-self.addEventListener('install', () => {
-  void self.skipWaiting();
+const CACHE_VERSION = 'v2';
+const APP_SHELL_CACHE = `veevalve-app-shell-${CACHE_VERSION}`;
+const STATIC_CACHE = `veevalve-static-${CACHE_VERSION}`;
+const NAVIGATION_NETWORK_TIMEOUT_MS = 1_200;
+const APP_SHELL_URLS = [
+  '/',
+  '/manifest.webmanifest',
+  '/favicon.svg',
+  '/icon-192.png',
+  '/icon-512.png',
+  '/apple-touch-icon.png',
+];
+const STATIC_PATHS = new Set(APP_SHELL_URLS.filter((url) => url !== '/'));
+
+const isCacheableResponse = (response) => {
+  return response && response.ok && response.type !== 'opaque';
+};
+
+const getCacheableNetworkResponse = async (request) => {
+  const response = await fetch(request);
+  if (!isCacheableResponse(response)) {
+    return response;
+  }
+
+  return response;
+};
+
+const cacheResponse = async (cacheName, request, response) => {
+  if (!isCacheableResponse(response)) {
+    return;
+  }
+
+  const cache = await caches.open(cacheName);
+  await cache.put(request, response.clone());
+};
+
+const findCachedNavigation = async (request) => {
+  const cache = await caches.open(APP_SHELL_CACHE);
+  const exactMatch = await cache.match(request);
+  if (exactMatch) {
+    return exactMatch;
+  }
+
+  return cache.match('/');
+};
+
+const timeout = (durationMs) =>
+  new Promise((resolve) => {
+    setTimeout(() => resolve(undefined), durationMs);
+  });
+
+const handleNavigationRequest = async (event) => {
+  const request = event.request;
+  const networkResponsePromise = (async () => {
+    const preloadResponse = await event.preloadResponse;
+    const response = preloadResponse || (await getCacheableNetworkResponse(request));
+    await cacheResponse(APP_SHELL_CACHE, request, response);
+
+    const requestUrl = new URL(request.url);
+    if (requestUrl.origin === self.location.origin && requestUrl.pathname === '/') {
+      await cacheResponse(APP_SHELL_CACHE, '/', response);
+    }
+
+    return response;
+  })();
+
+  event.waitUntil(networkResponsePromise.catch(() => undefined));
+
+  try {
+    const networkResponse = await Promise.race([
+      networkResponsePromise,
+      timeout(NAVIGATION_NETWORK_TIMEOUT_MS),
+    ]);
+    if (networkResponse) {
+      return networkResponse;
+    }
+  } catch {
+    // Fall back to a cached shell below.
+  }
+
+  const cachedResponse = await findCachedNavigation(request);
+  if (cachedResponse) {
+    return cachedResponse;
+  }
+
+  try {
+    return await networkResponsePromise;
+  } catch (error) {
+    const fallbackResponse = await findCachedNavigation(request);
+    if (fallbackResponse) {
+      return fallbackResponse;
+    }
+
+    throw error;
+  }
+};
+
+const handleStaticRequest = async (event) => {
+  const request = event.request;
+  const cachedResponse = await caches.match(request);
+  const networkResponsePromise = getCacheableNetworkResponse(request).then(async (response) => {
+    await cacheResponse(STATIC_CACHE, request, response);
+    return response;
+  });
+
+  event.waitUntil(networkResponsePromise.catch(() => undefined));
+
+  if (cachedResponse) {
+    return cachedResponse;
+  }
+
+  return networkResponsePromise;
+};
+
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches
+      .open(APP_SHELL_CACHE)
+      .then((cache) => cache.addAll(APP_SHELL_URLS))
+      .catch(() => undefined)
+      .then(() => self.skipWaiting()),
+  );
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(self.clients.claim());
+  event.waitUntil(
+    Promise.all([
+      caches
+        .keys()
+        .then((cacheNames) =>
+          Promise.all(
+            cacheNames
+              .filter((cacheName) => ![APP_SHELL_CACHE, STATIC_CACHE].includes(cacheName))
+              .map((cacheName) => caches.delete(cacheName)),
+          ),
+        ),
+      self.registration.navigationPreload ? self.registration.navigationPreload.enable() : null,
+      self.clients.claim(),
+    ]),
+  );
+});
+
+self.addEventListener('fetch', (event) => {
+  if (event.request.method !== 'GET') {
+    return;
+  }
+
+  const requestUrl = new URL(event.request.url);
+  if (requestUrl.origin !== self.location.origin) {
+    return;
+  }
+
+  if (event.request.mode === 'navigate') {
+    event.respondWith(handleNavigationRequest(event));
+    return;
+  }
+
+  if (requestUrl.pathname.startsWith('/_next/static/') || STATIC_PATHS.has(requestUrl.pathname)) {
+    event.respondWith(handleStaticRequest(event));
+  }
 });
 
 self.addEventListener('push', (event) => {
