@@ -1,12 +1,16 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import type { PlaceWithLatestReading } from '@veevalve/core/client';
 import {
   parseFavoritePlaceIds,
+  readCachedFavoritePlaces,
   readFavoritePlaceIds,
+  writeCachedFavoritePlaces,
   writeFavoritePlaceIds,
 } from '../lib/favorites-storage';
 
 const FAVORITES_LOCAL_STORAGE_KEY = 'veevalve.favorite_place_ids.v1';
+const FAVORITE_PLACES_CACHE_LOCAL_STORAGE_KEY = 'veevalve.favorite_places.v1';
 
 const createMemoryStorage = (initialValues: Map<string, string> = new Map()): Storage => {
   const values = new Map(initialValues);
@@ -28,6 +32,31 @@ const createMemoryStorage = (initialValues: Map<string, string> = new Map()): St
     }),
   };
 };
+
+const createCachedPlace = (
+  id: string,
+  status: NonNullable<PlaceWithLatestReading['latestReading']>['status'] = 'GOOD',
+): PlaceWithLatestReading => ({
+  id,
+  externalId: `external-${id}`,
+  nameEt: `Koht ${id}`,
+  nameEn: `Place ${id}`,
+  type: 'BEACH',
+  addressEt: `Aadress ${id}`,
+  latitude: 59.437,
+  longitude: 24.7536,
+  municipality: 'Tallinn',
+  latestReading: {
+    id: `reading-${id}`,
+    placeId: id,
+    sampledAt: '2026-07-03T09:00:00.000Z',
+    status,
+    statusReasonEt: 'Hea suplusvee kvaliteet',
+    statusReasonEn: 'Good bathing water quality',
+    source: 'TERVISEAMET_XML',
+    sourceUrl: 'https://example.com/source.xml',
+  },
+});
 
 describe('favorites storage', () => {
   afterEach(() => {
@@ -95,5 +124,45 @@ describe('favorites storage', () => {
         body: JSON.stringify({ favoritePlaceIds: [] }),
       }),
     );
+  });
+
+  it('reads cached favorite places in current favorite order', () => {
+    const place1 = createCachedPlace('place-1');
+    const place2 = createCachedPlace('place-2', 'UNKNOWN');
+    const storage = createMemoryStorage();
+    vi.stubGlobal('window', { localStorage: storage });
+
+    writeCachedFavoritePlaces([place2, place1]);
+
+    expect(readCachedFavoritePlaces(['place-1', 'missing-place', 'place-2'])).toEqual([
+      place1,
+      place2,
+    ]);
+  });
+
+  it('filters invalid cached favorite entries', () => {
+    const place = createCachedPlace('place-1');
+    const storage = createMemoryStorage(
+      new Map([
+        [
+          FAVORITE_PLACES_CACHE_LOCAL_STORAGE_KEY,
+          JSON.stringify([place, { id: 'place-2', nameEt: 'Missing required fields' }]),
+        ],
+      ]),
+    );
+    vi.stubGlobal('window', { localStorage: storage });
+
+    expect(readCachedFavoritePlaces(['place-2', 'place-1'])).toEqual([place]);
+  });
+
+  it('removes the cached favorite place payload when no places remain', () => {
+    const storage = createMemoryStorage(
+      new Map([[FAVORITE_PLACES_CACHE_LOCAL_STORAGE_KEY, JSON.stringify([createCachedPlace('a')])]]),
+    );
+    vi.stubGlobal('window', { localStorage: storage });
+
+    writeCachedFavoritePlaces([]);
+
+    expect(storage.getItem(FAVORITE_PLACES_CACHE_LOCAL_STORAGE_KEY)).toBeNull();
   });
 });

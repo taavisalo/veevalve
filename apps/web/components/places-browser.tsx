@@ -20,7 +20,12 @@ import { fetchPlaces } from '../lib/fetch-places';
 import type { PlaceMetrics } from '../lib/fetch-place-metrics';
 import type * as FetchPlaceMetricsModule from '../lib/fetch-place-metrics';
 import type * as FetchPlacesByIdsModule from '../lib/fetch-places-by-ids';
-import { readFavoritePlaceIds, writeFavoritePlaceIds } from '../lib/favorites-storage';
+import {
+  readCachedFavoritePlaces,
+  readFavoritePlaceIds,
+  writeCachedFavoritePlaces,
+  writeFavoritePlaceIds,
+} from '../lib/favorites-storage';
 import {
   readFavoriteStatusNotificationsEnabled,
   writeFavoriteStatusNotificationsEnabled,
@@ -43,6 +48,7 @@ const NEARBY_RESULTS_LIMIT = 12;
 const SUGGESTION_LIMIT = 8;
 const SEARCH_DEBOUNCE_MS = 180;
 const FAVORITE_ACTION_MIN_PENDING_MS = 350;
+const FAVORITES_UPDATED_VISIBLE_MS = 2_500;
 const GEOLOCATION_TIMEOUT_MS = 10_000;
 const GEOLOCATION_MAXIMUM_AGE_MS = 5 * 60 * 1_000;
 const WEB_PUSH_VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY ?? '';
@@ -224,6 +230,8 @@ type NearbySearchStatus =
   | 'unavailable'
   | 'timeout'
   | 'error';
+
+type FavoritesRefreshStatus = 'idle' | 'updating' | 'updated';
 
 interface FilterButtonProps {
   label: string;
@@ -434,6 +442,8 @@ export const PlacesBrowser = ({
   const [favoritesHydrated, setFavoritesHydrated] = useState(false);
   const [favoritesLoading, setFavoritesLoading] = useState(false);
   const [favoritePlaces, setFavoritePlaces] = useState<PlaceWithLatestReading[]>([]);
+  const [favoritesRefreshStatus, setFavoritesRefreshStatus] =
+    useState<FavoritesRefreshStatus>('idle');
   const [notificationsSupported, setNotificationsSupported] = useState(false);
   const [notificationPermission, setNotificationPermission] =
     useState<NotificationPermission>('default');
@@ -452,7 +462,27 @@ export const PlacesBrowser = ({
   const inputRef = useRef<HTMLInputElement | null>(null);
   const favoriteActionTimeoutsRef = useRef<Map<string, number>>(new Map());
   const favoriteActionStartedAtRef = useRef<Map<string, number>>(new Map());
+  const favoritePlacesRef = useRef<PlaceWithLatestReading[]>([]);
+  const favoritesRefreshStatusTimeoutRef = useRef<number | null>(null);
   const suggestionsListId = useId();
+
+  const clearFavoritesRefreshStatusTimeout = useCallback(() => {
+    if (favoritesRefreshStatusTimeoutRef.current === null) {
+      return;
+    }
+
+    window.clearTimeout(favoritesRefreshStatusTimeoutRef.current);
+    favoritesRefreshStatusTimeoutRef.current = null;
+  }, []);
+
+  const showFavoritesUpdatedStatus = useCallback(() => {
+    clearFavoritesRefreshStatusTimeout();
+    setFavoritesRefreshStatus('updated');
+    favoritesRefreshStatusTimeoutRef.current = window.setTimeout(() => {
+      favoritesRefreshStatusTimeoutRef.current = null;
+      setFavoritesRefreshStatus('idle');
+    }, FAVORITES_UPDATED_VISIBLE_MS);
+  }, [clearFavoritesRefreshStatusTimeout]);
 
   const clearFavoriteActionPending = useCallback((placeId: string) => {
     const existingTimeout = favoriteActionTimeoutsRef.current.get(placeId);
@@ -480,6 +510,10 @@ export const PlacesBrowser = ({
 
     favoriteActionTimeoutsRef.current.set(placeId, timeoutId);
   }, []);
+
+  useEffect(() => {
+    favoritePlacesRef.current = favoritePlaces;
+  }, [favoritePlaces]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -702,9 +736,20 @@ export const PlacesBrowser = ({
   }, [notificationsPreferencesHydrated, statusNotificationsEnabled]);
 
   useEffect(() => {
-    setFavoriteIds((currentIds) => readFavoritePlaceIds(currentIds));
+    const nextFavoriteIds = readFavoritePlaceIds(initialFavoriteIds);
+    setFavoriteIds(nextFavoriteIds);
+
+    const cachedFavoritePlaces = readCachedFavoritePlaces(nextFavoriteIds);
+    if (cachedFavoritePlaces.length > 0) {
+      setFavoritePlaces(cachedFavoritePlaces);
+    }
+
+    if (nextFavoriteIds.length > 0 && initialFavoritesVisible) {
+      setFavoritesLoading(true);
+    }
+
     setFavoritesHydrated(true);
-  }, []);
+  }, [initialFavoriteIds, initialFavoritesVisible]);
 
   useEffect(() => {
     if (!favoritesHydrated) {
@@ -726,20 +771,37 @@ export const PlacesBrowser = ({
   }, [favoriteIds, favoritesHydrated, initialFavoriteIds]);
 
   useEffect(() => {
+    if (!favoritesHydrated) {
+      return;
+    }
+
     if (favoriteIds.length === 0) {
+      clearFavoritesRefreshStatusTimeout();
+      setFavoritesRefreshStatus('idle');
       setFavoritePlaces([]);
+      writeCachedFavoritePlaces([]);
       setFavoritesLoading(false);
       return;
     }
 
     if (!favoritesVisible) {
+      clearFavoritesRefreshStatusTimeout();
+      setFavoritesRefreshStatus('idle');
       setFavoritesLoading(false);
       return;
     }
 
     const controller = new AbortController();
     const favoritePlacesFetchPolicy = getFavoritePlacesFetchPolicy();
+    const hadFavoritePlacesBeforeRefresh = favoritePlacesRef.current.length > 0;
     setFavoritesLoading(true);
+    if (hadFavoritePlacesBeforeRefresh) {
+      clearFavoritesRefreshStatusTimeout();
+      setFavoritesRefreshStatus('updating');
+    } else {
+      setFavoritesRefreshStatus('idle');
+    }
+
     void loadFetchPlacesByIdsModule()
       .then(({ fetchPlacesByIds }) =>
         fetchPlacesByIds({
@@ -760,12 +822,26 @@ export const PlacesBrowser = ({
         const ordered = favoriteIds
           .map((id) => byId.get(id))
           .filter((place): place is PlaceWithLatestReading => Boolean(place));
+
+        if (ordered.length === 0 && favoritePlacesRef.current.length > 0) {
+          setFavoritesRefreshStatus('idle');
+          return;
+        }
+
+        writeCachedFavoritePlaces(ordered);
         setFavoritePlaces(ordered);
+        if (ordered.length > 0) {
+          showFavoritesUpdatedStatus();
+        } else {
+          setFavoritesRefreshStatus('idle');
+        }
       })
       .catch((fetchError: unknown) => {
         if (controller.signal.aborted) {
           return;
         }
+        clearFavoritesRefreshStatusTimeout();
+        setFavoritesRefreshStatus('idle');
         console.error(fetchError);
       })
       .finally(() => {
@@ -777,7 +853,14 @@ export const PlacesBrowser = ({
     return () => {
       controller.abort();
     };
-  }, [favoriteIds, favoritesVisible, locale]);
+  }, [
+    clearFavoritesRefreshStatusTimeout,
+    favoriteIds,
+    favoritesHydrated,
+    favoritesVisible,
+    locale,
+    showFavoritesUpdatedStatus,
+  ]);
 
   useEffect(() => {
     if (!notificationsSupported || !notificationsPreferencesHydrated) {
@@ -877,8 +960,9 @@ export const PlacesBrowser = ({
 
       favoriteActionTimeoutsRef.current.clear();
       favoriteActionStartedAtRef.current.clear();
+      clearFavoritesRefreshStatusTimeout();
     };
-  }, []);
+  }, [clearFavoritesRefreshStatusTimeout]);
 
   useEffect(() => {
     const onSlashShortcut = (event: KeyboardEvent) => {
@@ -945,6 +1029,18 @@ export const PlacesBrowser = ({
     : locale === 'et'
       ? 'Näita'
       : 'Show';
+  const favoritesRefreshLabel =
+    favoritesRefreshStatus === 'updating'
+      ? locale === 'et'
+        ? 'Uuendan...'
+        : 'Updating...'
+      : favoritesRefreshStatus === 'updated'
+        ? locale === 'et'
+          ? 'Uuendatud'
+          : 'Updated'
+        : '';
+  const showFavoritesRefreshStatus =
+    favoritesVisible && favoritesRefreshStatus !== 'idle' && favoritePlaces.length > 0;
   const webPushConfigured = WEB_PUSH_VAPID_PUBLIC_KEY.trim().length > 0;
   const notificationsReady =
     notificationsSupported && webPushConfigured && notificationPermission === 'granted';
@@ -1125,6 +1221,15 @@ export const PlacesBrowser = ({
     setStatusNotificationsEnabled(false);
   };
 
+  const toggleFavoritesVisible = () => {
+    const nextFavoritesVisible = !favoritesVisible;
+    if (nextFavoritesVisible && favoriteIds.length > 0 && favoritePlaces.length === 0) {
+      setFavoritesLoading(true);
+    }
+
+    setFavoritesVisible(nextFavoritesVisible);
+  };
+
   const toggleFavorite = (placeId: string) => {
     if (favoriteActionPendingIds.has(placeId)) {
       return;
@@ -1144,7 +1249,11 @@ export const PlacesBrowser = ({
 
     if (isCurrentlyFavorite) {
       setFavoriteIds((currentIds) => currentIds.filter((id) => id !== placeId));
-      setFavoritePlaces((currentPlaces) => currentPlaces.filter((place) => place.id !== placeId));
+      setFavoritePlaces((currentPlaces) => {
+        const nextPlaces = currentPlaces.filter((place) => place.id !== placeId);
+        writeCachedFavoritePlaces(nextPlaces);
+        return nextPlaces;
+      });
       return;
     }
 
@@ -1155,7 +1264,9 @@ export const PlacesBrowser = ({
           return currentPlaces;
         }
 
-        return [optimisticPlace, ...currentPlaces].slice(0, 50);
+        const nextPlaces = [optimisticPlace, ...currentPlaces].slice(0, 50);
+        writeCachedFavoritePlaces(nextPlaces);
+        return nextPlaces;
       });
     }
   };
@@ -1724,10 +1835,10 @@ export const PlacesBrowser = ({
 
       {hasFavorites ? (
         <section id="favorite-places" className="mt-8" aria-live="polite">
-          <div className="mb-3 flex">
+          <div className="mb-3 flex min-h-9 items-center gap-3">
             <button
               type="button"
-              onClick={() => setFavoritesVisible((value) => !value)}
+              onClick={toggleFavoritesVisible}
               aria-pressed={favoritesVisible}
               aria-controls="favorite-places-content"
               aria-expanded={favoritesVisible}
@@ -1753,6 +1864,29 @@ export const PlacesBrowser = ({
               </span>
               <span className="text-xs">{favoritesToggleLabel}</span>
             </button>
+            <div
+              className="ml-auto flex h-8 w-32 shrink-0 items-center justify-end"
+              aria-live="polite"
+            >
+              {showFavoritesRefreshStatus ? (
+                <span
+                  role="status"
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-xs font-medium ${
+                    favoritesRefreshStatus === 'updating'
+                      ? 'border-emerald-200 bg-white/85 text-emerald-800 dark:border-teal-400/20 dark:bg-slate-900/85 dark:text-teal-100'
+                      : 'border-emerald-100 bg-emerald-50 text-emerald-800 dark:border-teal-400/20 dark:bg-teal-300/10 dark:text-teal-100'
+                  }`}
+                >
+                  {favoritesRefreshStatus === 'updating' ? (
+                    <span className="relative inline-flex h-3 w-3" aria-hidden="true">
+                      <span className="absolute inset-0 rounded-full border-2 border-emerald-100 dark:border-teal-300/20" />
+                      <span className="absolute inset-0 animate-spin rounded-full border-2 border-accent border-r-transparent" />
+                    </span>
+                  ) : null}
+                  <span>{favoritesRefreshLabel}</span>
+                </span>
+              ) : null}
+            </div>
           </div>
 
           {favoritesVisible ? (
