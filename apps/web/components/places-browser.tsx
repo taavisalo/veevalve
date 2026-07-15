@@ -33,6 +33,7 @@ import {
 import {
   getFavoritePlacesFetchPolicy,
   getPlaceMetricsFetchPolicy,
+  shouldRevalidateInitialPlaces,
 } from '../lib/place-fetch-policy';
 import {
   type AppTheme,
@@ -526,7 +527,9 @@ export const PlacesBrowser = ({
   useEffect(() => {
     if (isInitialRender.current) {
       isInitialRender.current = false;
-      return;
+      if (!shouldRevalidateInitialPlaces(initialNowIso)) {
+        return;
+      }
     }
 
     if (nearbyStatus === 'requesting') {
@@ -571,14 +574,40 @@ export const PlacesBrowser = ({
       });
 
     return () => controller.abort();
-  }, [debouncedSearch, locale, nearbyOrigin, nearbyStatus, statusFilter, typeFilter]);
+  }, [
+    debouncedSearch,
+    initialNowIso,
+    locale,
+    nearbyOrigin,
+    nearbyStatus,
+    statusFilter,
+    typeFilter,
+  ]);
 
   useEffect(() => {
-    const intervalId = window.setInterval(() => {
+    const syncReferenceTime = () => {
       setReferenceTimeIso(new Date().toISOString());
-    }, 60_000);
+    };
+    const syncVisibleReferenceTime = () => {
+      if (document.visibilityState === 'visible') {
+        syncReferenceTime();
+      }
+    };
 
-    return () => window.clearInterval(intervalId);
+    syncReferenceTime();
+    const intervalId = window.setInterval(() => {
+      syncReferenceTime();
+    }, 60_000);
+    window.addEventListener('focus', syncReferenceTime);
+    window.addEventListener('pageshow', syncReferenceTime);
+    document.addEventListener('visibilitychange', syncVisibleReferenceTime);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener('focus', syncReferenceTime);
+      window.removeEventListener('pageshow', syncReferenceTime);
+      document.removeEventListener('visibilitychange', syncVisibleReferenceTime);
+    };
   }, []);
 
   useEffect(() => {

@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'v3';
+const CACHE_VERSION = 'v4';
 const APP_SHELL_CACHE = `veevalve-app-shell-${CACHE_VERSION}`;
 const STATIC_CACHE = `veevalve-static-${CACHE_VERSION}`;
 const NAVIGATION_NETWORK_TIMEOUT_MS = 450;
